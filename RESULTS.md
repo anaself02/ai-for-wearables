@@ -285,6 +285,7 @@ That report contains the per-day heart-rate summary, the wearing-pattern and cov
 | `models/feature_config.json` | Settings and exact column order for the full model |
 | `models/svm_hr_only.joblib` | Heart-rate-only SVM pipeline, refitted on all subjects - the one usable on consumer wearable data |
 | `models/feature_config_hr_only.json` | Settings and exact column order for the heart-rate-only model |
+| `models/hr_training_distribution.json` | Mean/sd/min/median/max of each HR feature across the training windows, so anything applying the model can measure how far new data falls outside it |
 | `models/features.py`, `models/project_config.py` | A copy of the feature-extraction code, so the same features can be rebuilt from other data |
 | `results/features.csv` | The full feature table |
 | `results/cv_predictions_<set>.csv` | Out-of-fold prediction for every window |

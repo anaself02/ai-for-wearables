@@ -221,6 +221,54 @@ def save_feature_config(path, feature_set_name, feature_names):
         json.dump(settings, f, indent=2)
 
 
+def save_training_distribution(table, path):
+    """
+    Write the heart-rate features' training distribution to a small JSON file
+    next to the saved models.
+
+    WHY THIS FILE EXISTS. Two other places need to know what the HR features
+    looked like during training, so they can say how far a new set of
+    readings falls outside it:
+
+      * scripts/05_apply_to_personal_data.py, when comparing personal
+        wearable data against training;
+      * the Django health dashboard's arousal card, which runs the
+        heart-rate-only model against live data.
+
+    Both could recompute these numbers from results/features.csv, but that is
+    a 640 KB file that belongs to the training run, not to the saved model.
+    Writing the summary here instead means the model ships with everything
+    needed to interpret it, in a few hundred bytes, and there is exactly one
+    definition of "the training distribution" rather than two.
+    """
+    hr_columns = [name for name in features.FEATURE_NAMES
+                  if name.startswith("HR_")]
+
+    distribution = {
+        "description": ("Distribution of the heart-rate features across the "
+                        "WESAD training windows. Used to measure how far new "
+                        "data falls outside what the model was fitted on."),
+        "source": "WESAD wrist BVP, heart rate derived by features.py",
+        "n_windows": int(len(table)),
+        "n_subjects": int(table["subject_id"].nunique()),
+        "window_seconds": config.WINDOW_SECONDS,
+        "ibi_median_filter_beats": config.IBI_MEDIAN_FILTER_BEATS,
+        "features": {
+            name: {
+                "mean": float(table[name].mean()),
+                "std": float(table[name].std()),
+                "min": float(table[name].min()),
+                "median": float(table[name].median()),
+                "max": float(table[name].max()),
+            }
+            for name in hr_columns
+        },
+    }
+
+    with open(path, "w") as f:
+        json.dump(distribution, f, indent=2)
+
+
 def train_one_feature_set(feature_set_name, table):
     """
     Train and cross-validate every model on ONE feature set, save the results,
@@ -336,6 +384,14 @@ def main():
     for feature_set_name in features.FEATURE_SETS:
         all_scores[feature_set_name] = train_one_feature_set(
             feature_set_name, table)
+
+    # The heart-rate training distribution, for anything that needs to judge
+    # whether new data resembles what the model was fitted on.
+    distribution_path = os.path.join(config.MODELS_DIR,
+                                     "hr_training_distribution.json")
+    save_training_distribution(table, distribution_path)
+    print("Saved HR training distribution -> " + distribution_path)
+    print()
 
     # The feature-extraction code itself travels with the models, so the same
     # features can be rebuilt later from other data.

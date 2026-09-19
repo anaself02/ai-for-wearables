@@ -1009,6 +1009,10 @@ def write_results_md(table, summaries, class_names):
                  "wearable data |")
     lines.append("| `models/feature_config_hr_only.json` | Settings and exact "
                  "column order for the heart-rate-only model |")
+    lines.append("| `models/hr_training_distribution.json` | Mean/sd/min/"
+                 "median/max of each HR feature across the training windows, "
+                 "so anything applying the model can measure how far new data "
+                 "falls outside it |")
     lines.append("| `models/features.py`, `models/project_config.py` | A copy of the "
                  "feature-extraction code, so the same features can be rebuilt "
                  "from other data |")

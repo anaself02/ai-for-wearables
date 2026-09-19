@@ -596,12 +596,22 @@ def compare_distributions(personal_windows, feature_names):
         range, which is the bluntest possible out-of-distribution measure and
         needs no assumptions about shape.
     """
-    training = pd.read_csv(config.FEATURES_CSV)
+    # The training distribution is read from the summary saved beside the
+    # model by 03_train_model.py, not recomputed from results/features.csv.
+    # One definition of "the training distribution", shared with the Django
+    # dashboard's arousal card, and it travels with the model.
+    import json
+    distribution_path = os.path.join(config.MODELS_DIR,
+                                     "hr_training_distribution.json")
+    with open(distribution_path) as f:
+        training_distribution = json.load(f)
+    training_stats = training_distribution["features"]
 
     print("-" * 78)
     print("TRAINING vs PERSONAL feature distributions (before any prediction)")
     print("-" * 78)
-    print("WESAD training windows : {}".format(len(training)))
+    print("WESAD training windows : {}".format(
+        training_distribution["n_windows"]))
     print("Personal windows       : {}".format(len(personal_windows)))
     print()
     print("{:10s} {:>8s} {:>9s} {:>9s} {:>9s} {:>9s} {:>9s}".format(
@@ -609,20 +619,22 @@ def compare_distributions(personal_windows, feature_names):
 
     comparison = []
     for name in feature_names:
-        a = training[name]
-        b = personal_windows[name]
-        for source, series in [("WESAD", a), ("personal", b)]:
-            print("{:10s} {:>8s} {:9.3f} {:9.3f} {:9.3f} {:9.3f} {:9.3f}".format(
-                name if source == "WESAD" else "", source,
-                series.mean(), series.std(), series.min(),
-                series.median(), series.max()))
+        a = training_stats[name]          # a dict of summary statistics
+        b = personal_windows[name]        # the actual personal values
+
+        print("{:10s} {:>8s} {:9.3f} {:9.3f} {:9.3f} {:9.3f} {:9.3f}".format(
+            name, "WESAD", a["mean"], a["std"], a["min"], a["median"],
+            a["max"]))
+        print("{:10s} {:>8s} {:9.3f} {:9.3f} {:9.3f} {:9.3f} {:9.3f}".format(
+            "", "personal", b.mean(), b.std(), b.min(), b.median(), b.max()))
 
         # Share of personal windows outside the training range.
-        outside = ((b < a.min()) | (b > a.max())).mean()
+        outside = ((b < a["min"]) | (b > a["max"])).mean()
 
         # How far the personal centre sits from the training centre, measured
         # in training standard deviations. Roughly: "how many sigma out".
-        sigma_shift = ((b.median() - a.mean()) / a.std()) if a.std() else np.nan
+        sigma_shift = (((b.median() - a["mean"]) / a["std"])
+                       if a["std"] else np.nan)
 
         print("{:10s} {:>8s} outside training range: {:5.1%}   "
               "median shift: {:+.2f} training sd".format(
@@ -631,8 +643,8 @@ def compare_distributions(personal_windows, feature_names):
 
         comparison.append({
             "feature": name,
-            "wesad_mean": a.mean(), "wesad_std": a.std(),
-            "wesad_min": a.min(), "wesad_max": a.max(),
+            "wesad_mean": a["mean"], "wesad_std": a["std"],
+            "wesad_min": a["min"], "wesad_max": a["max"],
             "personal_mean": b.mean(), "personal_std": b.std(),
             "personal_min": b.min(), "personal_max": b.max(),
             "personal_outside_training_range": float(outside),
