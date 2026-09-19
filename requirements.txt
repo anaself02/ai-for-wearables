@@ -1,0 +1,20 @@
+# Python 3.12
+numpy==2.1.3
+pandas==2.2.3
+scikit-learn==1.5.2
+matplotlib==3.9.2
+scipy==1.14.1
+joblib==1.4.2
+
+# --- Bridge to the Django health dashboard (scripts/05_apply_to_personal_data.py) ---
+# 05 boots the dashboard project in-process so it can reuse that project's
+# OAuth credentials and Google Health API client instead of duplicating any
+# client-secret handling here. These are the dashboard's own dependencies,
+# pinned to the versions it currently has installed, so the two projects agree.
+# Nothing in steps 01-04 needs them.
+Django==6.1.1
+google-auth==2.58.0
+google-auth-oauthlib==1.4.1
+requests==2.34.2
+cryptography==50.0.1
+python-dotenv==1.2.3

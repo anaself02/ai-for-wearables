@@ -1,0 +1,35 @@
+{
+  "feature_set": "hr_only",
+  "window_seconds": 60,
+  "step_seconds": 30,
+  "label_purity_threshold": 1.0,
+  "target_labels": {
+    "1": "baseline",
+    "2": "stress",
+    "3": "amusement"
+  },
+  "sampling_rates_hz": {
+    "wrist_ACC": 32,
+    "wrist_BVP": 64,
+    "wrist_EDA": 4,
+    "wrist_TEMP": 4
+  },
+  "heart_rate_from_bvp": {
+    "bandpass_low_hz": 0.7,
+    "bandpass_high_hz": 3.7,
+    "butterworth_order": 3,
+    "min_peak_distance_s": 0.4,
+    "peak_prominence": "0.5 * std of the filtered window",
+    "plausible_bpm_range": [
+      40,
+      180
+    ]
+  },
+  "feature_names_in_order": [
+    "HR_mean",
+    "HR_std",
+    "HR_min",
+    "HR_max",
+    "HR_slope"
+  ]
+}
