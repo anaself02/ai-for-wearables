@@ -229,13 +229,19 @@ def sleep_rows(points):
     return rows
 
 
-# Display order for the hypnogram, shallowest at the top.
+# Display order for the hypnogram, shallowest at the top. "Restlessness" is not
+# a stage type - it is drawn from `shortAwakenings`, which are nested inside the
+# stage segments. Giving it its own band shows that layer without adding its
+# minutes to the Awake total, which is what would have double-counted.
 HYPNOGRAM_ROWS = [
-    ("AWAKE", "Awake"),
-    ("REM", "REM"),
-    ("LIGHT", "Light"),
-    ("DEEP", "Deep"),
+    ("AWAKE", "awake", "Total awake time"),
+    ("__RESTLESS__", "restless", "Restlessness"),
+    ("REM", "rem", "REM"),
+    ("LIGHT", "light", "Light"),
+    ("DEEP", "deep", "Deep"),
 ]
+
+RESTLESS_ROW = "__RESTLESS__"
 
 
 def _utc_offset_seconds(raw) -> int:
@@ -283,55 +289,77 @@ def hypnogram(point) -> dict | None:
     origin = _parse_instant(interval["startTime"])
 
     def minutes_from_start(raw):
-        return round((_parse_instant(raw) - origin).total_seconds() / 60, 2)
+        return (_parse_instant(raw) - origin).total_seconds() / 60
+
+    total_span = minutes_from_start(interval.get("endTime", interval["startTime"]))
+    if total_span <= 0:
+        return None
+
+    restless = sleep.get("shortAwakenings") or []
 
     rows = []
-    laid_out = []
-    totals = {}
+    total_segments = 0
 
-    for index, (stage_type, label) in enumerate(HYPNOGRAM_ROWS):
-        stage_minutes = 0.0
-        for segment in segments:
-            if segment.get("type") != stage_type:
-                continue
+    for stage_type, key, label in HYPNOGRAM_ROWS:
+        source = restless if stage_type == RESTLESS_ROW else [
+            s for s in segments if s.get("type") == stage_type
+        ]
+
+        band = []
+        minutes = 0.0
+        for segment in source:
             start = minutes_from_start(segment["startTime"])
             end = minutes_from_start(segment["endTime"])
             if end <= start:
                 continue
-            stage_minutes += end - start
-            laid_out.append({"row": index, "start": start, "end": end, "stage": label})
-        totals[stage_type] = round(stage_minutes)
+            minutes += end - start
+            # Percentages, so the band is laid out in CSS and stays responsive.
+            band.append(
+                {
+                    "left": round(max(start, 0.0) / total_span * 100, 4),
+                    "width": round((end - start) / total_span * 100, 4),
+                    "from": _local_clock(
+                        segment["startTime"], segment.get("startUtcOffset")
+                    ),
+                    "to": _local_clock(segment["endTime"], segment.get("endUtcOffset")),
+                    "minutes": round(end - start, 1),
+                }
+            )
+
+        band.sort(key=lambda s: s["left"])
+        total_segments += len(band)
         rows.append(
             {
                 "type": stage_type,
+                "key": key,
                 "label": label,
-                "minutes": round(stage_minutes),
-                "duration": _hours_minutes(round(stage_minutes)) or "0m",
+                "minutes": round(minutes),
+                "duration": _hours_minutes(round(minutes)) or "0m",
+                "count": len(band),
+                "segments": band,
+                # Restlessness sits inside the stages rather than beside them.
+                "nested": stage_type == RESTLESS_ROW,
             }
         )
 
-    total_span = minutes_from_start(interval.get("endTime", interval["startTime"]))
-    brief = sleep.get("shortAwakenings") or []
-    brief_minutes = 0.0
-    for segment in brief:
-        brief_minutes += (
-            _parse_instant(segment["endTime"]) - _parse_instant(segment["startTime"])
-        ).total_seconds() / 60
+    start_minute = _minute_of_day(
+        interval["startTime"], interval.get("startUtcOffset")
+    )
+
+    def clock_at(offset_minutes):
+        total = int(round(start_minute + offset_minutes)) % (24 * 60)
+        return f"{total // 60:02d}:{total % 60:02d}"
 
     return {
         "rows": rows,
-        "segments": sorted(laid_out, key=lambda s: s["start"]),
         "total_minutes": round(total_span),
         "bedtime": _local_clock(interval["startTime"], interval.get("startUtcOffset")),
+        "midpoint": clock_at(total_span / 2),
         "wake_time": _local_clock(
             interval.get("endTime", interval["startTime"]), interval.get("endUtcOffset")
         ),
-        "start_minute_of_day": _minute_of_day(
-            interval["startTime"], interval.get("startUtcOffset")
-        ),
-        "brief_awakenings": len(brief),
-        "brief_awakenings_minutes": round(brief_minutes),
-        "segment_count": len(laid_out),
+        "start_minute_of_day": start_minute,
+        "segment_count": total_segments,
     }
 
 

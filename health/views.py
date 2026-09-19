@@ -411,9 +411,10 @@ def sleep_night(request, day):
         reverse=True,
     )
 
+    # Rendered as positioned HTML rather than a canvas, so no JSON payload and
+    # no charting library is needed on this page.
     chart = metrics.hypnogram(candidates[0]) if candidates else None
     context["hypnogram"] = chart
-    context["hypnogram_json"] = json.dumps(chart) if chart else None
     if candidates and chart is None:
         # A `classic` sleep record has no stage breakdown to draw.
         context["no_stages"] = True

@@ -120,10 +120,11 @@ again rather than failing opaquely.
 
 ### Sleep-stage timeline (hypnogram)
 
-`/metric/sleep/night/<YYYY-MM-DD>/` draws one horizontal band per stage - Awake,
-REM, Light, Deep - with each stage's actual segments across the night on a shared
-time axis, its total duration in the band label, and bedtime/wake time at the
-ends. The multi-day sleep table links into it from each night's date.
+`/metric/sleep/night/<YYYY-MM-DD>/` draws five horizontal bands - Total awake
+time, Restlessness, REM, Light, Deep - with each band's actual segments across
+the night on a shared time axis, its total duration in the label above it, and
+bedtime / midpoint / wake time on the axis below. The multi-day sleep table links
+into it from each night's date.
 
 **What the API actually provides**, checked before anything was built:
 
@@ -139,22 +140,25 @@ ends. The multi-day sleep table links into it from each night's date.
 Two things that would be easy to get wrong:
 
 - **`shortAwakenings` are nested inside the stage segments, not alongside them.**
-  The same night had 21 of them while `stagesSummary` reported an AWAKE count of
-  3. Adding their 23 minutes to the Awake band would double-count time already
-  attributed to a stage, so they are reported as a footnote instead of drawn.
+  One night had 21 of them while `stagesSummary` reported an AWAKE count of 3.
+  They get their own "Restlessness" band - which is how Google's own app shows
+  them - but their minutes are never added to the Awake total and the band has no
+  share-of-night percentage, because that time is already counted under whichever
+  stage it interrupted.
 - **`sleep.type` can be `classic` instead of `STAGES`**, in which case there is no
   breakdown at all. That renders an explanation rather than an empty chart.
 
-**How it is drawn.** Chart.js with `indexAxis: "y"` and one dataset per segment
-carrying a `[start, end]` pair in its own stage's row, all with `grouped: false`
-so they overlay at full band height instead of bunching side by side. The x axis
-is linear minutes from bedtime with a tick callback printing clock times, rather
-than a time scale - that avoids pulling in a date adapter for the CDN build. Bed
-and wake times come from each segment's own `startUtcOffset`, so a night is shown
-in the device's local wall clock (04:00Z at UTC-4 reads as 00:00, not 04:00).
+**How it is drawn.** Not with Chart.js. The bands are rounded tracks with
+absolutely positioned segments sized in percent, which reflows with the viewport
+and puts every segment in the DOM as a real element - so hover text and
+screen-reader labels come from the markup instead of needing a parallel table
+beside a canvas. Chart.js fought the two things this layout needs: labels sit
+*above* each band rather than as y-axis ticks, and each band has its own rounded
+track behind the segments. It stays the charting library everywhere else.
 
-The canvas is invisible to a screen reader, so the same durations are repeated
-as a table below it.
+Times come from each segment's own `startUtcOffset`, so a night reads in the
+device's local wall clock: `04:00Z` at UTC-4 is `00:00`, not `04:00`. The axis
+prints bedtime, the midpoint and wake time.
 
 ### Insights
 

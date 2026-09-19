@@ -6,7 +6,6 @@ UTC offset, and `shortAwakenings` are nested inside the stage segments rather
 than sitting alongside them.
 """
 
-from datetime import date
 from unittest import mock
 
 from django.contrib.auth import get_user_model
@@ -52,6 +51,7 @@ NIGHT = {
             segment("06:15", "07:15", "REM"),
             segment("07:15", "08:00", "LIGHT"),
         ],
+        # Nested inside the stages above: 5 + 3 = 8 minutes.
         "shortAwakenings": [
             segment("05:00", "05:05", "AWAKE"),
             segment("06:40", "06:43", "AWAKE"),
@@ -60,6 +60,7 @@ NIGHT = {
             "minutesAsleep": "210",
             "minutesInSleepPeriod": "240",
             "minutesAwake": "30",
+            "minutesToFallAsleep": "0",
             "stagesSummary": [
                 {"type": "AWAKE", "minutes": "30", "count": "1"},
                 {"type": "LIGHT", "minutes": "105", "count": "2"},
@@ -75,64 +76,109 @@ class HypnogramTests(TestCase):
     def setUp(self):
         self.chart = metrics.hypnogram(NIGHT)
 
-    def test_all_four_stage_bands_are_present_in_display_order(self):
+    def _row(self, label):
+        return next(r for r in self.chart["rows"] if r["label"] == label)
+
+    def test_five_bands_in_display_order(self):
+        # Restlessness gets its own band: it is nested inside the stages, and a
+        # separate row shows it without adding its minutes to the awake total.
         self.assertEqual(
             [row["label"] for row in self.chart["rows"]],
-            ["Awake", "REM", "Light", "Deep"],
+            ["Total awake time", "Restlessness", "REM", "Light", "Deep"],
         )
 
     def test_each_band_carries_its_total_duration(self):
         totals = {row["label"]: row["minutes"] for row in self.chart["rows"]}
-        self.assertEqual(totals, {"Awake": 30, "REM": 60, "Light": 105, "Deep": 45})
+        self.assertEqual(
+            totals,
+            {
+                "Total awake time": 30,
+                "Restlessness": 8,
+                "REM": 60,
+                "Light": 105,
+                "Deep": 45,
+            },
+        )
 
     def test_durations_are_formatted_for_display(self):
-        durations = {row["label"]: row["duration"] for row in self.chart["rows"]}
-        self.assertEqual(durations["Light"], "1h 45m")
-        self.assertEqual(durations["Awake"], "30m")
+        self.assertEqual(self._row("Light")["duration"], "1h 45m")
+        self.assertEqual(self._row("Total awake time")["duration"], "30m")
+        self.assertEqual(self._row("Restlessness")["duration"], "8m")
 
-    def test_computed_totals_match_the_api_stages_summary(self):
+    def test_stage_totals_match_the_api_stages_summary(self):
         # Verified live: segment durations sum exactly to stagesSummary.
         reported = {
             entry["type"]: int(entry["minutes"])
             for entry in NIGHT["sleep"]["summary"]["stagesSummary"]
         }
-        computed = {row["type"]: row["minutes"] for row in self.chart["rows"]}
+        computed = {
+            row["type"]: row["minutes"]
+            for row in self.chart["rows"]
+            if not row["nested"]
+        }
         self.assertEqual(computed, reported)
 
-    def test_segments_are_positioned_in_minutes_from_bedtime(self):
-        first = self.chart["segments"][0]
-        self.assertEqual((first["start"], first["end"]), (0, 30))
-        self.assertEqual(first["stage"], "Awake")
-        last = self.chart["segments"][-1]
-        self.assertEqual((last["start"], last["end"]), (195, 240))
+    def test_restlessness_is_not_added_to_the_awake_band(self):
+        # Its 8 minutes already sit inside other stages; counting them again
+        # under Awake would inflate the night.
+        self.assertEqual(self._row("Total awake time")["minutes"], 30)
+        self.assertTrue(self._row("Restlessness")["nested"])
+        self.assertFalse(self._row("Deep")["nested"])
 
-    def test_each_segment_targets_its_own_stage_row(self):
-        rows_by_stage = {
-            row["label"]: index for index, row in enumerate(self.chart["rows"])
-        }
-        for seg in self.chart["segments"]:
-            self.assertEqual(seg["row"], rows_by_stage[seg["stage"]])
+    def test_segments_are_positioned_as_percentages_of_the_night(self):
+        first = self._row("Total awake time")["segments"][0]
+        # 04:00-04:30 of a 240-minute night: starts at 0%, spans 12.5%.
+        self.assertEqual(first["left"], 0.0)
+        self.assertEqual(first["width"], 12.5)
+
+        last = self._row("Light")["segments"][-1]
+        # 07:15-08:00 -> starts at 195/240, spans 45/240.
+        self.assertEqual(last["left"], 81.25)
+        self.assertEqual(last["width"], 18.75)
+
+    def test_every_segment_carries_its_own_clock_range(self):
+        deep = self._row("Deep")["segments"][0]
+        self.assertEqual((deep["from"], deep["to"]), ("01:30", "02:15"))
+        self.assertEqual(deep["minutes"], 45.0)
 
     def test_segments_are_ordered_across_the_night(self):
-        starts = [seg["start"] for seg in self.chart["segments"]]
-        self.assertEqual(starts, sorted(starts))
+        for row in self.chart["rows"]:
+            lefts = [seg["left"] for seg in row["segments"]]
+            self.assertEqual(lefts, sorted(lefts), row["label"])
 
-    def test_bedtime_and_wake_labels_use_the_devices_local_offset(self):
+    def test_segment_counts_are_exposed_per_band(self):
+        self.assertEqual(self._row("Light")["count"], 2)
+        self.assertEqual(self._row("Restlessness")["count"], 2)
+        self.assertEqual(self.chart["segment_count"], 7)
+
+    def test_axis_labels_use_the_devices_local_offset(self):
         # 04:00Z at UTC-4 is midnight locally, not 04:00.
         self.assertEqual(self.chart["bedtime"], "00:00")
         self.assertEqual(self.chart["wake_time"], "04:00")
         self.assertEqual(self.chart["start_minute_of_day"], 0)
 
+    def test_the_midpoint_label_sits_halfway_through_the_night(self):
+        self.assertEqual(self.chart["midpoint"], "02:00")
+
+    def test_a_midpoint_that_crosses_midnight_wraps(self):
+        night = {
+            "sleep": {
+                "interval": {
+                    "startTime": "2026-09-19T02:00:00Z",  # 22:00 local
+                    "startUtcOffset": OFFSET,
+                    "endTime": "2026-09-19T10:00:00Z",
+                    "endUtcOffset": OFFSET,
+                },
+                "stages": [segment("02:00", "10:00", "LIGHT")],
+            }
+        }
+        chart = metrics.hypnogram(night)
+        self.assertEqual(chart["bedtime"], "22:00")
+        self.assertEqual(chart["midpoint"], "02:00")
+        self.assertEqual(chart["wake_time"], "06:00")
+
     def test_total_span_covers_the_whole_interval(self):
         self.assertEqual(self.chart["total_minutes"], 240)
-
-    def test_brief_awakenings_are_reported_but_not_added_to_the_awake_band(self):
-        # They are nested inside the stage segments; counting them in Awake
-        # would double-count time that is already attributed to a stage.
-        self.assertEqual(self.chart["brief_awakenings"], 2)
-        self.assertEqual(self.chart["brief_awakenings_minutes"], 8)
-        awake = next(r for r in self.chart["rows"] if r["type"] == "AWAKE")
-        self.assertEqual(awake["minutes"], 30)
 
     def test_a_night_without_stage_data_returns_none(self):
         classic = {
@@ -147,6 +193,18 @@ class HypnogramTests(TestCase):
     def test_an_empty_point_returns_none(self):
         self.assertIsNone(metrics.hypnogram({}))
         self.assertIsNone(metrics.hypnogram(None))
+
+    def test_a_zero_length_night_returns_none_rather_than_dividing_by_zero(self):
+        night = {
+            "sleep": {
+                "interval": {
+                    "startTime": "2026-09-19T04:00:00Z",
+                    "endTime": "2026-09-19T04:00:00Z",
+                },
+                "stages": [segment("04:00", "04:00", "LIGHT")],
+            }
+        }
+        self.assertIsNone(metrics.hypnogram(night))
 
     def test_zero_length_segments_are_dropped(self):
         night = {
@@ -164,8 +222,18 @@ class HypnogramTests(TestCase):
             }
         }
         chart = metrics.hypnogram(night)
-        self.assertEqual(len(chart["segments"]), 1)
-        self.assertEqual(chart["segments"][0]["stage"], "Deep")
+        self.assertEqual(chart["segment_count"], 1)
+        deep = next(r for r in chart["rows"] if r["label"] == "Deep")
+        self.assertEqual(deep["count"], 1)
+
+    def test_a_night_with_no_short_awakenings_still_shows_the_band(self):
+        sleep = dict(NIGHT["sleep"])
+        sleep.pop("shortAwakenings")
+        chart = metrics.hypnogram({"sleep": sleep})
+        restless = next(r for r in chart["rows"] if r["label"] == "Restlessness")
+        self.assertEqual(restless["minutes"], 0)
+        self.assertEqual(restless["segments"], [])
+        self.assertEqual(restless["duration"], "0m")
 
 
 class SleepNightViewTests(TestCase):
@@ -190,16 +258,18 @@ class SleepNightViewTests(TestCase):
         response = self.client.get("/metric/sleep/night/2026-09-19/")
         self.assertEqual(response.status_code, 302)
 
-    def test_renders_all_four_bands_with_their_durations(self):
+    def test_renders_all_five_bands_with_their_durations(self):
         response = self._get()
         self.assertEqual(response.status_code, 200)
 
         chart = response.context["hypnogram"]
         self.assertEqual(
-            [row["label"] for row in chart["rows"]], ["Awake", "REM", "Light", "Deep"]
+            [row["label"] for row in chart["rows"]],
+            ["Total awake time", "Restlessness", "REM", "Light", "Deep"],
         )
         for label, duration in [
-            ("Awake", "30m"),
+            ("Total awake time", "30m"),
+            ("Restlessness", "8m"),
             ("REM", "1h 00m"),
             ("Light", "1h 45m"),
             ("Deep", "45m"),
@@ -207,20 +277,32 @@ class SleepNightViewTests(TestCase):
             self.assertContains(response, label)
             self.assertContains(response, duration)
 
-    def test_bedtime_and_wake_time_appear_on_the_page(self):
+    def test_bands_are_positioned_elements_not_a_canvas(self):
+        response = self._get()
+        self.assertContains(response, 'class="hypno-track"')
+        self.assertContains(response, "hypno-seg seg-deep")
+        self.assertContains(response, "left:0.0%;width:12.5%")
+        # No charting library is needed on this page at all.
+        self.assertNotContains(response, "<canvas")
+        self.assertNotContains(response, "chart.umd.min.js")
+
+    def test_every_band_is_labelled_for_a_screen_reader(self):
+        response = self._get()
+        self.assertContains(response, 'aria-label="Deep: 45m across 1 segment"')
+        self.assertContains(response, 'aria-label="Light: 1h 45m across 2 segments"')
+
+    def test_bedtime_midpoint_and_wake_time_appear_on_the_axis(self):
         response = self._get()
         self.assertContains(response, "00:00")
+        self.assertContains(response, "02:00")  # midpoint
         self.assertContains(response, "04:00")
+        self.assertContains(response, "Bedtime")
+        self.assertContains(response, "Wake time")
 
-    def test_the_chart_payload_is_embedded_for_the_canvas(self):
+    def test_restlessness_is_marked_nested_rather_than_a_share_of_the_night(self):
         response = self._get()
-        self.assertContains(response, 'id="hypnogram-data"')
-        self.assertContains(response, 'data-hypnogram="hypnogram-data"')
-
-    def test_brief_awakenings_are_explained_rather_than_charted(self):
-        response = self._get()
-        self.assertContains(response, "2 brief awakenings")
-        self.assertContains(response, "not part of the Awake total")
+        self.assertContains(response, "nested")
+        self.assertContains(response, "not added to the awake")
 
     def test_a_night_with_no_session_says_so(self):
         response = self._get(points=[])
@@ -265,7 +347,9 @@ class SleepNightViewTests(TestCase):
         self.assertEqual(response.context["hypnogram"]["total_minutes"], 240)
 
     def test_a_malformed_date_is_404(self):
-        self.assertEqual(self.client.get("/metric/sleep/night/19-09-2026/").status_code, 404)
+        self.assertEqual(
+            self.client.get("/metric/sleep/night/19-09-2026/").status_code, 404
+        )
 
     def test_the_sleep_table_links_into_the_night_view(self):
         fake = mock.MagicMock()
