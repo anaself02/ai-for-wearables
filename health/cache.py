@@ -76,7 +76,30 @@ def fetch_points(client, metric, start: date, end: date, *, user, force=False) -
     )
 
 
-def fetch_intraday(client, data_type, day: date, *, user, force=False, max_pages=4) -> Fetched:
+#: Pages of samples to request for one civil day.
+#:
+#: This was 4, and 4 silently truncated every heart-rate day. The heart-rate
+#: data type declares ``max_page_size = 10000``, which made 4 pages look like
+#: 40000 samples of headroom. The API actually returns about 5000 points per
+#: page, so 4 pages capped a day at roughly 20000 samples - and because the
+#: API returns the NEWEST samples first, the cap deleted the BEGINNING of the
+#: day. Days recorded from midnight came back appearing to start in the late
+#: morning, which reads as "the watch was not being worn" rather than as a
+#: bug. Measured: the same days return 27000-36000 samples once the limit is
+#: raised, starting at 00:00.
+#:
+#: A full 24 h of heart rate at the observed ~3 s spacing is about 7 pages;
+#: 16 leaves headroom without being so large that a runaway costs many
+#: requests. Sparser intraday types (HRV, SpO2) never came close to the old
+#: limit, so this only ever bit heart rate - but the fix belongs at the
+#: default, not at one call site.
+DEFAULT_INTRADAY_MAX_PAGES = 16
+
+
+def fetch_intraday(
+    client, data_type, day: date, *, user, force=False,
+    max_pages=DEFAULT_INTRADAY_MAX_PAGES,
+) -> Fetched:
     """Cached wrapper around a single civil day of raw samples.
 
     A day that has already ended cannot gain new samples, so it is held far
