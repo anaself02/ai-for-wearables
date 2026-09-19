@@ -204,95 +204,17 @@ These apply to every number above, and especially to any output of `scripts/05_a
 
 ## Phase 3: applying the model to my own wearable data
 
-### Data quality: a silent API pagination bug
+The Phase 3 results from this pre-fix run consist of personal heart-rate
+readings, per-day heart-rate statistics and wearing pattern. They have been
+split out of this archived report and kept locally at:
 
-This one is worth reading carefully, because the symptom looked exactly like a behavioural fact about the wearer.
+```
+results/personal/RESULTS_personal_before_ibi_median_filter.md
+```
 
-`scripts/05_apply_to_personal_data.py` fetches intraday heart rate one civil day at a time through the dashboard's API client. That client pages through results, and the caller chooses how many pages to request. The `heart-rate` data type declares `max_page_size = 10000`, so an initial limit of 4 pages looked like 40,000 samples of headroom - far more than a day could possibly hold.
-
-**The API actually returns about 5,000 points per page**, so 4 pages capped each day at roughly 20,000 samples. And because the API returns the *newest* samples first, hitting the cap did not truncate the end of the day - it deleted the *beginning*. Full days came back apparently starting at 10:45, 11:04 or 11:41.
-
-That is indistinguishable, from the data alone, from someone who simply does not put the watch on until late morning. It was caught only by re-fetching the same days with a higher page limit and watching the sample counts rise from ~20,000 to 27,000-36,000 and the start times drop to 00:00.
-
-Two changes came out of it, both still in the script:
-
-1. `DEFAULT_MAX_PAGES = 16`. A full 24 h day at the observed ~3 s spacing is about 7 pages; 16 leaves headroom.
-2. A truncation guard. Any *completed* day whose first sample is later than 00:05 is reported as suspicious, with an explicit instruction to re-run with a higher page limit to tell "watch was off" apart from "we truncated it".
-
-After the fix, two warnings remained and both are genuine: 2026-09-14 starts at 14:13 (14,430 samples - the watch really was off until mid-afternoon) and 2026-09-08 starts at 00:20. 2026-09-12 and 2026-09-13 returned no samples at all.
-
-The general lesson: a declared `max_page_size` is an upper bound the server is allowed to ignore, and silent truncation that removes the *oldest* records is invisible unless you go looking for it.
-
-### What was applied, and to what
-
-| | |
-|---|---|
-| Source | Google Health API, `heart-rate` data type, device reported as Google Fitbit Air (`PASSIVELY_MEASURED`) |
-| Auth | Reuses the Django dashboard's stored OAuth credentials and API client in-process; no credential handling is duplicated in this project |
-| Samples | 377,249 readings, 2026-09-06 00:00:00 to 2026-09-19 18:53:31 |
-| Observed spacing | ~3 s between readings (p05 1 s, p95 3 s) |
-| Windows | 30,254 windows of 60 s, stepping 30 s - identical geometry to training |
-| Readings per window | median 25; windows with fewer than 10 are dropped |
-| Days | 12 |
-| Model | `models/svm_hr_only.joblib`, the 5-feature heart-rate-only SVM |
-
-### The inputs are far outside the training distribution
-
-This comparison is computed and printed **before** any prediction, because it is what decides whether the predictions deserve any weight at all. An RBF-kernel SVM judges by distance in feature space, so inputs outside the training range do not degrade gracefully - they fall wherever happens to be nearest.
-
-| Feature | WESAD mean (sd) | Personal mean (sd) | Outside training range | Median shift |
-|---|---|---|---|---|
-| `HR_mean` | 78.72 (10.94) | 61.71 (14.34) | **34.7%** | -1.86 sd |
-| `HR_std` | 18.85 (6.25) | 2.18 (2.16) | **71.6%** | -2.79 sd |
-| `HR_min` | 46.16 (5.61) | 58.65 (12.96) | **5.0%** | +1.58 sd |
-| `HR_max` | 135.63 (16.28) | 65.73 (16.24) | **67.4%** | -4.52 sd |
-| `HR_slope` | 0.01 (0.23) | -0.00 (0.30) | **0.1%** | -0.04 sd |
-
-The cause is the one flagged before the step was written, and it is larger than expected:
-
-- **In training**, `HR_*` describes a *beat-to-beat* series - roughly 60-80 values per window, each the instantaneous rate implied by one inter-beat interval from our own peak detection on WESAD's 64 Hz PPG.
-- **Here**, `HR_*` describes ~20 *already-smoothed* bpm readings emitted by the watch every 3 s, through its own undisclosed filtering.
-
-So the same column name means a different physical quantity, and the gap is stark: within a single 60 s window the WESAD series averages a spread of `HR_std` = 18.8 bpm and reaches `HR_max` = 136 bpm, while the personal series averages `HR_std` = 2.2 and `HR_max` = 66.
-
-**This also says something uncomfortable about the training features themselves.** A WESAD window whose beat-to-beat series ranges from a mean minimum of 46 bpm to a mean maximum of 136 bpm within 60 seconds is not describing physiology - a real heart rate does not swing that far that fast. It is describing residual beat-detection error: occasional missed or doubled beats that survive the 40-180 bpm plausibility filter and inflate `HR_std`, `HR_min` and `HR_max`. Some of the heart-rate-only model's 0.518 macro-F1 is therefore likely to rest on peak-detector noise characteristics rather than on heart rate, and noise characteristics are exactly the thing that cannot transfer to a different device. Smoothing the inter-beat-interval series before computing these features (a median filter over neighbouring intervals is the standard remedy) would be the first thing to change in a revision of Phase 2.
-
-### Predictions
-
-| Predicted class | Share of windows |
-|---|---|
-| baseline | 44.0% |
-| stress | 0.2% |
-| amusement | 55.8% |
-
-**These predictions are degenerate and should be read as a negative result, not as a measurement.** Stress is predicted for 0.2% of windows across two weeks of ordinary life, while amusement - the class the model was *weakest* at in cross-validation - absorbs the majority. That is the expected consequence of feeding an RBF SVM inputs that sit 1.9 to 4.5 training standard deviations from where it was fitted.
-
-Per day (waking hours are 08:00-23:00; overnight windows are reported separately because the model has no sleep class and WESAD contains no sleep):
-
-| Day | Windows | Mean bpm | baseline | stress | amusement | stress (waking) |
-|---|---|---|---|---|---|---|
-| 2026-09-06 | 2833 | 65.1 | 52.1% | 0.1% | 47.8% | 0.1% |
-| 2026-09-07 | 2653 | 59.4 | 40.2% | 0.1% | 59.7% | 0.2% |
-| 2026-09-08 | 2817 | 64.8 | 49.4% | 0.1% | 50.5% | 0.1% |
-| 2026-09-09 | 2843 | 60.6 | 41.4% | 0.2% | 58.4% | 0.2% |
-| 2026-09-10 | 2853 | 60.9 | 42.2% | 0.3% | 57.5% | 0.2% |
-| 2026-09-11 | 2633 | 61.7 | 48.3% | 0.3% | 51.4% | 0.1% |
-| 2026-09-14 | 1154 | 64.4 | 45.3% | 0.2% | 54.5% | 0.1% |
-| 2026-09-15 | 2434 | 61.8 | 43.6% | 0.2% | 56.2% | 0.1% |
-| 2026-09-16 | 2207 | 59.2 | 23.9% | 0.2% | 75.9% | 0.2% |
-| 2026-09-17 | 2834 | 63.8 | 55.2% | 0.2% | 44.6% | 0.1% |
-| 2026-09-18 | 2726 | 60.7 | 42.7% | 0.2% | 57.0% | 0.2% |
-| 2026-09-19 | 2267 | 58.4 | 39.2% | 0.4% | 60.4% | 0.3% |
-
-There is **no ground truth** for these days, so no accuracy is reported and none can be. The day-to-day variation above is small and tracks mean heart rate, not anything that has been shown to be stress.
-
-### What this step does and does not establish
-
-**Establishes:** the full pipeline runs end to end on real consumer-wearable data - live API fetch through reused OAuth credentials, windowing with the same geometry as training, features computed by the same imported code, and a saved model producing predictions.
-
-**Does not establish:** anything about whether I was stressed. The model was trained on a laboratory stressor in a controlled setting, it has no "neither" class, its inputs here are measurably out of distribution, and there are no labels to check it against. Treating any number in this section as a stress measurement would be wrong.
-
-**The useful finding is the negative one:** a model trained on research-grade beat-to-beat heart rate does not transfer to a consumer device's smoothed heart-rate feed, even when the feature names, the window length and the code are identical - because the underlying signal is not the same measurement. Closing that gap needs either training features robust to the difference (smoothed IBIs, as above) or training on the target device's own data.
+which is covered by the `results/personal/` entry in `.gitignore`. The API
+pagination finding from that run, which is not personal data, is written up in
+the current `RESULTS.md` at the project root.
 
 ## Saved artefacts
 

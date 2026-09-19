@@ -19,7 +19,9 @@ Outputs:
   results/confusion_matrix_<set>_<model>.png
   results/per_subject_f1_<set>.png
   results/classification_report_<set>_<model>.txt
-  RESULTS.md
+  RESULTS.md                              WESAD results only - tracked in git
+  results/personal/RESULTS_personal.md    Phase 3 personal-data results -
+                                          NOT tracked (personal health data)
 
 Usage:
     python 04_evaluate.py
@@ -412,25 +414,23 @@ def ibi_filter_section(summaries, table):
     return lines
 
 
-def phase3_section():
+def api_pagination_section():
     """
-    The Phase 3 section: applying the heart-rate-only model to personal
-    wearable data (scripts/05_apply_to_personal_data.py).
+    The pagination finding, for the TRACKED report.
 
-    Written only if 05 has been run - it reads the summary files that script
-    saves, so RESULTS.md has one source of truth rather than hand-copied
-    numbers. The data-quality subsection is included either way, because the
-    pagination bug is a finding about the API and not about any one run.
+    This is a fact about the Google Health API and about how the fetch code
+    was written - not about any individual's health - so it belongs in
+    RESULTS.md. The specific days it affected are wearing-pattern
+    information, so those stay in the untracked personal report instead.
     """
     lines = []
-    lines.append("## Phase 3: applying the model to my own wearable data")
+    lines.append("## Data quality: a silent API pagination bug")
     lines.append("")
-
-    # --- the data-quality lesson, always included ---------------------------
-    lines.append("### Data quality: a silent API pagination bug")
-    lines.append("")
-    lines.append("This one is worth reading carefully, because the symptom "
-                 "looked exactly like a behavioural fact about the wearer.")
+    lines.append("Found while fetching personal wearable data in Phase 3, but "
+                 "recorded here because it is a finding about the API rather "
+                 "than about any particular person's data - and because the "
+                 "symptom was indistinguishable from a behavioural fact about "
+                 "the wearer.")
     lines.append("")
     lines.append("`scripts/05_apply_to_personal_data.py` fetches intraday "
                  "heart rate one civil day at a time through the dashboard's "
@@ -444,34 +444,104 @@ def phase3_section():
                  "so 4 pages capped each day at roughly 20,000 samples. And "
                  "because the API returns the *newest* samples first, hitting "
                  "the cap did not truncate the end of the day - it deleted "
-                 "the *beginning*. Full days came back apparently starting at "
-                 "10:45, 11:04 or 11:41.")
+                 "the *beginning*. Days that had in fact been recorded from "
+                 "midnight came back appearing to start in the late morning.")
     lines.append("")
     lines.append("That is indistinguishable, from the data alone, from "
                  "someone who simply does not put the watch on until late "
-                 "morning. It was caught only by re-fetching the same days "
-                 "with a higher page limit and watching the sample counts "
-                 "rise from ~20,000 to 27,000-36,000 and the start times drop "
-                 "to 00:00.")
+                 "morning - a wrong conclusion about the person, drawn from a "
+                 "bug in the fetch. It was caught only by re-fetching the "
+                 "same days with a higher page limit and watching the sample "
+                 "counts rise from ~20,000 to 27,000-36,000 while the start "
+                 "times dropped to 00:00.")
     lines.append("")
     lines.append("Two changes came out of it, both still in the script:")
     lines.append("")
     lines.append("1. `DEFAULT_MAX_PAGES = 16`. A full 24 h day at the observed "
-                 "~3 s spacing is about 7 pages; 16 leaves headroom.")
+                 "~3 s sample spacing is about 7 pages; 16 leaves headroom.")
     lines.append("2. A truncation guard. Any *completed* day whose first "
                  "sample is later than 00:05 is reported as suspicious, with "
                  "an explicit instruction to re-run with a higher page limit "
                  "to tell \"watch was off\" apart from \"we truncated it\".")
     lines.append("")
-    lines.append("After the fix, two warnings remained and both are genuine: "
-                 "2026-09-14 starts at 14:13 (14,430 samples - the watch really "
-                 "was off until mid-afternoon) and 2026-09-08 starts at 00:20. "
-                 "2026-09-12 and 2026-09-13 returned no samples at all.")
-    lines.append("")
     lines.append("The general lesson: a declared `max_page_size` is an upper "
                  "bound the server is allowed to ignore, and silent truncation "
                  "that removes the *oldest* records is invisible unless you go "
-                 "looking for it.")
+                 "looking for it. Which days were genuinely affected is "
+                 "recorded in the personal report (see the pointer at the end "
+                 "of this file), since that is information about the wearer.")
+    lines.append("")
+    return lines
+
+
+def phase3_pointer():
+    """
+    The short note left in the TRACKED report in place of the Phase 3
+    section, so a reader can see that the work exists and where it lives
+    rather than finding a silent gap between Phase 2 and the artefact list.
+    """
+    personal_report = os.path.join(config.PERSONAL_DIR, "RESULTS_personal.md")
+    exists = os.path.exists(personal_report)
+
+    lines = []
+    lines.append("## Phase 3: applying the model to my own wearable data")
+    lines.append("")
+    lines.append("The heart-rate-only model was applied to real heart-rate "
+                 "data from my own consumer wearable (Google Fitbit Air, read "
+                 "live through the Google Health API by "
+                 "`scripts/05_apply_to_personal_data.py`, reusing the Django "
+                 "dashboard's stored OAuth credentials in-process rather than "
+                 "duplicating any credential handling).")
+    lines.append("")
+    lines.append("**Those results are deliberately not in this file.** They "
+                 "consist of my own heart-rate readings, per-day heart-rate "
+                 "statistics and wearing pattern - personal health "
+                 "information, which stays out of a repository that might "
+                 "later be pushed somewhere. They are written instead to:")
+    lines.append("")
+    lines.append("```")
+    lines.append("results/personal/RESULTS_personal.md")
+    lines.append("```")
+    lines.append("")
+    lines.append("which is covered by the `results/personal/` entry in "
+                 "`.gitignore` and kept locally only.{}".format(
+                     "" if exists else
+                     " (Not generated yet - run "
+                     "`05_apply_to_personal_data.py inspect` then `predict`, "
+                     "then re-run this script.)"))
+    lines.append("")
+    lines.append("That report contains the per-day heart-rate summary, the "
+                 "wearing-pattern and coverage notes, the training-versus-"
+                 "personal feature distribution comparison, the model's "
+                 "predictions, and the discussion of what the step does and "
+                 "does not establish. The one finding from it that is *not* "
+                 "personal - the API pagination bug - is written up in this "
+                 "file above, and the effect the comparison had on the "
+                 "training features is the subject of the "
+                 "median-filter correction section.")
+    lines.append("")
+    return lines
+
+
+def phase3_section():
+    """
+    The Phase 3 report itself - written to the UNTRACKED personal report at
+    results/personal/RESULTS_personal.md, not to RESULTS.md, because every
+    number in it derives from real personal health data.
+
+    Written only if 05 has been run; it reads the summary files that script
+    saves, so the numbers are never hand-copied.
+    """
+    lines = []
+    lines.append("# Phase 3: applying the model to my own wearable data")
+    lines.append("")
+    lines.append("> **Personal health data - kept local, never committed.** "
+                 "This file lives under `results/personal/`, which is "
+                 "excluded by `.gitignore`. The WESAD results it refers to "
+                 "are in `RESULTS.md` at the project root.")
+    lines.append("")
+    lines.append("Generated by `scripts/04_evaluate.py` from the outputs of "
+                 "`scripts/05_apply_to_personal_data.py`.")
     lines.append("")
 
     # --- the run itself, only if 05 predict has been run --------------------
@@ -481,19 +551,19 @@ def phase3_section():
     per_day_path = os.path.join(config.PERSONAL_DIR,
                                 "predictions_per_day.csv")
 
+    # Nothing to report yet - the caller writes no file at all in that case,
+    # rather than leaving a stub behind.
     if not os.path.exists(summary_path):
-        lines.append("_The prediction pass has not been run yet. Run "
-                     "`python scripts/05_apply_to_personal_data.py inspect` "
-                     "then `... predict` to fill in this section._")
-        lines.append("")
-        return lines
+        return None
 
     with open(summary_path) as f:
         summary = json.load(f)
     comparison = pd.read_csv(comparison_path)
     per_day = pd.read_csv(per_day_path)
 
-    lines.append("### What was applied, and to what")
+    inspection_path = os.path.join(config.PERSONAL_DIR, "hr_inspection.csv")
+
+    lines.append("## What was applied, and to what")
     lines.append("")
     lines.append("| | |")
     lines.append("|---|---|")
@@ -519,7 +589,31 @@ def phase3_section():
                  "heart-rate-only SVM |")
     lines.append("")
 
-    lines.append("### The inputs are far outside the training distribution")
+    # --- coverage / wearing pattern ----------------------------------------
+    # This is the half of the pagination finding that IS personal: which days
+    # were genuinely incomplete, once the API truncation bug was ruled out.
+    # The bug itself is written up in RESULTS.md; the days are written here.
+    if os.path.exists(inspection_path):
+        inspection = pd.read_csv(inspection_path)
+        lines.append("## Coverage and wearing pattern")
+        lines.append("")
+        lines.append("After the API pagination bug was fixed (see "
+                     "\"Data quality: a silent API pagination bug\" in "
+                     "`RESULTS.md`), the remaining gaps are real rather than "
+                     "artifacts of truncation:")
+        lines.append("")
+        lines.append("| Day | Samples | First | Last | Median gap | Gaps > 5 min |")
+        lines.append("|---|---|---|---|---|---|")
+        for _, row in inspection.iterrows():
+            lines.append("| {} | {:,} | {} | {} | {:.1f} s | {} |".format(
+                row["day"], int(row["n"]),
+                str(row["first"])[11:16], str(row["last"])[11:16],
+                row["median_gap_s"], int(row["gaps_over_5min"])))
+        lines.append("")
+        lines.append("Days absent from this table returned no samples at all.")
+        lines.append("")
+
+    lines.append("## The inputs are far outside the training distribution")
     lines.append("")
     lines.append("This comparison is computed and printed **before** any "
                  "prediction, because it is what decides whether the "
@@ -578,7 +672,7 @@ def phase3_section():
                  "smoothed once-per-3-seconds output.")
     lines.append("")
 
-    lines.append("### Predictions")
+    lines.append("## Predictions")
     lines.append("")
     lines.append("| Predicted class | Share of windows |")
     lines.append("|---|---|")
@@ -619,7 +713,7 @@ def phase3_section():
                  "been shown to be stress.")
     lines.append("")
 
-    lines.append("### What this step does and does not establish")
+    lines.append("## What this step does and does not establish")
     lines.append("")
     lines.append("**Establishes:** the full pipeline runs end to end on real "
                  "consumer-wearable data - live API fetch through reused OAuth "
@@ -895,7 +989,11 @@ def write_results_md(table, summaries, class_names):
     lines.append("")
 
     # ---------------------------------------------------- phase 3 (personal)
-    lines.extend(phase3_section())
+    # The pagination finding belongs here (it is about the API). The Phase 3
+    # results themselves do not - they are personal health data, and go to
+    # the untracked report instead; only a pointer is left behind.
+    lines.extend(api_pagination_section())
+    lines.extend(phase3_pointer())
 
     # ------------------------------------------------------------- artefacts
     lines.append("## Saved artefacts")
@@ -917,8 +1015,20 @@ def write_results_md(table, summaries, class_names):
     lines.append("| `results/features.csv` | The full feature table |")
     lines.append("| `results/cv_predictions_<set>.csv` | Out-of-fold prediction "
                  "for every window |")
+    lines.append("")
+    lines.append("Everything under `results/personal/` is personal health "
+                 "data and is **not tracked** (see `.gitignore`). It exists "
+                 "only on the machine that produced it:")
+    lines.append("")
+    lines.append("| File (untracked) | What it is |")
+    lines.append("|---|---|")
+    lines.append("| `results/personal/RESULTS_personal.md` | The Phase 3 "
+                 "report - per-day heart-rate summary, coverage, "
+                 "out-of-distribution comparison, predictions |")
     lines.append("| `results/personal/hr_samples.csv` | Raw personal "
                  "heart-rate samples fetched from the Google Health API |")
+    lines.append("| `results/personal/hr_inspection.csv` | Per-day coverage "
+                 "and sample-spacing summary |")
     lines.append("| `results/personal/feature_distribution_comparison.csv` | "
                  "Training vs personal feature distributions |")
     lines.append("| `results/personal/predictions_windows.csv` | Per-window "
@@ -940,11 +1050,33 @@ def write_results_md(table, summaries, class_names):
     lines.append("# dashboard's stored Google credentials; stop its runserver first)")
     lines.append("python scripts/05_apply_to_personal_data.py inspect")
     lines.append("python scripts/05_apply_to_personal_data.py predict")
-    lines.append("python scripts/04_evaluate.py   # re-run to fold Phase 3 into this file")
+    lines.append("python scripts/04_evaluate.py   # re-run to regenerate both reports")
     lines.append("```")
     lines.append("")
 
     path = os.path.join(config.PROJECT_DIR, "RESULTS.md")
+    with open(path, "w", encoding="utf-8") as f:
+        f.write("\n".join(lines))
+    return path
+
+
+def write_personal_report():
+    """
+    Write the Phase 3 report to results/personal/RESULTS_personal.md.
+
+    Kept as a SEPARATE file from RESULTS.md because every number in it comes
+    from real personal heart-rate readings. results/personal/ is excluded by
+    .gitignore, so this report stays on the machine that produced it even
+    though RESULTS.md is committed.
+
+    Returns the path written, or None if 05 has not been run yet.
+    """
+    lines = phase3_section()
+    if lines is None:
+        return None
+
+    os.makedirs(config.PERSONAL_DIR, exist_ok=True)
+    path = os.path.join(config.PERSONAL_DIR, "RESULTS_personal.md")
     with open(path, "w", encoding="utf-8") as f:
         f.write("\n".join(lines))
     return path
@@ -959,9 +1091,18 @@ def main():
         summaries[feature_set_name] = evaluate_feature_set(
             feature_set_name, class_names)
 
+    # Personal report first, so that RESULTS.md's pointer can say truthfully
+    # whether the file it points at exists.
+    personal_path = write_personal_report()
     path = write_results_md(table, summaries, class_names)
+
     print("Figures written to " + config.RESULTS_DIR)
-    print("Summary written to " + path)
+    print("WESAD summary (tracked)      : " + path)
+    if personal_path:
+        print("Phase 3 report (NOT tracked) : " + personal_path)
+    else:
+        print("Phase 3 report               : not written - run "
+              "05_apply_to_personal_data.py first")
 
 
 if __name__ == "__main__":

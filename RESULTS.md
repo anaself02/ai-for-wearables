@@ -246,97 +246,36 @@ These apply to every number above, and especially to any output of `scripts/05_a
 5. **Overlapping windows are not independent.** The 50% overlap means neighbouring windows share 30 s of signal. Subject-wise splitting prevents this from leaking across train and test, but it does mean the effective sample size is smaller than the 1015 window count suggests.
 6. **Hyperparameters were not tuned.** Both models use scikit-learn defaults. Tuning honestly would require a nested cross-validation loop (an inner loop over the training subjects only); tuning on the outer folds would leak test information and inflate the scores.
 
-## Phase 3: applying the model to my own wearable data
+## Data quality: a silent API pagination bug
 
-### Data quality: a silent API pagination bug
-
-This one is worth reading carefully, because the symptom looked exactly like a behavioural fact about the wearer.
+Found while fetching personal wearable data in Phase 3, but recorded here because it is a finding about the API rather than about any particular person's data - and because the symptom was indistinguishable from a behavioural fact about the wearer.
 
 `scripts/05_apply_to_personal_data.py` fetches intraday heart rate one civil day at a time through the dashboard's API client. That client pages through results, and the caller chooses how many pages to request. The `heart-rate` data type declares `max_page_size = 10000`, so an initial limit of 4 pages looked like 40,000 samples of headroom - far more than a day could possibly hold.
 
-**The API actually returns about 5,000 points per page**, so 4 pages capped each day at roughly 20,000 samples. And because the API returns the *newest* samples first, hitting the cap did not truncate the end of the day - it deleted the *beginning*. Full days came back apparently starting at 10:45, 11:04 or 11:41.
+**The API actually returns about 5,000 points per page**, so 4 pages capped each day at roughly 20,000 samples. And because the API returns the *newest* samples first, hitting the cap did not truncate the end of the day - it deleted the *beginning*. Days that had in fact been recorded from midnight came back appearing to start in the late morning.
 
-That is indistinguishable, from the data alone, from someone who simply does not put the watch on until late morning. It was caught only by re-fetching the same days with a higher page limit and watching the sample counts rise from ~20,000 to 27,000-36,000 and the start times drop to 00:00.
+That is indistinguishable, from the data alone, from someone who simply does not put the watch on until late morning - a wrong conclusion about the person, drawn from a bug in the fetch. It was caught only by re-fetching the same days with a higher page limit and watching the sample counts rise from ~20,000 to 27,000-36,000 while the start times dropped to 00:00.
 
 Two changes came out of it, both still in the script:
 
-1. `DEFAULT_MAX_PAGES = 16`. A full 24 h day at the observed ~3 s spacing is about 7 pages; 16 leaves headroom.
+1. `DEFAULT_MAX_PAGES = 16`. A full 24 h day at the observed ~3 s sample spacing is about 7 pages; 16 leaves headroom.
 2. A truncation guard. Any *completed* day whose first sample is later than 00:05 is reported as suspicious, with an explicit instruction to re-run with a higher page limit to tell "watch was off" apart from "we truncated it".
 
-After the fix, two warnings remained and both are genuine: 2026-09-14 starts at 14:13 (14,430 samples - the watch really was off until mid-afternoon) and 2026-09-08 starts at 00:20. 2026-09-12 and 2026-09-13 returned no samples at all.
+The general lesson: a declared `max_page_size` is an upper bound the server is allowed to ignore, and silent truncation that removes the *oldest* records is invisible unless you go looking for it. Which days were genuinely affected is recorded in the personal report (see the pointer at the end of this file), since that is information about the wearer.
 
-The general lesson: a declared `max_page_size` is an upper bound the server is allowed to ignore, and silent truncation that removes the *oldest* records is invisible unless you go looking for it.
+## Phase 3: applying the model to my own wearable data
 
-### What was applied, and to what
+The heart-rate-only model was applied to real heart-rate data from my own consumer wearable (Google Fitbit Air, read live through the Google Health API by `scripts/05_apply_to_personal_data.py`, reusing the Django dashboard's stored OAuth credentials in-process rather than duplicating any credential handling).
 
-| | |
-|---|---|
-| Source | Google Health API, `heart-rate` data type, device reported as Google Fitbit Air (`PASSIVELY_MEASURED`) |
-| Auth | Reuses the Django dashboard's stored OAuth credentials and API client in-process; no credential handling is duplicated in this project |
-| Samples | 377,627 readings, 2026-09-06 00:00:00 to 2026-09-19 19:08:25 |
-| Observed spacing | ~3 s between readings (p05 1 s, p95 3 s) |
-| Windows | 30,284 windows of 60 s, stepping 30 s - identical geometry to training |
-| Readings per window | median 25; windows with fewer than 10 are dropped |
-| Days | 12 |
-| Model | `models/svm_hr_only.joblib`, the 5-feature heart-rate-only SVM |
+**Those results are deliberately not in this file.** They consist of my own heart-rate readings, per-day heart-rate statistics and wearing pattern - personal health information, which stays out of a repository that might later be pushed somewhere. They are written instead to:
 
-### The inputs are far outside the training distribution
+```
+results/personal/RESULTS_personal.md
+```
 
-This comparison is computed and printed **before** any prediction, because it is what decides whether the predictions deserve any weight at all. An RBF-kernel SVM judges by distance in feature space, so inputs outside the training range do not degrade gracefully - they fall wherever happens to be nearest.
+which is covered by the `results/personal/` entry in `.gitignore` and kept locally only.
 
-| Feature | WESAD mean (sd) | Personal mean (sd) | Outside training range | Median shift |
-|---|---|---|---|---|
-| `HR_mean` | 76.68 (11.59) | 61.71 (14.34) | **31.6%** | -1.58 sd |
-| `HR_std` | 11.18 (5.27) | 2.18 (2.16) | **52.4%** | -1.85 sd |
-| `HR_min` | 55.79 (8.96) | 58.65 (12.95) | **0.4%** | -0.09 sd |
-| `HR_max` | 106.19 (19.46) | 65.74 (16.23) | **38.9%** | -2.27 sd |
-| `HR_slope` | 0.01 (0.25) | -0.00 (0.30) | **0.0%** | -0.04 sd |
-
-The cause is the one flagged before the step was written, and it is larger than expected:
-
-- **In training**, `HR_*` describes a *beat-to-beat* series - roughly 60-80 values per window, each the instantaneous rate implied by one inter-beat interval from our own peak detection on WESAD's 64 Hz PPG.
-- **Here**, `HR_*` describes ~20 *already-smoothed* bpm readings emitted by the watch every 3 s, through its own undisclosed filtering.
-
-So the same column name means a different physical quantity, and the gap is stark: within a single 60 s window the WESAD series averages a spread of `HR_std` = 11.2 bpm and reaches `HR_max` = 106 bpm, while the personal series averages `HR_std` = 2.2 and `HR_max` = 66.
-
-It was this comparison that exposed the beat-detection artifacts in the WESAD features, and the inter-beat-interval median filter documented above was added in response. The figures in the table are computed against the **corrected** training distribution; against the uncorrected one the gap was wider still (`HR_std` 71.6% outside range, `HR_max` 67.4%, a -4.52 sd shift). Cleaning the training features narrowed the mismatch but did not remove it, because the remaining difference is not an artifact - it is the genuine distinction between a beat-to-beat series and a device's smoothed once-per-3-seconds output.
-
-### Predictions
-
-| Predicted class | Share of windows |
-|---|---|
-| baseline | 31.2% |
-| stress | 2.4% |
-| amusement | 66.3% |
-
-**These predictions are degenerate and should be read as a negative result, not as a measurement.** Stress is predicted for 2.4% of windows across two weeks of ordinary life, while amusement - the class the model was *weakest* at in cross-validation - absorbs a large share. That is the expected consequence of feeding an RBF SVM inputs whose medians sit up to 2.3 training standard deviations from where it was fitted.
-
-Per day (waking hours are 08:00-23:00; overnight windows are reported separately because the model has no sleep class and WESAD contains no sleep):
-
-| Day | Windows | Mean bpm | baseline | stress | amusement | stress (waking) |
-|---|---|---|---|---|---|---|
-| 2026-09-06 | 2833 | 65.1 | 36.5% | 2.0% | 61.6% | 2.0% |
-| 2026-09-07 | 2653 | 59.4 | 34.1% | 0.7% | 65.2% | 1.0% |
-| 2026-09-08 | 2817 | 64.8 | 35.3% | 4.9% | 59.9% | 7.6% |
-| 2026-09-09 | 2843 | 60.6 | 26.6% | 2.3% | 71.2% | 3.2% |
-| 2026-09-10 | 2853 | 60.9 | 28.4% | 2.4% | 69.2% | 3.4% |
-| 2026-09-11 | 2633 | 61.7 | 26.9% | 5.1% | 68.0% | 7.6% |
-| 2026-09-14 | 1154 | 64.4 | 34.0% | 4.4% | 61.6% | 4.8% |
-| 2026-09-15 | 2434 | 61.8 | 33.1% | 1.0% | 65.9% | 0.7% |
-| 2026-09-16 | 2207 | 59.2 | 16.6% | 2.7% | 80.7% | 4.3% |
-| 2026-09-17 | 2834 | 63.8 | 41.4% | 2.3% | 56.2% | 3.3% |
-| 2026-09-18 | 2726 | 60.7 | 29.9% | 2.0% | 68.1% | 2.6% |
-| 2026-09-19 | 2297 | 58.4 | 30.2% | 0.3% | 69.4% | 0.3% |
-
-There is **no ground truth** for these days, so no accuracy is reported and none can be. The day-to-day variation above is small and tracks mean heart rate, not anything that has been shown to be stress.
-
-### What this step does and does not establish
-
-**Establishes:** the full pipeline runs end to end on real consumer-wearable data - live API fetch through reused OAuth credentials, windowing with the same geometry as training, features computed by the same imported code, and a saved model producing predictions.
-
-**Does not establish:** anything about whether I was stressed. The model was trained on a laboratory stressor in a controlled setting, it has no "neither" class, its inputs here are measurably out of distribution, and there are no labels to check it against. Treating any number in this section as a stress measurement would be wrong.
-
-**The useful finding is the negative one:** a model trained on research-grade beat-to-beat heart rate does not transfer to a consumer device's smoothed heart-rate feed, even when the feature names, the window length and the code are identical - because the underlying signal is not the same measurement. Closing that gap needs either training features robust to the difference (smoothed IBIs, as above) or training on the target device's own data.
+That report contains the per-day heart-rate summary, the wearing-pattern and coverage notes, the training-versus-personal feature distribution comparison, the model's predictions, and the discussion of what the step does and does not establish. The one finding from it that is *not* personal - the API pagination bug - is written up in this file above, and the effect the comparison had on the training features is the subject of the median-filter correction section.
 
 ## Saved artefacts
 
@@ -349,7 +288,14 @@ There is **no ground truth** for these days, so no accuracy is reported and none
 | `models/features.py`, `models/project_config.py` | A copy of the feature-extraction code, so the same features can be rebuilt from other data |
 | `results/features.csv` | The full feature table |
 | `results/cv_predictions_<set>.csv` | Out-of-fold prediction for every window |
+
+Everything under `results/personal/` is personal health data and is **not tracked** (see `.gitignore`). It exists only on the machine that produced it:
+
+| File (untracked) | What it is |
+|---|---|
+| `results/personal/RESULTS_personal.md` | The Phase 3 report - per-day heart-rate summary, coverage, out-of-distribution comparison, predictions |
 | `results/personal/hr_samples.csv` | Raw personal heart-rate samples fetched from the Google Health API |
+| `results/personal/hr_inspection.csv` | Per-day coverage and sample-spacing summary |
 | `results/personal/feature_distribution_comparison.csv` | Training vs personal feature distributions |
 | `results/personal/predictions_windows.csv` | Per-window personal predictions, with the features behind them |
 | `results/personal/predictions_per_day.csv` | Per-day aggregation of those predictions |
@@ -367,5 +313,5 @@ python scripts/04_evaluate.py
 # dashboard's stored Google credentials; stop its runserver first)
 python scripts/05_apply_to_personal_data.py inspect
 python scripts/05_apply_to_personal_data.py predict
-python scripts/04_evaluate.py   # re-run to fold Phase 3 into this file
+python scripts/04_evaluate.py   # re-run to regenerate both reports
 ```
