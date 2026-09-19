@@ -229,10 +229,128 @@ def sleep_rows(points):
     return rows
 
 
+# Display order for the hypnogram, shallowest at the top.
+HYPNOGRAM_ROWS = [
+    ("AWAKE", "Awake"),
+    ("REM", "REM"),
+    ("LIGHT", "Light"),
+    ("DEEP", "Deep"),
+]
+
+
+def _utc_offset_seconds(raw) -> int:
+    """'-14400s' -> -14400. Absent offset means UTC."""
+    if not raw:
+        return 0
+    return int(float(str(raw).rstrip("s")))
+
+
+def _parse_instant(raw):
+    from datetime import datetime
+
+    return datetime.fromisoformat(str(raw).replace("Z", "+00:00"))
+
+
+def _local_clock(instant_raw, offset_raw) -> str:
+    """Wall-clock HH:MM at the recording device, from the UTC stamp + its offset."""
+    from datetime import timedelta as _timedelta
+
+    moment = _parse_instant(instant_raw) + _timedelta(
+        seconds=_utc_offset_seconds(offset_raw)
+    )
+    return f"{moment.hour:02d}:{moment.minute:02d}"
+
+
+def hypnogram(point) -> dict | None:
+    """One night's stage segments, laid out for a stacked timeline chart.
+
+    Verified against a live response: `stages` tiles the night exactly (no gaps,
+    no overlaps) and its per-stage durations match `summary.stagesSummary`
+    minute for minute, so totals are computed from the segments themselves.
+
+    `shortAwakenings` are deliberately kept separate. They are nested *within*
+    the stage segments - 21 of them on a night whose AWAKE count is 3 - so
+    adding them to the Awake total would double-count.
+
+    Returns None for a night with no stage data (a `classic` sleep record).
+    """
+    sleep = (point or {}).get("sleep") or {}
+    segments = sleep.get("stages") or []
+    interval = sleep.get("interval") or {}
+    if not segments or not interval.get("startTime"):
+        return None
+
+    origin = _parse_instant(interval["startTime"])
+
+    def minutes_from_start(raw):
+        return round((_parse_instant(raw) - origin).total_seconds() / 60, 2)
+
+    rows = []
+    laid_out = []
+    totals = {}
+
+    for index, (stage_type, label) in enumerate(HYPNOGRAM_ROWS):
+        stage_minutes = 0.0
+        for segment in segments:
+            if segment.get("type") != stage_type:
+                continue
+            start = minutes_from_start(segment["startTime"])
+            end = minutes_from_start(segment["endTime"])
+            if end <= start:
+                continue
+            stage_minutes += end - start
+            laid_out.append({"row": index, "start": start, "end": end, "stage": label})
+        totals[stage_type] = round(stage_minutes)
+        rows.append(
+            {
+                "type": stage_type,
+                "label": label,
+                "minutes": round(stage_minutes),
+                "duration": _hours_minutes(round(stage_minutes)) or "0m",
+            }
+        )
+
+    total_span = minutes_from_start(interval.get("endTime", interval["startTime"]))
+    brief = sleep.get("shortAwakenings") or []
+    brief_minutes = 0.0
+    for segment in brief:
+        brief_minutes += (
+            _parse_instant(segment["endTime"]) - _parse_instant(segment["startTime"])
+        ).total_seconds() / 60
+
+    return {
+        "rows": rows,
+        "segments": sorted(laid_out, key=lambda s: s["start"]),
+        "total_minutes": round(total_span),
+        "bedtime": _local_clock(interval["startTime"], interval.get("startUtcOffset")),
+        "wake_time": _local_clock(
+            interval.get("endTime", interval["startTime"]), interval.get("endUtcOffset")
+        ),
+        "start_minute_of_day": _minute_of_day(
+            interval["startTime"], interval.get("startUtcOffset")
+        ),
+        "brief_awakenings": len(brief),
+        "brief_awakenings_minutes": round(brief_minutes),
+        "segment_count": len(laid_out),
+    }
+
+
+def _minute_of_day(instant_raw, offset_raw) -> int:
+    """Local minutes past midnight, so the axis can print real clock times."""
+    from datetime import timedelta as _timedelta
+
+    moment = _parse_instant(instant_raw) + _timedelta(
+        seconds=_utc_offset_seconds(offset_raw)
+    )
+    return moment.hour * 60 + moment.minute
+
+
 def _hours_minutes(minutes):
+    """450 -> '7h 30m', 43 -> '43m'. A leading '0h' just reads as noise."""
     if not minutes:
         return None
-    return f"{minutes // 60}h {minutes % 60:02d}m"
+    hours, remainder = divmod(int(minutes), 60)
+    return f"{hours}h {remainder:02d}m" if hours else f"{remainder}m"
 
 
 # -- exercise ---------------------------------------------------------------

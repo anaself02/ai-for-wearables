@@ -342,6 +342,87 @@ def metric_day(request, slug, day):
 
 
 # ---------------------------------------------------------------------------
+# one night's sleep-stage timeline
+# ---------------------------------------------------------------------------
+
+
+@login_required
+def sleep_night(request, day):
+    """Hypnogram for a single night: one band per stage across the night.
+
+    Inherently per-night, so it lives on its own page rather than on the
+    multi-day sleep view, which links into it.
+    """
+    try:
+        target = datetime.strptime(day, "%Y-%m-%d").date()
+    except ValueError:
+        raise Http404("Expected a date as YYYY-MM-DD")
+
+    credential = _credential_or_none(request)
+    if credential is None:
+        return redirect("accounts:landing")
+
+    metric = metrics.get("sleep")
+    context = {
+        "metric": metric,
+        "day": target,
+        "prev_day": target - timedelta(days=1),
+        "next_day": target + timedelta(days=1),
+    }
+
+    # A night is keyed by the civil date it ends on, so fetching that single day
+    # is enough; a two-day window guards a session that straddles the boundary.
+    try:
+        client = GoogleHealthClient(credential)
+        fetched = health_cache.fetch_points(
+            client,
+            metric,
+            target,
+            target + timedelta(days=1),
+            user=request.user,
+            force=health_cache.wants_refresh(request),
+        )
+    except GoogleReconnectRequired as exc:
+        return render(request, "health/reconnect.html", {"detail": str(exc)})
+    except GoogleHealthError as exc:
+        context["error"] = str(exc)
+        return render(request, "health/sleep_night.html", context)
+
+    context["freshness"] = fetched
+    nights = [
+        row
+        for row in metric.rows(fetched.points)
+        if row["date"] == target.isoformat() and not row.get("is_nap")
+    ]
+    context["summary"] = nights[0] if nights else None
+
+    # Pick the night's main session: the longest non-nap one ending on this date.
+    candidates = [
+        point
+        for point in fetched.points
+        if metrics._sleep_night_date(point) == target.isoformat()
+        and not ((point.get("sleep") or {}).get("metadata") or {}).get("nap")
+    ]
+    candidates.sort(
+        key=lambda p: metrics.as_int(
+            ((p.get("sleep") or {}).get("summary") or {}).get("minutesAsleep")
+        )
+        or 0,
+        reverse=True,
+    )
+
+    chart = metrics.hypnogram(candidates[0]) if candidates else None
+    context["hypnogram"] = chart
+    context["hypnogram_json"] = json.dumps(chart) if chart else None
+    if candidates and chart is None:
+        # A `classic` sleep record has no stage breakdown to draw.
+        context["no_stages"] = True
+        context["sleep_type"] = (candidates[0].get("sleep") or {}).get("type")
+
+    return render(request, "health/sleep_night.html", context)
+
+
+# ---------------------------------------------------------------------------
 # raw JSON pages (kept from step 2 as a debugging aid)
 # ---------------------------------------------------------------------------
 

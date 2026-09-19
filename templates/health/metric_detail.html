@@ -84,7 +84,7 @@
             <tbody>
               {% for row in rows %}
                 <tr>
-                  <td>{{ row.date }}</td>
+                  <td><a href="{% url 'health:sleep_night' row.date %}">{{ row.date }}</a></td>
                   <td class="num">{{ row.asleep_hm|default:"&mdash;" }}</td>
                   <td class="num">{{ row.in_bed_hm|default:"&mdash;" }}</td>
                   <td class="num">{% if row.efficiency %}{{ row.efficiency }}%{% else %}&mdash;{% endif %}</td>

@@ -113,12 +113,127 @@
     });
   }
 
+  /* ---- hypnogram -------------------------------------------------------
+   * One horizontal band per sleep stage, each stage's segments drawn across a
+   * shared time axis.
+   *
+   * Every segment is its own dataset with `grouped: false`, so they all draw at
+   * full band height in their own row instead of being bunched side by side.
+   * The x axis is minutes from bedtime (linear) rather than a time scale: that
+   * needs no date adapter, and the tick callback prints real clock times from
+   * the night's local start minute.
+   */
+
+  var STAGE_COLOURS = {
+    Awake: "#f0b849",
+    REM: "#b58cf0",
+    Light: "#6ea8fe",
+    Deep: "#3f6fd8",
+  };
+
+  function clockAt(minuteOfDay) {
+    var total = ((Math.round(minuteOfDay) % 1440) + 1440) % 1440;
+    var h = Math.floor(total / 60);
+    var m = total % 60;
+    return (h < 10 ? "0" : "") + h + ":" + (m < 10 ? "0" : "") + m;
+  }
+
+  function durationLabel(minutes) {
+    var whole = Math.round(minutes);
+    var h = Math.floor(whole / 60);
+    var m = whole % 60;
+    return h ? h + "h " + (m < 10 ? "0" : "") + m + "m" : m + "m";
+  }
+
+  function buildHypnogram(canvas) {
+    var data = readSeries(canvas.dataset.hypnogram);
+    if (!data || !data.segments || !data.segments.length) return;
+
+    var rowLabels = data.rows.map(function (row) {
+      return row.label + " — " + row.duration;
+    });
+
+    var datasets = data.segments.map(function (segment) {
+      var cells = data.rows.map(function (_, index) {
+        return index === segment.row ? [segment.start, segment.end] : null;
+      });
+      return {
+        label: segment.stage,
+        data: cells,
+        backgroundColor: STAGE_COLOURS[segment.stage] || "#6ea8fe",
+        borderWidth: 0,
+        borderSkipped: false,
+        borderRadius: 2,
+        grouped: false,
+        barPercentage: 1,
+        categoryPercentage: 0.72,
+      };
+    });
+
+    new Chart(canvas.getContext("2d"), {
+      type: "bar",
+      data: { labels: rowLabels, datasets: datasets },
+      options: {
+        indexAxis: "y",
+        responsive: true,
+        maintainAspectRatio: false,
+        animation: { duration: 250 },
+        plugins: {
+          legend: { display: false },
+          tooltip: {
+            displayColors: false,
+            callbacks: {
+              title: function (items) {
+                return items[0].dataset.label;
+              },
+              label: function (ctx) {
+                var pair = ctx.raw;
+                if (!pair) return "";
+                return (
+                  clockAt(data.start_minute_of_day + pair[0]) +
+                  " – " +
+                  clockAt(data.start_minute_of_day + pair[1]) +
+                  "  (" +
+                  durationLabel(pair[1] - pair[0]) +
+                  ")"
+                );
+              },
+            },
+          },
+        },
+        scales: {
+          x: {
+            type: "linear",
+            min: 0,
+            max: data.total_minutes,
+            grid: { color: GRID },
+            ticks: {
+              color: TICK,
+              maxRotation: 0,
+              autoSkipPadding: 18,
+              // Hourly marks read far better than arbitrary minute counts.
+              stepSize: data.total_minutes > 480 ? 120 : 60,
+              callback: function (value) {
+                return clockAt(data.start_minute_of_day + value);
+              },
+            },
+          },
+          y: {
+            grid: { display: false },
+            ticks: { color: "#e8ebf3", font: { size: 12.5 } },
+          },
+        },
+      },
+    });
+  }
+
   function init() {
     if (typeof Chart === "undefined") return;
     Chart.defaults.color = TICK;
     Chart.defaults.font.family =
       'ui-sans-serif, system-ui, "Segoe UI", Roboto, sans-serif';
     document.querySelectorAll("canvas[data-chart]").forEach(build);
+    document.querySelectorAll("canvas[data-hypnogram]").forEach(buildHypnogram);
 
     // Day picker on the metric detail page.
     var picker = document.querySelector("[data-day-picker]");

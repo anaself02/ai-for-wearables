@@ -1,0 +1,112 @@
+{% extends "base.html" %}
+{% block title %}Sleep - {{ day }}{% endblock %}
+
+{% block content %}
+  <p class="small"><a href="{% url 'health:metric' 'sleep' %}?days=30">&larr; Sleep</a></p>
+  <h1>Night of {{ day }}</h1>
+
+  {% if hypnogram %}
+    <p class="lede">
+      Asleep {{ hypnogram.bedtime }} &rarr; {{ hypnogram.wake_time }}
+      &middot; {{ hypnogram.segment_count }} stage segments
+    </p>
+  {% endif %}
+
+  {% include "health/_freshness.html" %}
+
+  <ul class="chips">
+    <li><a class="chip" href="{% url 'health:sleep_night' prev_day|date:'Y-m-d' %}">&larr; {{ prev_day }}</a></li>
+    <li><a class="chip" href="{% url 'health:sleep_night' next_day|date:'Y-m-d' %}">{{ next_day }} &rarr;</a></li>
+  </ul>
+
+  {% if error %}
+    <div class="notice error"><strong>{{ error }}</strong></div>
+
+  {% elif no_stages %}
+    <div class="notice">
+      This night was recorded as <code>{{ sleep_type }}</code> sleep, which carries
+      no stage breakdown &mdash; only a total. There is nothing to plot.
+    </div>
+
+  {% elif hypnogram %}
+    {% if summary %}
+      <div class="stats">
+        <div class="stat">
+          <div class="k">Asleep</div>
+          <div class="v">{{ summary.asleep_hm }}</div>
+        </div>
+        <div class="stat">
+          <div class="k">In bed</div>
+          <div class="v">{{ summary.in_bed_hm }}</div>
+        </div>
+        {% if summary.efficiency %}
+          <div class="stat">
+            <div class="k">Efficiency</div>
+            <div class="v">{{ summary.efficiency }}<span class="unit">%</span></div>
+          </div>
+        {% endif %}
+        <div class="stat">
+          <div class="k">Bedtime</div>
+          <div class="v" style="font-size:1.1rem">{{ hypnogram.bedtime }}</div>
+        </div>
+        <div class="stat">
+          <div class="k">Woke</div>
+          <div class="v" style="font-size:1.1rem">{{ hypnogram.wake_time }}</div>
+        </div>
+      </div>
+    {% endif %}
+
+    {{ hypnogram|json_script:"hypnogram-data" }}
+    <div class="panel">
+      <div class="hypnogram-axis">
+        <span>{{ hypnogram.bedtime }}</span>
+        <span class="muted small">time asleep</span>
+        <span>{{ hypnogram.wake_time }}</span>
+      </div>
+      <div class="chart-wrap hypnogram">
+        <canvas data-hypnogram="hypnogram-data"></canvas>
+      </div>
+    </div>
+
+    {# The chart is a canvas and invisible to a screen reader, so the same
+       numbers are repeated as a table. #}
+    <h2>Time in each stage</h2>
+    <div class="panel table-scroll">
+      <table>
+        <thead>
+          <tr><th>Stage</th><th class="num">Duration</th><th class="num">Minutes</th><th class="num">Share of night</th></tr>
+        </thead>
+        <tbody>
+          {% for row in hypnogram.rows %}
+            <tr>
+              <td><span class="stage-dot stage-{{ row.type|lower }}"></span>{{ row.label }}</td>
+              <td class="num">{{ row.duration }}</td>
+              <td class="num">{{ row.minutes }}</td>
+              <td class="num">
+                {% widthratio row.minutes hypnogram.total_minutes 100 %}%
+              </td>
+            </tr>
+          {% endfor %}
+        </tbody>
+      </table>
+    </div>
+
+    {% if hypnogram.brief_awakenings %}
+      <p class="muted small" style="margin-top:14px">
+        The API also reports <strong>{{ hypnogram.brief_awakenings }} brief awakenings</strong>
+        totalling {{ hypnogram.brief_awakenings_minutes }} minutes. These sit
+        <em>inside</em> the stage segments above rather than alongside them, so they
+        are not part of the Awake total and are not drawn as their own band.
+      </p>
+    {% endif %}
+
+  {% else %}
+    <div class="notice">No sleep session recorded for this night.</div>
+  {% endif %}
+
+  <p class="small muted" style="margin-top:28px">
+    <a href="{% url 'health:raw' 'sleep' %}?days=7">View the raw sleep JSON</a>
+  </p>
+{% endblock %}
+
+{% block scripts %}{% include "health/_chart_scripts.html" %}{% endblock %}

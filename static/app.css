@@ -235,6 +235,34 @@ details.methodology summary {
 .stat .v { font-size: 1.5rem; font-weight: 650; letter-spacing: -.02em; }
 .stat .v .unit { font-size: .9rem; color: var(--muted); font-weight: 500; margin-left: 3px; }
 
+/* ---- hypnogram ---- */
+
+.chart-wrap.hypnogram { height: 280px; }
+
+.hypnogram-axis {
+  display: flex;
+  justify-content: space-between;
+  align-items: baseline;
+  font-size: 13px;
+  font-variant-numeric: tabular-nums;
+  margin-bottom: 10px;
+  padding-bottom: 8px;
+  border-bottom: 1px solid var(--line);
+}
+
+.stage-dot {
+  display: inline-block;
+  width: 9px;
+  height: 9px;
+  border-radius: 2px;
+  margin-right: 8px;
+  vertical-align: baseline;
+}
+.stage-awake { background: #f0b849; }
+.stage-rem { background: #b58cf0; }
+.stage-light { background: #6ea8fe; }
+.stage-deep { background: #3f6fd8; }
+
 .chart-wrap { position: relative; width: 100%; height: 320px; }
 .chart-wrap.short { height: 220px; }
 .chart-wrap canvas { width: 100% !important; }
