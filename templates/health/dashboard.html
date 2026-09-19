@@ -4,6 +4,7 @@
 {% block content %}
   <h1>Overview</h1>
   <p class="lede">Live from the Google Health API &middot; last {{ days }} days ({{ start }} to {{ end }})</p>
+  {% include "health/_freshness.html" %}
 
   <div class="cards">
     {% for card in cards %}

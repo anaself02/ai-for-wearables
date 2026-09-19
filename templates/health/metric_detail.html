@@ -11,6 +11,8 @@
     {% if count is not None %}&middot; {{ count }} point{{ count|pluralize }}{% endif %}
   </p>
 
+  {% include "health/_freshness.html" %}
+
   <ul class="chips">
     {% for window in windows %}
       <li><a class="chip {% if window == days %}active{% endif %}" href="?days={{ window }}">{{ window }} days</a></li>

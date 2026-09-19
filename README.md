@@ -118,6 +118,44 @@ Restarting `runserver` mid-sign-in can also trigger it if the session is
 cleared; the callback detects a missing verifier and asks the user to start
 again rather than failing opaquely.
 
+### Response caching
+
+The overview needs one API call per metric, so an uncached browser refresh cost
+ten calls to Google. `health/cache.py` puts a short-lived cache in front of every
+fetch. Measured on this machine:
+
+| page | cold | warm |
+|---|---|---|
+| `/dashboard/` | 2.26s | **0.24s** |
+| `/metric/heart-rate/?days=90` | 4.61s | **0.21s** |
+| `/metric/heart-rate/day/<date>/` | 3.11s | **0.30s** |
+
+Every page shows when its data was fetched and carries a **Refresh now** link;
+`?refresh=1` on any page deletes that entry and re-fetches.
+
+Two properties are load-bearing and have tests:
+
+- **Keys are per user.** These are personal health readings - a shared key would
+  show one person another's data. The user id is part of every key, alongside the
+  metric, its source endpoint and the exact window.
+- **Failures are never cached.** The value is only written back after a
+  successful return, so an error is retried on the next request instead of being
+  remembered for the rest of the TTL.
+
+A civil day that has already ended cannot gain new samples, so the intraday
+drill-down for a past day is held for 24 hours rather than 10 minutes.
+
+Tuning, via `.env`:
+
+```
+HEALTH_CACHE_SECONDS=600        # 0 disables caching entirely
+HEALTH_CACHE_SECONDS_PAST_DAY=86400
+```
+
+The backend is `LocMemCache`: no extra service, but per-process and empty after a
+restart. Switch to the database or Redis backend if this is ever served by more
+than one worker.
+
 ### Checking the credentials
 
 ```

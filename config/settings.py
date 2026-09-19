@@ -124,6 +124,30 @@ GOOGLE_OAUTH_SCOPES = [
 
 GOOGLE_HEALTH_API_BASE = "https://health.googleapis.com/v4"
 
+# ---------------------------------------------------------------------------
+# API response cache
+# ---------------------------------------------------------------------------
+# The overview page needs one API call per metric, so an uncached browser
+# refresh costs ten calls. Health readings do not change second to second.
+# Set HEALTH_CACHE_SECONDS=0 to disable caching entirely.
+HEALTH_CACHE_SECONDS = int(env("HEALTH_CACHE_SECONDS", "600"))
+
+# A civil day that has already ended cannot gain new samples, so the intraday
+# drill-down for a past day is held much longer.
+HEALTH_CACHE_SECONDS_PAST_DAY = int(env("HEALTH_CACHE_SECONDS_PAST_DAY", "86400"))
+
+# In-process cache: no extra service to run, and fast. It is per-process and
+# does not survive a restart - move to the database or Redis backend if this is
+# ever served by more than one worker.
+CACHES = {
+    "default": {
+        "BACKEND": "django.core.cache.backends.locmem.LocMemCache",
+        "LOCATION": "health-dashboard",
+        "TIMEOUT": HEALTH_CACHE_SECONDS,
+        "OPTIONS": {"MAX_ENTRIES": 2000},
+    }
+}
+
 # Google returns the granted scope set in a different order than requested, and
 # silently adds "openid" alongside the userinfo scopes. oauthlib treats that as a
 # scope change and raises; relaxing the check is the documented workaround.

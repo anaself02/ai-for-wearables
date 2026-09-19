@@ -16,6 +16,7 @@ from django.http import Http404
 from django.shortcuts import redirect, render
 from django.utils import timezone
 
+from . import cache as health_cache
 from . import datatypes, metrics
 from .client import GoogleHealthClient, GoogleHealthError, GoogleReconnectRequired
 from .models import HistoricalMetric
@@ -99,15 +100,19 @@ def index(request):
     except GoogleReconnectRequired as exc:
         return render(request, "health/reconnect.html", {"detail": str(exc)})
 
+    force = health_cache.wants_refresh(request)
+
     def load(metric):
         try:
-            points = metrics.fetch_points(client, metric, start, end)
-            return metric, points, None
+            fetched = health_cache.fetch_points(
+                client, metric, start, end, user=request.user, force=force
+            )
+            return metric, fetched, None
         except GoogleReconnectRequired:
             raise
         except GoogleHealthError as exc:
             logger.warning("%s failed: %s", metric.slug, exc)
-            return metric, [], str(exc)
+            return metric, None, str(exc)
 
     targets = metrics.fetchable()
     try:
@@ -116,7 +121,12 @@ def index(request):
     except GoogleReconnectRequired as exc:
         return render(request, "health/reconnect.html", {"detail": str(exc)})
 
-    loaded = {metric.slug: (points, error) for metric, points, error in results}
+    loaded = {
+        metric.slug: (fetched.points if fetched else [], error)
+        for metric, fetched, error in results
+    }
+    # The page is only as fresh as its least fresh card.
+    freshness = health_cache.oldest([fetched for _, fetched, _ in results])
     historical = _latest_historical(request.user)
 
     cards = []
@@ -159,6 +169,7 @@ def index(request):
             "start": start,
             "end": end,
             "credential": credential,
+            "freshness": freshness,
         },
     )
 
@@ -209,7 +220,14 @@ def metric_detail(request, slug):
 
     try:
         client = GoogleHealthClient(credential)
-        points = metrics.fetch_points(client, metric, start, end)
+        fetched = health_cache.fetch_points(
+            client,
+            metric,
+            start,
+            end,
+            user=request.user,
+            force=health_cache.wants_refresh(request),
+        )
     except GoogleReconnectRequired as exc:
         return render(request, "health/reconnect.html", {"detail": str(exc)})
     except GoogleHealthError as exc:
@@ -217,6 +235,8 @@ def metric_detail(request, slug):
         context["error_body"] = exc.body
         return render(request, "health/metric_detail.html", context)
 
+    points = fetched.points
+    context["freshness"] = fetched
     series = metric.series(points) if metric.series else None
     value, when = metrics.latest_value(series)
 
@@ -274,9 +294,14 @@ def metric_day(request, slug, day):
 
     try:
         client = GoogleHealthClient(credential)
-        # One civil day, full resolution: several pages of samples.
-        points = client.list_data_points(
-            data_type, start=target, end=target + timedelta(days=1), max_pages=4
+        # One civil day, full resolution: several pages of samples. A day that
+        # has already ended is cached for much longer than today.
+        fetched = health_cache.fetch_intraday(
+            client,
+            data_type,
+            target,
+            user=request.user,
+            force=health_cache.wants_refresh(request),
         )
     except GoogleReconnectRequired as exc:
         return render(request, "health/reconnect.html", {"detail": str(exc)})
@@ -284,6 +309,8 @@ def metric_day(request, slug, day):
         context["error"] = str(exc)
         return render(request, "health/metric_day.html", context)
 
+    points = fetched.points
+    context["freshness"] = fetched
     series = extract(points) if extract else None
     context["count"] = len(points)
     context["series"] = series

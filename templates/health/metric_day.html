@@ -9,6 +9,8 @@
     {% if count is not None %}&middot; {{ count }} point{{ count|pluralize }}{% endif %}
   </p>
 
+  {% include "health/_freshness.html" %}
+
   <ul class="chips">
     <li><a class="chip" href="{% url 'health:metric_day' metric.slug prev_day|date:'Y-m-d' %}">&larr; {{ prev_day }}</a></li>
     <li><a class="chip" href="{% url 'health:metric_day' metric.slug next_day|date:'Y-m-d' %}">{{ next_day }} &rarr;</a></li>

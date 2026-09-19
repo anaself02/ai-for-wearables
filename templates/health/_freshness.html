@@ -1,0 +1,12 @@
+{% if freshness %}
+  <p class="small muted freshness">
+    {% if freshness.from_cache %}
+      Cached &middot; fetched
+      {% if freshness.age_seconds < 60 %}moments ago{% else %}{{ freshness.fetched_at|timesince }} ago{% endif %}
+    {% else %}
+      Fetched from the API just now
+    {% endif %}
+    &middot;
+    <a href="?{% if days %}days={{ days }}&amp;{% endif %}refresh=1">Refresh now</a>
+  </p>
+{% endif %}
