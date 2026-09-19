@@ -38,11 +38,23 @@ MINUTES_PER_HOUR = 60
 DEFAULT_SLEEP_TARGET_MINUTES = 450  # 7h30
 
 
+#: How much weight a reader should put on an insight. Rendered as a badge, and
+#: the detail sentence is phrased to match - an insight that fails its test says
+#: so in its first clause rather than burying it in the footnote.
+SIG_DESCRIPTIVE = "descriptive"  # arithmetic on the sample; no test applies
+SIG_NONE = "not distinguishable from chance"
+SIG_SAMPLE = "significant in this sample"
+SIG_CORRECTED = "survives multiple-comparison correction"
+
+ALPHA = 0.05
+
+
 @dataclass(frozen=True)
 class Insight:
     key: str
     title: str
-    #: One plain-language sentence. Observational phrasing only.
+    #: One plain-language sentence. Observational phrasing only, and it must
+    #: not read as significant when the statistics do not support it.
     detail: str
     available: bool = True
     value: float | None = None
@@ -53,10 +65,18 @@ class Insight:
     note: str = ""
     sample_size: int = 0
     direction: str = ""  # "up" | "down" | "flat" | ""
+    significance: str = SIG_DESCRIPTIVE
+    p_value: float | None = None
+    #: Numbers the methodology section quotes back, e.g. pairings tested.
+    meta: dict = field(default_factory=dict)
 
     @classmethod
     def unavailable(cls, key, title, note):
         return cls(key=key, title=title, detail="", available=False, note=note)
+
+    @property
+    def is_significant(self) -> bool:
+        return self.significance in (SIG_SAMPLE, SIG_CORRECTED)
 
 
 # ---------------------------------------------------------------------------
@@ -191,18 +211,21 @@ def describe_strength(r: float) -> str:
     return "very weak"
 
 
+def format_p(p: float | None) -> str:
+    if p is None:
+        return "p unavailable"
+    return f"p ≈ {p:.3f}" if p >= 0.001 else "p < 0.001"
+
+
 def _stats_footnote(r: float, n: int) -> str:
     p = p_value_for_r(r, n)
-    significance = (
-        f"p ≈ {p:.3f}" if p is not None and p >= 0.001 else "p < 0.001"
-    ) if p is not None else "p unavailable"
     verdict = (
         "not distinguishable from chance at the 0.05 level"
-        if p is None or p >= 0.05
+        if p is None or p >= ALPHA
         else "unlikely under the null at the 0.05 level"
     )
     return (
-        f"Pearson r = {r:+.2f} over {n} paired days, {significance} - {verdict}. "
+        f"Pearson r = {r:+.2f} over {n} paired days, {format_p(p)} - {verdict}. "
         f"Association only; consecutive days from one person are not independent "
         f"observations, so this describes the sample rather than proving anything."
     )
@@ -242,18 +265,37 @@ def trend(
     total_change = slope * span_days
     direction = "flat" if abs(total_change) < 10 ** -decimals else ("up" if total_change > 0 else "down")
 
+    # A fitted line always has *some* slope. Testing it against zero is what
+    # separates a trend from day-to-day scatter, and the sentence is worded to
+    # match the answer rather than asserting a trend either way.
+    r = pearson([float(x) for x in xs], ys)
+    p = p_value_for_r(r, len(points)) if r is not None else None
+    significant = p is not None and p < ALPHA
+    significance = SIG_SAMPLE if significant else SIG_NONE
+
     if direction == "flat":
         detail = f"{label} has been essentially flat over the last {span_days} days."
-    else:
+        significance = SIG_DESCRIPTIVE
+    elif significant:
         detail = (
             f"{label} trended {direction} by "
             f"{abs(total_change):.{decimals}f} {unit} across the last {span_days} days."
         )
+    else:
+        detail = (
+            f"{label} drifted {direction} by about "
+            f"{abs(total_change):.{decimals}f} {unit} across the last {span_days} days, "
+            f"but the day-to-day scatter is wide enough that this is not "
+            f"distinguishable from no trend at all."
+        )
 
+    # A perfectly constant series has no correlation to report, which is not an
+    # error - it is the flat case, already described above.
+    fit = f"fit r = {r:+.2f}, {format_p(p)}. " if r is not None else ""
     footnote = (
-        f"Least-squares slope over {len(points)} readings "
-        f"({slope:+.3f} {unit}/day). A line fitted to {len(points)} days describes the "
-        f"window; it is not a forecast."
+        f"Least-squares slope over {len(points)} readings ({slope:+.3f} {unit}/day); "
+        f"{fit}A line fitted to {len(points)} days describes this window only - "
+        f"it is not a forecast."
     )
     return Insight(
         key=key,
@@ -264,6 +306,8 @@ def trend(
         footnote=footnote,
         sample_size=len(points),
         direction=direction,
+        significance=significance,
+        p_value=p,
     )
 
 
@@ -355,6 +399,8 @@ def resting_hr_after_sleep(
     difference = short_hr - long_hr
 
     r = pearson(durations, beats)
+    p = p_value_for_r(r, len(days)) if r is not None else None
+    significant = p is not None and p < ALPHA
 
     if abs(difference) < 0.5:
         detail = (
@@ -363,10 +409,20 @@ def resting_hr_after_sleep(
         )
     else:
         higher_lower = "higher" if difference > 0 else "lower"
-        detail = (
+        observed = (
             f"Resting heart rate was {abs(difference):.1f} bpm {higher_lower} on mornings "
             f"after the shortest nights ({short_sleep_h:.1f}h avg, {short_hr:.1f} bpm) "
-            f"than after the longest ({long_sleep_h:.1f}h avg, {long_hr:.1f} bpm)."
+            f"than after the longest ({long_sleep_h:.1f}h avg, {long_hr:.1f} bpm)"
+        )
+        # The difference is a fact about the sample either way; whether it means
+        # anything is a separate question, and the sentence has to answer both.
+        detail = (
+            f"{observed}."
+            if significant
+            else (
+                f"{observed} - a gap this small is within normal day-to-day "
+                f"variation over {len(days)} nights."
+            )
         )
 
     footnote = (
@@ -385,6 +441,9 @@ def resting_hr_after_sleep(
         footnote=footnote,
         sample_size=len(days),
         direction="up" if difference > 0 else "down",
+        significance=SIG_SAMPLE if significant else SIG_NONE,
+        p_value=p,
+        meta={"partly_definitional": True},
     )
 
 
@@ -409,11 +468,25 @@ def pair_correlation(
     if r is None:
         return Insight.unavailable(key, title, "One of the series does not vary.")
 
+    p = p_value_for_r(r, len(days))
+    significant = p is not None and p < ALPHA
     relation = "higher" if r > 0 else "lower"
-    detail = (
-        f"{describe_strength(r).capitalize()} association: days with higher "
-        f"{left_label} tended to show {relation} {right_label}."
-    )
+
+    if significant:
+        detail = (
+            f"{describe_strength(r).capitalize()} association: days with higher "
+            f"{left_label} tended to show {relation} {right_label}."
+        )
+    else:
+        # Leading with the strength label reads as a finding. When the test
+        # fails, the sentence has to say so before describing the direction.
+        detail = (
+            f"Tested, no clear relationship: {left_label} and {right_label} moved "
+            f"{'together' if r > 0 else 'in opposite directions'} slightly "
+            f"(r = {r:+.2f}), which is within what random variation would produce "
+            f"over {len(days)} days."
+        )
+
     return Insight(
         key=key,
         title=title,
@@ -423,6 +496,8 @@ def pair_correlation(
         footnote=_stats_footnote(r, len(days)),
         sample_size=len(days),
         direction="up" if r > 0 else "down",
+        significance=SIG_SAMPLE if significant else SIG_NONE,
+        p_value=p,
     )
 
 
@@ -513,25 +588,35 @@ def strongest_relationship(series_map: dict, *, min_pairs: int = 14) -> Insight:
 
     r, left_key, right_key, n = best
     relation = "together" if r > 0 else "in opposite directions"
-    detail = (
-        f"Of the daily metrics collected, {left_key} and {right_key} moved "
-        f"{relation} most closely ({describe_strength(r)}, r = {r:+.2f})."
-    )
 
     # This is the maximum of `tested` correlations, so the usual single-test
     # threshold does not apply. Bonferroni is crude but it is the honest floor:
-    # claiming significance off the back of the biggest of 20 comparisons is
+    # claiming significance off the back of the biggest of twenty comparisons is
     # exactly the error this insight would otherwise invite.
     p = p_value_for_r(r, n)
-    threshold = 0.05 / tested if tested else 0.05
+    threshold = ALPHA / tested if tested else ALPHA
     survives = p is not None and p < threshold
-    p_text = f"p ≈ {p:.3f}" if p is not None and p >= 0.001 else "p < 0.001"
+
+    lead = (
+        f"The strongest of {tested} relationships tested: {left_key} and "
+        f"{right_key} moved {relation} ({describe_strength(r)}, r = {r:+.2f})"
+    )
+    if survives:
+        detail = (
+            f"{lead}, and it still holds after correcting for having tested "
+            f"{tested} pairs."
+        )
+    else:
+        detail = (
+            f"{lead} - though not significant after correcting for multiple "
+            f"comparisons, so this is a lead to look into rather than a real effect."
+        )
+
     footnote = (
-        f"Pearson r = {r:+.2f} over {n} paired days, {p_text}. This was the largest "
-        f"of {tested} pairings examined, so the single-test 0.05 threshold does not "
-        f"apply; against a Bonferroni-corrected {threshold:.4f} it "
-        f"{'still holds' if survives else 'does not hold'}. "
-        f"Treat it as a lead worth looking into, not a result."
+        f"Pearson r = {r:+.2f} over {n} paired days, {format_p(p)}. Picking the "
+        f"largest of {tested} comparisons inflates it, so the single-test 0.05 "
+        f"threshold does not apply; the Bonferroni-corrected threshold is "
+        f"{threshold:.4f}, which this {'clears' if survives else 'does not clear'}."
     )
     return Insight(
         key="strongest-relationship",
@@ -542,6 +627,13 @@ def strongest_relationship(series_map: dict, *, min_pairs: int = 14) -> Insight:
         footnote=footnote,
         sample_size=n,
         direction="up" if r > 0 else "down",
+        significance=SIG_CORRECTED if survives else SIG_NONE,
+        p_value=p,
+        meta={
+            "pairs_tested": tested,
+            "bonferroni_threshold": threshold,
+            "survives_correction": survives,
+        },
     )
 
 
@@ -616,6 +708,100 @@ def build(series_map: dict) -> list[Insight]:
         ),
     ]
     return insights
+
+
+def methodology(computed) -> list[dict]:
+    """Caveats shown on the page itself, with the real numbers filled in.
+
+    Built from the computed insights rather than written as fixed prose, so the
+    counts and thresholds quoted here cannot drift away from what was actually
+    calculated.
+    """
+    by_key = {insight.key: insight for insight in computed if insight.available}
+    notes = [
+        {
+            "key": "sample",
+            "heading": "What this is",
+            "body": (
+                "Every figure here is computed from one person's own readings over "
+                "the displayed window - typically 20 to 30 days. There is no control "
+                "group, no randomisation and no blinding, so these describe patterns "
+                "in the data. They are not clinical findings and cannot show that one "
+                "thing causes another."
+            ),
+        }
+    ]
+
+    rhr_sleep = by_key.get("rhr-after-sleep")
+    if rhr_sleep is not None and rhr_sleep.meta.get("partly_definitional"):
+        notes.append(
+            {
+                "key": "circularity",
+                "heading": "Resting HR and sleep overlap by construction",
+                "body": (
+                    "The API reports daily resting heart rate with "
+                    "calculationMethod \"WITH_SLEEP\" - the figure is derived from "
+                    "that same night's sleep recording. The two are therefore not "
+                    "independent measurements, so the resting-HR-versus-sleep "
+                    "comparison is partly definitional rather than purely "
+                    "correlational, and part of any relationship is built into how "
+                    "the number is produced."
+                ),
+            }
+        )
+
+    strongest = by_key.get("strongest-relationship")
+    if strongest is not None:
+        tested = strongest.meta.get("pairs_tested", 0)
+        threshold = strongest.meta.get("bonferroni_threshold", ALPHA)
+        survives = strongest.meta.get("survives_correction", False)
+        notes.append(
+            {
+                "key": "multiple-comparisons",
+                "heading": "The strongest relationship was cherry-picked",
+                "body": (
+                    f"\"Strongest relationship\" is the largest of {tested} "
+                    f"correlations tested, and reporting the biggest of many "
+                    f"comparisons inflates it. Its raw p-value "
+                    f"({format_p(strongest.p_value)}) therefore cannot be read "
+                    f"against the usual 0.05 threshold. Correcting for {tested} "
+                    f"tests (Bonferroni) gives {threshold:.4f}, which the current "
+                    f"result {'clears' if survives else 'does not clear'}. It is "
+                    f"{'worth taking seriously' if survives else 'a lead to look into, not a real effect'}."
+                ),
+            }
+        )
+
+    excluded = sorted(" and ".join(sorted(pair)) for pair in DEFINITIONAL_PAIRS)
+    if excluded:
+        notes.append(
+            {
+                "key": "nested-metrics",
+                "heading": "Overlapping metrics were excluded",
+                "body": (
+                    f"Pairs where one metric is a component of the other were left "
+                    f"out of the scan ({'; '.join(excluded)}). Deep sleep is part of "
+                    f"total time asleep, so those two are guaranteed to correlate by "
+                    f"arithmetic. Including them would surface a strong number that "
+                    f"says nothing about health."
+                ),
+            }
+        )
+
+    notes.append(
+        {
+            "key": "independence",
+            "heading": "Consecutive days are not independent",
+            "body": (
+                "p-values come from the usual t approximation for a Pearson "
+                "correlation, which assumes independent observations. Readings from "
+                "consecutive days in one person are autocorrelated, so the true "
+                "uncertainty is wider than the quoted p-values suggest. Treat them "
+                "as a rough description of this sample."
+            ),
+        }
+    )
+    return notes
 
 
 def available(insights) -> list[Insight]:

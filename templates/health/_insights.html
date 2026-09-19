@@ -1,14 +1,14 @@
 {% if insights or insights_pending %}
   <h2 class="insights-heading">Insights</h2>
   <p class="muted small" style="margin:-6px 0 14px">
-    Computed from the last {{ days }} days of your own data. These are
-    observed associations in a single person's readings, not clinical findings.
+    Computed from the last {{ days }} days of your own data. These are observed
+    patterns in one person's readings, not clinical findings.
   </p>
 
   {% if insights %}
     <div class="insights">
       {% for insight in insights %}
-        <div class="insight {% if insight.direction %}dir-{{ insight.direction }}{% endif %}">
+        <div class="insight {% if insight.direction %}dir-{{ insight.direction }}{% endif %}{% if not insight.is_significant %} inconclusive{% endif %}">
           <div class="insight-head">
             <span class="insight-title">{{ insight.title }}</span>
             {% if insight.value is not None %}
@@ -16,6 +16,13 @@
             {% endif %}
           </div>
           <p class="insight-detail">{{ insight.detail }}</p>
+          <p class="insight-meta">
+            {% comment %}
+              Three states, not two: an arithmetic summary is not a failed test.
+            {% endcomment %}
+            <span class="sig sig-{% if insight.is_significant %}yes{% elif insight.significance == "descriptive" %}neutral{% else %}no{% endif %}">{{ insight.significance }}</span>
+            <span class="muted">n = {{ insight.sample_size }}</span>
+          </p>
           {% if insight.footnote %}
             <p class="insight-footnote">{{ insight.footnote }}</p>
           {% endif %}
@@ -32,6 +39,20 @@
           <li><strong>{{ insight.title }}</strong> &mdash; {{ insight.note }}</li>
         {% endfor %}
       </ul>
+    </details>
+  {% endif %}
+
+  {% if methodology %}
+    <details class="methodology" open>
+      <summary>Methodology notes</summary>
+      <div class="methodology-body">
+        {% for note in methodology %}
+          <div class="method-note">
+            <h3>{{ note.heading }}</h3>
+            <p>{{ note.body }}</p>
+          </div>
+        {% endfor %}
+      </div>
     </details>
   {% endif %}
 {% endif %}

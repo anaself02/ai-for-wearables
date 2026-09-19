@@ -184,6 +184,7 @@ def index(request):
             "freshness": freshness,
             "insights": insights_module.available(computed),
             "insights_pending": insights_module.pending(computed),
+            "methodology": insights_module.methodology(computed),
         },
     )
 

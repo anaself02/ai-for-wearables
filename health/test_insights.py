@@ -310,7 +310,7 @@ class StrongestRelationshipTests(TestCase):
             }
         )
         self.assertIn("Bonferroni", result.footnote)
-        self.assertIn("pairings examined", result.footnote)
+        self.assertIn("comparisons inflates it", result.footnote)
 
     def test_nothing_to_compare(self):
         result = insights.strongest_relationship({"a": series([1.0] * 5)})
@@ -320,6 +320,193 @@ class StrongestRelationshipTests(TestCase):
 # ---------------------------------------------------------------------------
 # assembly and view integration
 # ---------------------------------------------------------------------------
+
+
+class WordingAuditTests(TestCase):
+    """No insight may read as a finding when its own test did not support one."""
+
+    #: Phrases that assert a real effect. None may appear in a detail sentence
+    #: whose significance is SIG_NONE.
+    OVERCLAIMING = [
+        "significant",
+        "proves",
+        "shows that",
+        "demonstrates",
+        "confirms",
+        "causes",
+        "caused",
+        "leads to",
+        "results in",
+        "due to",
+        "because of",
+        "clear effect",
+        "real effect",
+    ]
+
+    def _all_insights(self):
+        """A realistic mixed bag: some strong, some pure noise."""
+        strong = series(linear(28, 50.0, 0.3))
+        noise = series([50 + (i % 5) - 2 for i in range(28)])
+        nights = series([float(400 + (i % 7) * 25) for i in range(28)])
+        return insights.build(
+            {
+                "resting_hr": noise,
+                "hrv": strong,
+                "spo2": series([97 + (i % 3) * 0.4 for i in range(28)]),
+                "respiratory_rate": series([16 + (i % 4) * 0.3 for i in range(28)]),
+                "sleep_minutes": nights,
+                "deep_sleep_minutes": series([float(90 + (i % 5) * 6) for i in range(28)]),
+                "steps": series([float(8000 + (i % 6) * 900) for i in range(28)]),
+            }
+        )
+
+    def test_inconclusive_insights_never_claim_an_effect(self):
+        for insight in insights.available(self._all_insights()):
+            if insight.is_significant:
+                continue
+            text = insight.detail.lower()
+            for phrase in self.OVERCLAIMING:
+                # "not significant after correcting..." is allowed; a bare claim is not.
+                if phrase == "significant" and "not significant" in text:
+                    continue
+                if phrase == "real effect" and "not a real effect" in text:
+                    continue
+                self.assertNotIn(phrase, text, f"{insight.key}: {insight.detail}")
+
+    def test_no_insight_ever_uses_causal_language(self):
+        for insight in insights.available(self._all_insights()):
+            combined = f"{insight.detail} {insight.footnote}".lower()
+            for phrase in ["causes", "caused by", "leads to", "results in"]:
+                self.assertNotIn(phrase, combined, insight.key)
+
+    def test_every_available_insight_declares_its_significance(self):
+        for insight in insights.available(self._all_insights()):
+            self.assertIn(
+                insight.significance,
+                {
+                    insights.SIG_DESCRIPTIVE,
+                    insights.SIG_NONE,
+                    insights.SIG_SAMPLE,
+                    insights.SIG_CORRECTED,
+                },
+                insight.key,
+            )
+
+    def test_a_non_significant_trend_says_so_in_the_sentence(self):
+        # Pure noise around a flat mean: any fitted slope is meaningless.
+        noisy = series([50 + (i % 5) - 2 for i in range(28)])
+        result = insights.trend(
+            noisy, key="t", title="T", label="Resting heart rate", unit="bpm"
+        )
+        self.assertEqual(result.significance, insights.SIG_NONE)
+        self.assertIn("not distinguishable from no trend", result.detail)
+        self.assertNotIn("trended", result.detail)
+
+    def test_a_real_trend_is_stated_plainly(self):
+        result = insights.trend(
+            series(linear(28, 50.0, 0.3)),
+            key="t",
+            title="T",
+            label="Resting heart rate",
+            unit="bpm",
+        )
+        self.assertEqual(result.significance, insights.SIG_SAMPLE)
+        self.assertIn("trended up", result.detail)
+
+    def test_a_null_correlation_leads_with_the_null_result(self):
+        left = series([float(i % 5) for i in range(28)])
+        right = series([float((i * 7) % 11) for i in range(28)])
+        result = insights.pair_correlation(
+            left, right, key="p", title="P", left_label="alpha", right_label="beta"
+        )
+        self.assertEqual(result.significance, insights.SIG_NONE)
+        self.assertTrue(result.detail.startswith("Tested, no clear relationship"))
+        self.assertIn("within what random variation would produce", result.detail)
+
+    def test_strongest_relationship_states_the_correction_in_the_sentence(self):
+        base = linear(24, 1.0, 1)
+        result = insights.strongest_relationship(
+            {
+                "a": series(base),
+                "b": series([v + (1 if i % 2 else -1) for i, v in enumerate(base)]),
+                "c": series([(v * 3) % 7 for v in base]),
+                "d": series([(v * 5) % 11 for v in base]),
+            }
+        )
+        # The count of tests must be in the headline sentence, not just the footnote.
+        self.assertIn("relationships tested", result.detail)
+        combined = result.detail + " " + result.footnote
+        self.assertIn("correcting", combined)
+        self.assertIn("Bonferroni", combined)
+
+    def test_strongest_relationship_that_fails_correction_says_lead_not_effect(self):
+        # Weak, noisy series: the winner will not clear a Bonferroni threshold.
+        result = insights.strongest_relationship(
+            {
+                "a": series([float((i * 3) % 7) for i in range(24)]),
+                "b": series([float((i * 5) % 11) for i in range(24)]),
+                "c": series([float((i * 2) % 5) for i in range(24)]),
+                "d": series([float((i * 7) % 13) for i in range(24)]),
+            }
+        )
+        if not result.meta.get("survives_correction", False):
+            self.assertIn("not significant after correcting", result.detail)
+            self.assertIn("not a real effect", result.detail)
+
+
+class MethodologyTests(TestCase):
+    def _computed(self):
+        return insights.build(
+            {
+                "resting_hr": series(linear(28, 50.0, 0.1)),
+                "hrv": series(linear(28, 60.0, 0.2)),
+                "spo2": series([97 + (i % 3) * 0.4 for i in range(28)]),
+                "sleep_minutes": series([float(400 + (i % 7) * 25) for i in range(28)]),
+                "deep_sleep_minutes": series([float(90 + (i % 5) * 6) for i in range(28)]),
+                "steps": series([float(8000 + (i % 6) * 900) for i in range(28)]),
+            }
+        )
+
+    def test_states_the_with_sleep_circularity(self):
+        notes = insights.methodology(self._computed())
+        body = " ".join(note["body"] for note in notes)
+        self.assertIn("WITH_SLEEP", body)
+        self.assertIn("not independent", body)
+        self.assertIn("definitional", body)
+
+    def test_states_the_multiple_comparison_correction_with_real_numbers(self):
+        computed = self._computed()
+        notes = insights.methodology(computed)
+        note = next(n for n in notes if n["key"] == "multiple-comparisons")
+
+        strongest = next(i for i in computed if i.key == "strongest-relationship")
+        tested = strongest.meta["pairs_tested"]
+        # The prose must quote what was actually computed, not a fixed number.
+        self.assertIn(f"{tested} correlations tested", note["body"])
+        self.assertIn("Bonferroni", note["body"])
+        self.assertIn(f"{strongest.meta['bonferroni_threshold']:.4f}", note["body"])
+
+    def test_states_why_nested_metrics_were_excluded(self):
+        notes = insights.methodology(self._computed())
+        note = next(n for n in notes if n["key"] == "nested-metrics")
+        self.assertIn("deep sleep", note["body"])
+        self.assertIn("time asleep", note["body"])
+        self.assertIn("arithmetic", note["body"])
+
+    def test_states_the_sample_limitation_and_autocorrelation(self):
+        notes = insights.methodology(self._computed())
+        body = " ".join(note["body"] for note in notes)
+        self.assertIn("no control group", body.lower())
+        self.assertIn("autocorrelated", body)
+        self.assertIn("cannot show that one thing causes another", body)
+
+    def test_notes_are_omitted_when_their_insight_is_unavailable(self):
+        notes = insights.methodology(insights.build({}))
+        keys = {note["key"] for note in notes}
+        self.assertNotIn("multiple-comparisons", keys)
+        self.assertNotIn("circularity", keys)
+        # The general caveats always apply.
+        self.assertIn("sample", keys)
 
 
 class BuildTests(TestCase):
@@ -439,6 +626,39 @@ class InsightsOnDashboardTests(TestCase):
         self.assertEqual(response.context["insights"], [])
         self.assertTrue(response.context["insights_pending"])
         self.assertContains(response, "waiting for more data")
+
+    def test_methodology_notes_render_on_the_page_itself(self):
+        points = [
+            {
+                "dailyRestingHeartRate": {
+                    "date": {"year": 2026, "month": 9, "day": 1 + i},
+                    "beatsPerMinute": str(50 + i // 5),
+                }
+            }
+            for i in range(20)
+        ]
+        response = self._dashboard(rhr_points=points)
+        self.assertContains(response, "Methodology notes")
+        self.assertContains(response, "no control group")
+        self.assertContains(response, "autocorrelated")
+
+    def test_weak_insights_stay_visible_rather_than_being_hidden(self):
+        points = [
+            {
+                "dailyRestingHeartRate": {
+                    "date": {"year": 2026, "month": 9, "day": 1 + i},
+                    "beatsPerMinute": str(50 + (i % 5) - 2),
+                }
+            }
+            for i in range(20)
+        ]
+        response = self._dashboard(rhr_points=points)
+        trend_insight = next(
+            i for i in response.context["insights"] if i.key == "rhr-trend"
+        )
+        # Showing "tested, not distinguishable from chance" beats silence.
+        self.assertFalse(trend_insight.is_significant)
+        self.assertContains(response, "not distinguishable from chance")
 
     def test_a_real_trend_appears_in_the_section(self):
         points = [

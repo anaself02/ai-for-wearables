@@ -142,6 +142,26 @@ blanks the section. Insights currently computed:
 | Deep sleep and HRV | Named correlation |
 | Strongest relationship | Scans every pair, reports the largest |
 
+**Every insight carries its own verdict.** Each one reports a significance state
+- `significant in this sample`, `not distinguishable from chance`, `survives
+multiple-comparison correction`, or `descriptive` for a plain arithmetic summary
+- and **the sentence is phrased to match it**. A trend that fails its test reads
+"drifted up by about 0.5 ms ... but the day-to-day scatter is wide enough that
+this is not distinguishable from no trend at all", not "trended up". Tests assert
+that an insight whose test failed never contains overclaiming language.
+
+This distinction earns its keep on the current data: the resting-HR trend fits at
+r = +0.74, p < 0.001, while the HRV "trend" is r = +0.03, p ≈ 0.905. Before slope
+significance was tested, both were worded identically.
+
+Weak and null results stay **visible** rather than being hidden below a
+threshold. "Tested, no clear relationship" is more defensible than silence,
+and it shows the comparison was made rather than quietly dropped.
+
+**Methodology notes** are rendered on the page itself, not just in this file, and
+are generated from the computed insights so the numbers they quote cannot drift
+out of date.
+
 **On the statistics.** This is n≈25 from one person with no control and no
 randomisation. The wording is observational throughout - "resting heart rate was
 higher on mornings after the shortest nights", never "short sleep raises resting

@@ -161,10 +161,65 @@ a.card:hover { border-color: var(--accent); transform: translateY(-1px); }
 .insight-detail { margin: 8px 0 0; font-size: 14.5px; line-height: 1.5; }
 .insight-footnote { margin: 8px 0 0; font-size: 12px; line-height: 1.55; color: var(--muted); }
 
+/* An insight whose test did not clear the threshold is shown, not hidden -
+   "tested, weak, not distinguishable from chance" is more defensible than
+   silence - but it must not look like a finding. */
+.insight.inconclusive { border-left-color: var(--line); opacity: .88; }
+
+.insight-meta {
+  margin: 10px 0 0;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  align-items: center;
+  font-size: 11px;
+}
+.sig {
+  display: inline-block;
+  text-transform: uppercase;
+  letter-spacing: .05em;
+  border-radius: 999px;
+  padding: 2px 9px;
+  border: 1px solid var(--line);
+}
+.sig-yes { color: var(--accent-2); border-color: rgba(69, 217, 192, .4); }
+.sig-no { color: var(--muted); }
+/* Arithmetic on the sample - no test applies, so it is neither pass nor fail. */
+.sig-neutral { color: var(--accent); border-color: rgba(110, 168, 254, .35); }
+
 details.pending { margin-top: 14px; font-size: 13px; color: var(--muted); }
 details.pending summary { cursor: pointer; }
 details.pending ul { margin: 8px 0 0; padding-left: 20px; }
 details.pending li { margin-bottom: 4px; }
+
+details.methodology {
+  margin-top: 22px;
+  background: var(--panel);
+  border: 1px solid var(--line);
+  border-radius: 10px;
+  padding: 14px 16px;
+}
+details.methodology summary {
+  cursor: pointer;
+  font-size: 12px;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: .05em;
+  color: var(--muted);
+}
+.methodology-body {
+  display: grid;
+  gap: 16px;
+  grid-template-columns: repeat(auto-fit, minmax(300px, 1fr));
+  margin-top: 14px;
+}
+.method-note h3 {
+  margin: 0 0 5px;
+  font-size: 13.5px;
+  font-weight: 650;
+  letter-spacing: -.01em;
+}
+.method-note p { margin: 0; font-size: 12.5px; line-height: 1.6; color: var(--muted); }
 
 /* ---- panels, stats, charts ---- */
 
