@@ -133,8 +133,9 @@ def index(request):
     for metric in metrics.METRICS:
         card = {"metric": metric, "error": None, "value": None, "value_label": None}
 
-        if metric.group == metrics.UNAVAILABLE:
-            # No live data by definition; fall back to a labelled legacy reading.
+        if not metric.is_api_backed:
+            # UNAVAILABLE (endpoint exists, returns nothing) and LEGACY (no
+            # endpoint at all) both render from stored history, never a call.
             card["historical"] = historical.get(metric.historical_metric_type)
             cards.append(card)
             continue
@@ -188,15 +189,18 @@ def metric_detail(request, slug):
     context = {
         "metric": metric,
         "windows": ALLOWED_WINDOWS,
-        "data_type": metric.data_type if metric.has_detail else None,
+        "data_type": metric.data_type,
     }
 
-    if metric.group == metrics.UNAVAILABLE:
-        # Confirmed empty rather than broken, so this renders without any API call.
-        # Anything imported from Takeout is shown here, clearly marked as legacy.
+    if not metric.is_api_backed:
+        # Two cases, both rendered from stored history alone and never from a
+        # live call: UNAVAILABLE means the endpoint exists but returns nothing
+        # for this user; LEGACY means no endpoint exists at all.
         readings = HistoricalMetric.series_for(request.user, metric.historical_metric_type)
         series = (
-            _historical_series(readings, "VO2 max (legacy)", readings[0].unit)
+            _historical_series(
+                readings, f"{metric.label} (legacy)", readings[0].unit
+            )
             if readings
             else None
         )
@@ -209,7 +213,12 @@ def metric_detail(request, slug):
                 "series_json": json.dumps(series) if series else None,
             }
         )
-        return render(request, "health/metric_unavailable.html", context)
+        template = (
+            "health/metric_legacy.html"
+            if metric.group == metrics.LEGACY
+            else "health/metric_unavailable.html"
+        )
+        return render(request, template, context)
 
     days, start, end = _window(request)
     context.update({"days": days, "start": start, "end": end})

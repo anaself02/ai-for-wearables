@@ -8,7 +8,7 @@
 
   <div class="cards">
     {% for card in cards %}
-      {% if card.metric.group == "unavailable" %}
+      {% if not card.metric.is_api_backed %}
         {% if card.historical %}
           <a class="card legacy" href="{% url 'health:metric' card.metric.slug %}">
             <div class="name">{{ card.metric.label }} <span class="tag legacy-tag">legacy</span></div>

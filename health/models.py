@@ -19,6 +19,7 @@ class HistoricalMetric(models.Model):
 
     class MetricType(models.TextChoices):
         VO2_MAX = "vo2-max", "VO2 max"
+        SLEEP_SCORE = "sleep-score", "Sleep score"
 
     user = models.ForeignKey(
         settings.AUTH_USER_MODEL,

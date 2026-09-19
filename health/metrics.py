@@ -24,7 +24,10 @@ from . import datatypes
 # Presentation groups.
 DAILY = "daily"
 EVENT = "event"
+#: A live data type exists but returns nothing for this user.
 UNAVAILABLE = "unavailable"
+#: No live endpoint exists at all - historical import is the only source.
+LEGACY = "legacy"
 
 # Where a metric's daily series comes from.
 SOURCE_ROLLUP = "rollup"
@@ -358,12 +361,14 @@ class Metric:
     blurb: str = ""
 
     @property
-    def data_type(self) -> datatypes.DataType:
-        return datatypes.REGISTRY[self.slug]
+    def data_type(self) -> datatypes.DataType | None:
+        """None for LEGACY metrics, which have no live endpoint."""
+        return datatypes.REGISTRY.get(self.slug)
 
     @property
-    def has_detail(self) -> bool:
-        return self.group != UNAVAILABLE
+    def is_api_backed(self) -> bool:
+        """False when the card is rendered from stored history alone."""
+        return self.group not in (UNAVAILABLE, LEGACY)
 
     @property
     def intraday_type(self) -> datatypes.DataType | None:
@@ -394,6 +399,24 @@ METRICS: list[Metric] = [
         rows=sleep_rows,
         summary_label="Last night",
         blurb="The API exposes no sleep score - efficiency is computed from minutes asleep over minutes in the sleep period.",
+    ),
+    Metric(
+        slug="sleep-score",
+        label="Sleep score",
+        group=LEGACY,
+        chart="line",
+        unit="/100",
+        historical_metric_type="sleep-score",
+        summary_label="Last scored",
+        empty_message=(
+            "No sleep score data. The Google Health API has no sleep score "
+            "endpoint - import one from a Google Takeout export."
+        ),
+        blurb=(
+            "Google Health exposes sleep stages and minute counts but no score of "
+            "any kind, so this can only come from a Takeout export. It is never "
+            "refreshed by sync."
+        ),
     ),
     Metric(
         slug="daily-resting-heart-rate",
@@ -521,8 +544,8 @@ def get(slug: str) -> Metric | None:
 
 
 def fetchable() -> list[Metric]:
-    """Metrics that need an API call to render (VO2 max cards need none)."""
-    return [metric for metric in METRICS if metric.group != UNAVAILABLE]
+    """Metrics that need an API call. VO2 max and sleep score need none."""
+    return [metric for metric in METRICS if metric.is_api_backed]
 
 
 # ---------------------------------------------------------------------------

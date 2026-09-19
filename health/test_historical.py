@@ -17,7 +17,7 @@ from django.test import TestCase
 
 from accounts.models import GoogleCredential
 from health import metrics
-from health.management.commands import import_takeout_vo2max as importer
+from health import takeout as importer
 from health.models import HistoricalMetric
 
 User = get_user_model()
@@ -30,28 +30,28 @@ class DateParsingTests(TestCase):
     def test_takeout_dates_are_month_first(self):
         # 09/11/26 is 11 September, not 9 November. Read the other way round the
         # real export's daily sequence (07/15 -> 09/11) would be impossible.
-        self.assertEqual(importer.parse_date("09/11/26 00:00:00"), date(2026, 9, 11))
-        self.assertEqual(importer.parse_date("07/15/26 00:00:00"), date(2026, 7, 15))
+        self.assertEqual(importer.parse_vo2max_date("09/11/26 00:00:00"), date(2026, 9, 11))
+        self.assertEqual(importer.parse_vo2max_date("07/15/26 00:00:00"), date(2026, 7, 15))
 
     def test_a_day_that_cannot_be_a_month_still_parses(self):
-        self.assertEqual(importer.parse_date("12/31/26 00:00:00"), date(2026, 12, 31))
+        self.assertEqual(importer.parse_vo2max_date("12/31/26 00:00:00"), date(2026, 12, 31))
 
 
 class ReadRecordsTests(TestCase):
     def test_reads_every_record_from_the_fixture(self):
-        readings = importer.read_records(FIXTURE)
+        readings = importer.parse_vo2max(FIXTURE)
         self.assertEqual(len(readings), 3)
         self.assertEqual(readings[0]["date"], date(2026, 7, 15))
         self.assertEqual(readings[-1]["date"], date(2026, 9, 11))
 
     def test_stores_the_filtered_value_not_the_raw_estimate(self):
         # filteredDemographicVO2Max is the smoothed series Fitbit displayed.
-        readings = importer.read_records(FIXTURE)
+        readings = importer.parse_vo2max(FIXTURE)
         self.assertEqual(readings[-1]["value"], 51.15)
         self.assertEqual(readings[-1]["extra"]["raw_estimate"], 51.113800000000005)
 
     def test_keeps_the_error_term_and_source_file(self):
-        reading = importer.read_records(FIXTURE)[-1]
+        reading = importer.parse_vo2max(FIXTURE)[-1]
         self.assertEqual(reading["extra"]["error"], 0.36325)
         self.assertEqual(reading["extra"]["source_file"], FIXTURE.name)
 
@@ -66,7 +66,7 @@ class ReadRecordsTests(TestCase):
             ),
             encoding="utf-8",
         )
-        readings = importer.read_records(path)
+        readings = importer.parse_vo2max(path)
         self.assertEqual(len(readings), 1)
         # Falls back to the raw estimate when no filtered value is present.
         self.assertEqual(readings[0]["value"], 50.0)
@@ -77,8 +77,8 @@ class ReadRecordsTests(TestCase):
             json.dumps([{"dateTime": "2026-07-15", "value": {"demographicVO2Max": 50.0}}]),
             encoding="utf-8",
         )
-        with self.assertRaises(CommandError) as ctx:
-            importer.read_records(path)
+        with self.assertRaises(importer.TakeoutParseError) as ctx:
+            importer.parse_vo2max(path)
         self.assertIn("cannot parse dateTime", str(ctx.exception))
 
     def mktemp(self):

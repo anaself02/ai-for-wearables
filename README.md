@@ -390,24 +390,55 @@ Metrics fall into four presentation groups, set in `health/metrics.py`:
 The overview issues ten API calls; they are fanned out over a thread pool, which
 takes the page from roughly ten seconds to about 1.7s.
 
-### Historical VO2 max from Google Takeout
+### Historical metrics from Google Takeout
 
-The live API only derives VO2 max from GPS-tracked outdoor runs, so the three
-VO2 max cards are permanently empty without one. The Fitbit-era *passive*
-estimate (`demographic_vo2_max`) was retired in the migration to Google Health
-and is not exposed by any endpoint - but it still exists in a Takeout export
-generated before the migration.
-
-This is a **one-time manual import**, never a sync. Nothing here contacts Google.
+Some metrics cannot be obtained from the live API at all. Those - and only those
+- are imported once by hand from a Takeout export. This is never a sync, and
+nothing in `health/takeout.py` contacts Google.
 
 ```
-manage.py import_takeout_vo2max "<path to Takeout folder or the json file>" [--user X] [--dry-run]
+manage.py import_takeout "<path to the Takeout folder>" [--only X] [--user Y] [--dry-run]
 ```
 
-The path may be the json file, its folder, or the Takeout root - the command
-searches recursively. Re-running it updates in place rather than duplicating
-(unique on user + metric type + date), so it is safe to run again after a newer
-export.
+The path may be a single export file, its folder, or the Takeout root - the
+command searches recursively. Re-running updates in place rather than
+duplicating (unique on user + metric type + date), so it is safe after a newer
+export. `manage.py import_takeout_vo2max` still works as an alias for
+`--only vo2-max`.
+
+**What is imported, and why it has to be**
+
+| Metric | Rows | Why the live API cannot supply it |
+|---|---|---|
+| Sleep score | 45 | No sleep score endpoint exists. The API returns stages and minute counts only. |
+| VO2 max | 57 | The passive `demographic_vo2_max` estimate was retired in the migration; live VO2 max needs a GPS-tracked run. |
+
+**What is deliberately not imported.** Checked against a live 90-day query on
+2026-09-19 - the API already serves all of these, so importing them would only
+duplicate live data:
+
+| Takeout folder | Rows | Live equivalent |
+|---|---|---|
+| Active Zone Minutes (AZM) | 1020 | `active-zone-minutes` - 913 points |
+| Temperature | 48 | `daily-sleep-temperature-derivations` - 49 points |
+| Heart Rate Variability | 4558 | `daily-heart-rate-variability` |
+| Oxygen Saturation (SpO2) | 24869 | `daily-oxygen-saturation` |
+| Stress Score | **0** | header-only file, nothing to import |
+| Daily Readiness | **0** | header-only file, nothing to import |
+
+**Sleep score format** - `Sleep Score/sleep_score.csv`:
+
+```
+sleep_log_entry_id,timestamp,overall_score,composition_score,revitalization_score,...
+53548224804,2026-09-11T11:56:30Z,78,,79,,109,53,0.157...
+```
+
+`overall_score` is the headline 0-100 value; the sub-scores are frequently blank
+in real exports and are kept in `extra` rather than charted. The `timestamp` is
+UTC at wake time and is converted to the configured timezone before taking its
+date, so a night is keyed the same way the live sleep data keys it - by the
+civil date it *ends* on. Taking the UTC date directly happens to work for a
+morning wake time but breaks across midnight UTC; there is a test for this.
 
 **The file**
 
@@ -435,14 +466,20 @@ Two things about this format are easy to get wrong:
   error term are kept in `HistoricalMetric.extra`.
 
 **The model** - `health.models.HistoricalMetric(user, metric_type, date, value,
-unit, source, extra)` - is deliberately generic so other legacy-only metrics can
-reuse it. Only VO2 max is implemented.
+unit, source, extra)` - is generic; adding another legacy metric means writing a
+parser and one `LegacyImport` entry in `health/takeout.py`.
 
-**In the UI**, an imported reading never replaces the live empty state, it is
-added beside it: the card gets a dashed border, an amber `legacy` tag, the value,
-its date, and its source, and still carries the live "requires a GPS-tracked
-outdoor run" message. The detail page charts the whole imported series under the
-same labelling. All three VO2 max cards read the one `vo2-max` historical series.
+**In the UI**, an imported reading is never presented as live. Two presentation
+groups cover the difference:
+
+- `UNAVAILABLE` - a live endpoint exists but returns nothing for this user (the
+  three VO2 max cards). The imported value is shown *beside* the live empty
+  state, which still says a GPS-tracked run is required.
+- `LEGACY` - no live endpoint exists at all (sleep score). Rendered from stored
+  history alone, with an explanation of why there is no live version.
+
+Both get a dashed border, an amber `legacy` tag, and the value's date and source.
+Neither makes an API call. All three VO2 max cards read the one `vo2-max` series.
 
 ### Performance: broken IPv6 makes every call take ~169 seconds
 
