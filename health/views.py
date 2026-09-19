@@ -17,7 +17,7 @@ from django.shortcuts import redirect, render
 from django.utils import timezone
 
 from . import cache as health_cache
-from . import datatypes, metrics
+from . import datatypes, insights as insights_module, metrics
 from .client import GoogleHealthClient, GoogleHealthError, GoogleReconnectRequired
 from .models import HistoricalMetric
 
@@ -27,8 +27,11 @@ DEFAULT_WINDOW_DAYS = 7
 ALLOWED_WINDOWS = [7, 30, 90]
 MAX_WINDOW_DAYS = 90
 
-# Overview cards only ever show a short trend; the detail page does the long ones.
-OVERVIEW_WINDOW_DAYS = 7
+# The overview fetches one long window and slices it: the cards' sparklines want
+# a week, the insight layer wants a month, and issuing both would double the API
+# calls for the same data.
+OVERVIEW_WINDOW_DAYS = 30
+SPARKLINE_POINTS = 7
 
 # A week of `steps` is ~2.8 MB of pretty-printed JSON, which is enough to make a
 # browser give up on the <pre> block. The raw pages exist to prove the pipeline,
@@ -143,8 +146,10 @@ def index(request):
         points, error = loaded.get(metric.slug, ([], None))
         card["error"] = error
         series = metric.series(points) if metric.series else None
-        card["series"] = series
-        card["series_json"] = json.dumps(series) if series else None
+        # The card shows a week; the same fetch feeds the month-long insights.
+        spark = metrics.tail(series, SPARKLINE_POINTS)
+        card["series"] = spark
+        card["series_json"] = json.dumps(spark) if spark else None
         card["count"] = len(points)
 
         if metric.slug == "exercise":
@@ -161,6 +166,12 @@ def index(request):
 
         cards.append(card)
 
+    # Derived observations over the whole fetched window. Each insight decides
+    # for itself whether it has enough data, so one thin metric never blanks
+    # the section.
+    points_by_slug = {slug: points for slug, (points, _) in loaded.items()}
+    computed = insights_module.build(metrics.insight_series(points_by_slug))
+
     return render(
         request,
         "health/dashboard.html",
@@ -171,6 +182,8 @@ def index(request):
             "end": end,
             "credential": credential,
             "freshness": freshness,
+            "insights": insights_module.available(computed),
+            "insights_pending": insights_module.pending(computed),
         },
     )
 

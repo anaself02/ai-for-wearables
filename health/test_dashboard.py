@@ -9,6 +9,7 @@ from unittest import mock
 
 from django.conf import settings
 from django.contrib.auth import get_user_model
+from django.core.cache import cache
 from django.test import RequestFactory, TestCase, override_settings
 from django.utils import timezone as django_timezone
 
@@ -330,6 +331,10 @@ class TimezoneWindowTests(TestCase):
 
 class DashboardViewTests(TestCase):
     def setUp(self):
+        # The dashboard and the steps detail page now share a 30-day cache key,
+        # so without this a previous test's fetch satisfies the next one.
+        cache.clear()
+        self.addCleanup(cache.clear)
         self.user = User.objects.create(username="tester@example.com")
         GoogleCredential.objects.create(
             user=self.user, google_sub="sub-1", refresh_token="1//refresh"

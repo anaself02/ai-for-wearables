@@ -1,0 +1,37 @@
+{% if insights or insights_pending %}
+  <h2 class="insights-heading">Insights</h2>
+  <p class="muted small" style="margin:-6px 0 14px">
+    Computed from the last {{ days }} days of your own data. These are
+    observed associations in a single person's readings, not clinical findings.
+  </p>
+
+  {% if insights %}
+    <div class="insights">
+      {% for insight in insights %}
+        <div class="insight {% if insight.direction %}dir-{{ insight.direction }}{% endif %}">
+          <div class="insight-head">
+            <span class="insight-title">{{ insight.title }}</span>
+            {% if insight.value is not None %}
+              <span class="insight-value">{{ insight.value }}{% if insight.unit %} {{ insight.unit }}{% endif %}</span>
+            {% endif %}
+          </div>
+          <p class="insight-detail">{{ insight.detail }}</p>
+          {% if insight.footnote %}
+            <p class="insight-footnote">{{ insight.footnote }}</p>
+          {% endif %}
+        </div>
+      {% endfor %}
+    </div>
+  {% endif %}
+
+  {% if insights_pending %}
+    <details class="pending">
+      <summary>{{ insights_pending|length }} insight{{ insights_pending|pluralize }} waiting for more data</summary>
+      <ul>
+        {% for insight in insights_pending %}
+          <li><strong>{{ insight.title }}</strong> &mdash; {{ insight.note }}</li>
+        {% endfor %}
+      </ul>
+    </details>
+  {% endif %}
+{% endif %}

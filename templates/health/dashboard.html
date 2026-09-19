@@ -58,6 +58,8 @@
       {% endif %}
     {% endfor %}
   </div>
+
+  {% include "health/_insights.html" %}
 {% endblock %}
 
 {% block scripts %}{% include "health/_chart_scripts.html" %}{% endblock %}

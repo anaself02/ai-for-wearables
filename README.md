@@ -118,6 +118,65 @@ Restarting `runserver` mid-sign-in can also trigger it if the session is
 cleared; the callback detects a missing verifier and asks the user to start
 again rather than failing opaquely.
 
+### Insights
+
+`health/insights.py` computes derived observations from the daily series the
+dashboard already fetches. Every function is **pure** - it takes plain
+`[(date, value)]` and returns an `Insight` - so each one is tested against a
+synthetic series whose answer is known in advance (an exact 3 bpm drift, a
+deficit that sums to a round number, a correlation whose p-value is in the
+standard tables).
+
+Each insight also **degrades on its own**: too little data yields
+`available=False` with a note saying what is missing, so one thin metric never
+blanks the section. Insights currently computed:
+
+| Insight | What it does |
+|---|---|
+| Resting heart rate trend | Least-squares drift across the window |
+| HRV trend | Same, on daily RMSSD |
+| Sleep debt | Running total against a fixed 7.5h reference |
+| Resting HR and sleep length | Bottom vs top third of nights by duration |
+| Sleep consistency | Night-to-night standard deviation |
+| HRV and resting heart rate | Named correlation |
+| Deep sleep and HRV | Named correlation |
+| Strongest relationship | Scans every pair, reports the largest |
+
+**On the statistics.** This is n≈25 from one person with no control and no
+randomisation. The wording is observational throughout - "resting heart rate was
+higher on mornings after the shortest nights", never "short sleep raises resting
+heart rate" - and a test asserts that no insight's text contains causal verbs.
+Three specific honesty problems are handled rather than hidden:
+
+- **Circularity.** The API reports `calculationMethod: "WITH_SLEEP"` for daily
+  resting heart rate, so it is *derived from* the same night's sleep. Correlating
+  the two is partly definitional, and the insight says so.
+- **Multiple comparisons.** "Strongest relationship" is the maximum of ~20
+  correlations, so the single-test 0.05 threshold does not apply. It reports a
+  Bonferroni-corrected threshold and states whether the result survives it. On
+  the current data it does not.
+- **Nested metrics.** Deep sleep is a component of time asleep, so that pair is
+  excluded from the scan - a metric correlating with a quantity it is part of is
+  arithmetic, not a finding.
+
+p-values come from the usual t approximation, with the incomplete beta function
+implemented in `insights.py` (no scipy). They describe this sample; consecutive
+days from one person are not independent observations.
+
+**Two data-quality fixes this surfaced**, both verified against live responses:
+
+- **Naps were being counted as nights.** The API returns them as ordinary sleep
+  sessions. `metadata.nap` is the reliable flag - `mainSleep` is *absent* on one
+  nap and `true` on another, so it cannot be used. Filtering naps flipped the
+  sleep-debt figure from a 7.4h deficit to a 3.7h surplus.
+- **A single date can carry two sessions** (a nap plus the night). Only the
+  longest surviving session per date is kept, so pairing cannot silently pick
+  whichever happened to sort last.
+
+The overview now fetches a 30-day window and slices the last 7 points for the
+card sparklines, rather than issuing a second short-window request for the same
+metrics.
+
 ### Response caching
 
 The overview needs one API call per metric, so an uncached browser refresh cost

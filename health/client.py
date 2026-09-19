@@ -13,6 +13,7 @@ from datetime import date
 from django.conf import settings
 from google.auth.exceptions import RefreshError
 from google.auth.transport.requests import AuthorizedSession
+from requests.adapters import HTTPAdapter
 
 from .datatypes import DataType
 
@@ -57,6 +58,11 @@ class GoogleHealthClient:
         self.credential = credential
         self._credentials = credential.to_credentials()
         self._session = AuthorizedSession(self._credentials)
+        # The dashboard fans out across a thread pool, and a 90-day rollup fans
+        # out again into 14-day chunks. urllib3's default pool of 10 is smaller
+        # than that, which makes it discard and reopen connections mid-page.
+        adapter = HTTPAdapter(pool_connections=4, pool_maxsize=32)
+        self._session.mount("https://", adapter)
         self._last_seen_token = self._credentials.token
         # The dashboard fetches several metrics in parallel over one client.
         # AuthorizedSession already locks its own refresh; this guards the
