@@ -1,0 +1,7 @@
+{% extends "base.html" %}
+{% block title %}Sign-in failed{% endblock %}
+{% block content %}
+  <h1>Sign-in failed</h1>
+  <div class="notice" style="margin:16px 0"><code>{{ detail }}</code></div>
+  <p><a class="btn" href="{% url 'accounts:google_login' %}">Try again</a></p>
+{% endblock %}

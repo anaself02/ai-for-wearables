@@ -1,0 +1,17 @@
+# Secrets: client secret, Django secret key, Fernet token-encryption key.
+.env
+
+# Local database - holds encrypted OAuth tokens and imported health data.
+*.sqlite3
+
+# Virtualenv and Python artefacts
+.venv/
+__pycache__/
+*.py[cod]
+
+# Session scratch: task briefs written for the assistant, not part of the app.
+prompt.md
+
+# Editors
+.idea/
+.vscode/

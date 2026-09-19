@@ -1,0 +1,30 @@
+{% load static %}<title>{% block title %}Health Dashboard{% endblock %}</title>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<link rel="stylesheet" href="{% static 'app.css' %}">
+
+<header class="topbar">
+  <a class="brand" href="/">Health Dashboard</a>
+  {% if user.is_authenticated %}
+    <nav>
+      <a href="{% url 'health:index' %}">Overview</a>
+      <a href="{% url 'health:raw_index' %}">Raw data</a>
+    </nav>
+    <form method="post" action="{% url 'accounts:sign_out' %}">
+      {% csrf_token %}
+      <span class="muted small">{{ user.email|default:user.username }}</span>
+      <button class="btn secondary" type="submit">Sign out</button>
+    </form>
+  {% endif %}
+</header>
+
+<main>
+  {% if messages %}
+    <ul class="messages">
+      {% for message in messages %}<li class="muted">{{ message }}</li>{% endfor %}
+    </ul>
+  {% endif %}
+  {% block content %}{% endblock %}
+</main>
+
+{% block scripts %}{% endblock %}

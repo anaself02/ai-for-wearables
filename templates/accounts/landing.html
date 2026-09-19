@@ -1,0 +1,10 @@
+{% extends "base.html" %}
+{% block title %}Sign in - Health Dashboard{% endblock %}
+{% block content %}
+  <h1>Personal Health Dashboard</h1>
+  <p class="muted">Reads your own fitness and health data live from the Google Health API.</p>
+  <p style="margin-top:28px"><a class="btn" href="{% url 'accounts:google_login' %}">Sign in with Google</a></p>
+  <p class="muted" style="margin-top:20px">
+    Signing in also grants this app read-only access to your activity, health metrics and sleep data.
+  </p>
+{% endblock %}

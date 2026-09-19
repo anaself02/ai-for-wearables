@@ -1,0 +1,6 @@
+Django>=6.1,<6.2
+google-auth>=2.58
+google-auth-oauthlib>=1.4
+requests>=2.32
+cryptography>=46
+python-dotenv>=1.2
