@@ -370,3 +370,48 @@ select {
   .chart-wrap { height: 260px; }
   .stats { gap: 18px; }
 }
+
+/* --- arousal card ------------------------------------------------------- */
+/* The card that runs the WESAD-trained model against today's heart rate.
+   Deliberately styled like an insight rather than like a metric card: it is
+   an interpretation, not a reading, and should not look as authoritative as
+   a measured number. */
+
+.arousal { margin: 22px 0; }
+.arousal .insight { margin-bottom: 4px; }
+
+/* Neutral accent: this card must not imply good or bad news the way the
+   up/down insight colours do. */
+.insight.dir-neutral { border-left-color: var(--accent); }
+
+.arousal form { margin-top: 12px; }
+
+.button {
+  display: inline-block;
+  background: var(--panel-2);
+  color: var(--text);
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  padding: 8px 14px;
+  font: inherit;
+  font-size: 13px;
+  font-weight: 600;
+  cursor: pointer;
+}
+.button:hover { border-color: var(--accent); color: var(--accent); }
+.button.subtle { background: transparent; font-weight: 500; color: var(--muted); }
+
+.arousal-detail { margin-top: 12px; }
+.arousal-detail > summary {
+  cursor: pointer;
+  color: var(--muted);
+  font-size: 13px;
+}
+.arousal-detail > summary:hover { color: var(--accent); }
+.arousal-detail table { margin-top: 10px; }
+
+/* The limitations list on the methodology page. Long prose, so these cells
+   wrap rather than inheriting the table default of nowrap. */
+.limitations { padding-left: 20px; }
+.limitations li { margin-bottom: 10px; color: var(--text); }
+.ood td, .ood th { white-space: normal; }

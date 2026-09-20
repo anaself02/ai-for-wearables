@@ -136,6 +136,32 @@ HEALTH_CACHE_SECONDS = int(env("HEALTH_CACHE_SECONDS", "600"))
 # drill-down for a past day is held much longer.
 HEALTH_CACHE_SECONDS_PAST_DAY = int(env("HEALTH_CACHE_SECONDS_PAST_DAY", "86400"))
 
+# ---------------------------------------------------------------------------
+# The WESAD-trained arousal model
+# ---------------------------------------------------------------------------
+# health/arousal.py runs a scikit-learn model that was trained in a SEPARATE
+# project, "wearable-ml". This app reads four files from it, read-only, and
+# never writes anything back:
+#
+#   models/svm_hr_only.joblib            the trained pipeline
+#   models/feature_config_hr_only.json   which features, in which order
+#   models/hr_training_distribution.json what the training data looked like
+#   models/model_card.json               scores and limitations, rendered by
+#                                        the "how this works" page
+#
+# The model is referenced in place rather than copied in here on purpose: one
+# copy means retraining cannot leave the dashboard silently serving a stale
+# model whose numbers no longer match that project's RESULTS.md.
+#
+# If the path does not exist the arousal card degrades to an explanation.
+# Nothing else in the dashboard depends on it.
+WEARABLE_ML_DIR = env("WEARABLE_ML_DIR", str(BASE_DIR.parent / "wearable-ml"))
+
+# How long a computed arousal assessment is cached. It costs far more than a
+# plain API read - several pages of samples, then a few thousand windows of
+# feature extraction - so it is computed on demand rather than on page load.
+AROUSAL_CACHE_SECONDS = int(env("AROUSAL_CACHE_SECONDS", "3600"))
+
 # In-process cache: no extra service to run, and fast. It is per-process and
 # does not survive a restart - move to the database or Redis backend if this is
 # ever served by more than one worker.

@@ -16,6 +16,7 @@ from django.http import Http404
 from django.shortcuts import redirect, render
 from django.utils import timezone
 
+from . import arousal as arousal_module
 from . import cache as health_cache
 from . import datatypes, insights as insights_module, metrics
 from .client import GoogleHealthClient, GoogleHealthError, GoogleReconnectRequired
@@ -185,6 +186,77 @@ def index(request):
             "insights": insights_module.available(computed),
             "insights_pending": insights_module.pending(computed),
             "methodology": insights_module.methodology(computed),
+            # Read from the cache only - never computed here. Running the
+            # model costs several pages of samples plus a few thousand
+            # windows of feature extraction, which is not something to do
+            # behind every dashboard load. The card offers a button instead.
+            "arousal": arousal_module.cached_assessment(
+                request.user, timezone.localdate()),
+            "arousal_day": timezone.localdate(),
+        },
+    )
+
+
+# ---------------------------------------------------------------------------
+# the arousal card: running the WESAD-trained model against live data
+# ---------------------------------------------------------------------------
+
+
+@login_required
+def arousal_compute(request):
+    """Compute today's arousal assessment on demand, then show the dashboard.
+
+    POST only: it spends real work and writes a cache entry, so it should not
+    be triggered by a link preview or a refresh of a GET.
+    """
+    if request.method != "POST":
+        return redirect("health:index")
+
+    credential = _credential_or_none(request)
+    if credential is None or not credential.is_usable:
+        return render(
+            request,
+            "health/reconnect.html",
+            {"detail": "No usable Google token is stored for this account."},
+        )
+
+    try:
+        client = GoogleHealthClient(credential)
+        arousal_module.compute_assessment(
+            client,
+            request.user,
+            timezone.localdate(),
+            force=health_cache.wants_refresh(request),
+        )
+    except GoogleReconnectRequired as exc:
+        return render(request, "health/reconnect.html", {"detail": str(exc)})
+    except GoogleHealthError as exc:
+        # The card renders the reason rather than the page failing.
+        logger.warning("Arousal fetch failed: %s", exc)
+        arousal_module.store_unavailable(
+            request.user, timezone.localdate(),
+            "Heart-rate data could not be fetched: {}".format(exc))
+
+    return redirect("health:index")
+
+
+@login_required
+def arousal_methodology(request):
+    """The honesty layer: what the model is, and what it cannot tell you.
+
+    Rendered from the model's own card, written by the training project, so
+    the figures here cannot drift away from that project's RESULTS.md.
+    """
+    return render(
+        request,
+        "health/arousal_methodology.html",
+        {
+            "card": arousal_module.load_model_card(),
+            "window_seconds": arousal_module.WINDOW_SECONDS,
+            "step_seconds": arousal_module.STEP_SECONDS,
+            "min_samples": arousal_module.MIN_SAMPLES_PER_WINDOW,
+            "assessment": arousal_module.cached_assessment(
+                request.user, timezone.localdate()),
         },
     )
 

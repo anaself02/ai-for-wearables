@@ -1,0 +1,155 @@
+{% extends "base.html" %}
+{% block title %}How the arousal signal works - Health Dashboard{% endblock %}
+
+{% comment %}
+  The honesty layer for the arousal card.
+
+  Everything factual on this page is rendered from models/model_card.json,
+  which the training project writes at the moment it trains the model. Nothing
+  is typed in here, so these figures cannot drift away from that project's
+  RESULTS.md the way copied numbers would.
+{% endcomment %}
+
+{% block content %}
+  <h1>How the arousal signal works</h1>
+  <p class="lede">
+    What the model is, how it was tested, and the things it cannot tell you.
+  </p>
+
+  {% if not card %}
+
+    <p class="empty-msg">
+      The model card could not be read, so this page cannot describe the
+      model honestly. Check that <code>WEARABLE_ML_DIR</code> points at the
+      wearable-ml project and that it has been trained.
+    </p>
+
+  {% else %}
+
+    <h2>The short version</h2>
+    <p><strong>{{ card.honest_summary }}</strong></p>
+
+    <h2>What it is</h2>
+    <table class="ood">
+      <tbody>
+        <tr><th>Algorithm</th><td>{{ card.algorithm }}</td></tr>
+        <tr><th>Trained on</th><td>
+          {{ card.trained_on.dataset }} &mdash; {{ card.trained_on.signals }}
+        </td></tr>
+        <tr><th>Training data</th><td>
+          {{ card.trained_on.n_windows }} windows of
+          {{ card.trained_on.window_seconds }} s from
+          {{ card.trained_on.n_subjects }} subjects
+        </td></tr>
+        <tr><th>Classes</th><td>
+          {% for number, name in card.classes.items %}{{ name }}{% if not forloop.last %}, {% endif %}{% endfor %}
+        </td></tr>
+        <tr><th>Validation</th><td>{{ card.validation }}</td></tr>
+      </tbody>
+    </table>
+
+    <h2>How well it actually does</h2>
+    <p class="muted small">
+      Every figure below comes from leave-one-subject-out cross-validation:
+      each fold trains on all but one person and is tested on the person it
+      has never seen. That is a harder and more honest test than a random
+      split, which would let the model recognise the individual rather than
+      the state.
+    </p>
+    <table class="ood">
+      <thead>
+        <tr><th>Sensors</th><th>Model</th><th>Accuracy</th><th>Macro-F1</th></tr>
+      </thead>
+      <tbody>
+        {% for feature_set, models in card.scores.items %}
+          {% for model_name, score in models.items %}
+            <tr>
+              <td>{% if feature_set == "hr_only" %}heart rate only{% else %}all 8 channels{% endif %}</td>
+              <td>{{ model_name }}</td>
+              <td>{{ score.accuracy|floatformat:3 }}</td>
+              <td>{{ score.f1_macro|floatformat:3 }}</td>
+            </tr>
+          {% endfor %}
+        {% endfor %}
+        <tr class="muted">
+          <td colspan="2">always guessing the most common class</td>
+          <td>{{ card.always_guess_largest_class.accuracy|floatformat:3 }}</td>
+          <td>{{ card.always_guess_largest_class.f1_macro|floatformat:3 }}</td>
+        </tr>
+      </tbody>
+    </table>
+    <p class="muted small">
+      The card on the dashboard uses the <strong>heart rate only</strong> SVM,
+      because heart rate is the only one of these signals this watch reports.
+      The gap between that row and the 8-channel row is the cost of not having
+      electrodermal activity and skin temperature.
+    </p>
+
+    <h2>What it cannot tell you</h2>
+    <ul class="limitations">
+      {% for limitation in card.limitations %}
+        <li>{{ limitation }}</li>
+      {% endfor %}
+    </ul>
+
+    <h2>How today's number is produced</h2>
+    <ol>
+      <li>Today's wrist heart-rate samples are read from the Google Health
+        API (the same cached fetch the rest of the dashboard uses).</li>
+      <li>They are cut into {{ window_seconds }}-second windows, stepping
+        every {{ step_seconds }} seconds &mdash; the same geometry the model
+        was trained on. A window holding fewer than {{ min_samples }} readings
+        is dropped rather than described by statistics computed from almost
+        nothing.</li>
+      <li>Five features are computed per window: mean, standard deviation,
+        minimum, maximum and slope of the heart rate.</li>
+      <li>The model labels each window, and the card reports the label that
+        won the most windows.</li>
+      <li>Before that label is shown, each feature is compared against the
+        range seen in training, and the comparison is displayed with it.</li>
+    </ol>
+
+    {% if assessment and assessment.available %}
+      <h2>Today's out-of-distribution check</h2>
+      <p class="muted small">
+        This is the measurement behind the caveat on the card. Large values
+        mean today's readings look unlike anything the model was fitted on,
+        and its output should be weighted accordingly.
+      </p>
+      <table class="ood">
+        <thead>
+          <tr>
+            <th>Feature</th>
+            <th>Training range</th>
+            <th>Today's median</th>
+            <th>Outside range</th>
+            <th>Median shift</th>
+          </tr>
+        </thead>
+        <tbody>
+          {% for row in assessment.ood_rows %}
+            <tr>
+              <td><code>{{ row.feature }}</code></td>
+              <td>{{ row.training_min|floatformat:2 }} to {{ row.training_max|floatformat:2 }}</td>
+              <td>{{ row.today_median|floatformat:2 }}</td>
+              <td>{{ row.share_outside|floatformat:3 }}</td>
+              <td>{{ row.median_shift|floatformat:2 }} sd</td>
+            </tr>
+          {% endfor %}
+        </tbody>
+      </table>
+    {% endif %}
+
+    <h2>Why there is no accuracy figure for your own data</h2>
+    <p>
+      There is no ground truth. Nobody recorded which minutes of your days
+      were stressful, so there is nothing to score the predictions against.
+      The cross-validated numbers above describe how the model performs on
+      the laboratory dataset it was trained on &mdash; they are not a claim
+      about how it performs on you.
+    </p>
+
+  {% endif %}
+
+  <p><a href="{% url 'health:index' %}">&larr; Back to the dashboard</a></p>
+{% endblock %}

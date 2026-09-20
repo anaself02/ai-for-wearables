@@ -125,6 +125,45 @@ def fetch_intraday(
     )
 
 
+def cached_compute(parts, ttl, produce, *, force=False, only_if_cached=False):
+    """Cache any computed value under the same per-user key scheme.
+
+    The two fetchers above cache lists of API points and wrap them in
+    ``Fetched``. This is for anything else worth caching - currently the
+    arousal assessment, which is not an API response but a model prediction
+    derived from one, and is expensive enough to be computed on demand rather
+    than on every page load.
+
+    ``only_if_cached=True`` reads without ever calling ``produce`` and returns
+    None on a miss. That is what lets a page show "not computed yet" instead
+    of blocking for several seconds behind a fetch the visitor did not ask
+    for.
+
+    ``parts`` must start with something that identifies the user, exactly as
+    the fetchers do: these are personal health readings, and a key collision
+    would show one person another's data.
+    """
+    key = _key(*parts)
+
+    if force:
+        cache.delete(key)
+
+    if only_if_cached:
+        return cache.get(key)
+
+    if ttl <= 0:  # caching disabled
+        return produce()
+
+    hit = cache.get(key)
+    if hit is not None:
+        return hit
+
+    value = produce()
+    # Only reached when produce() did not raise, so failures stay uncached.
+    cache.set(key, value, ttl)
+    return value
+
+
 def wants_refresh(request) -> bool:
     """?refresh=1 forces a re-fetch, for when the watch has just synced."""
     return request.GET.get("refresh") in {"1", "true", "yes"}

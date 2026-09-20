@@ -21,6 +21,14 @@ app_name = "health"
 
 urlpatterns = [
     path("dashboard/", views.index, name="index"),
+    # The arousal card: a POST computes today's assessment, and the
+    # methodology page explains what it can and cannot mean.
+    path("arousal/compute/", views.arousal_compute, name="arousal_compute"),
+    path(
+        "arousal/how-this-works/",
+        views.arousal_methodology,
+        name="arousal_methodology",
+    ),
     path("metric/<slug:slug>/", views.metric_detail, name="metric"),
     # Registered before the generic day route so "sleep" reaches the hypnogram
     # rather than the intraday-sample view, which sleep has no extractor for.
