@@ -1,4 +1,4 @@
-"""The fitness percentile, and the fitness age it refuses to compute."""
+"""The fitness percentile, the fitness age, and the caveat they travel with."""
 
 from datetime import date
 
@@ -95,25 +95,33 @@ class AssessTests(TestCase):
         self.assertFalse(result.available)
         self.assertIn("No VO2 max", result.reason)
 
-    def test_a_demographic_estimate_gets_a_percentile_but_no_fitness_age(self):
-        """The whole point: age goes into that figure, so it cannot come out."""
+    def test_a_demographic_estimate_is_reported_but_flagged_circular(self):
+        """The number is shown; what it rests on is not hidden."""
         result = fitness.assess(
             51.15, source="Fitbit demographic estimate", measured=False,
             born=date(1990, 5, 1), sex="male", today=TODAY,
         )
         self.assertTrue(result.available)
         self.assertIsNotNone(result.percentile)
-        self.assertIsNone(result.fitness_age)
-        self.assertIn("age back out", result.fitness_age_withheld_because)
+        self.assertEqual(result.fitness_age, 31)
+        self.assertTrue(result.circular)
 
-    def test_a_measured_value_does_get_a_fitness_age(self):
+    def test_the_difference_is_calendar_age_minus_fitness_age(self):
+        result = fitness.assess(
+            51.15, source="Fitbit demographic estimate", measured=False,
+            born=date(1990, 5, 1), sex="male", today=TODAY,
+        )
+        self.assertEqual(result.age, 36)
+        self.assertEqual(result.difference, 5)
+
+    def test_a_measured_value_is_not_flagged_circular(self):
         result = fitness.assess(
             51.15, source="GPS-tracked run", measured=True,
             born=date(1990, 5, 1), sex="male", today=TODAY,
         )
         self.assertTrue(result.available)
         self.assertIsNotNone(result.fitness_age)
-        self.assertEqual(result.fitness_age_withheld_because, "")
+        self.assertFalse(result.circular)
 
 
 class FitnessPageTests(TestCase):
@@ -131,7 +139,7 @@ class FitnessPageTests(TestCase):
         self.assertEqual(response.status_code, 200)
         self.assertContains(response, reverse("accounts:settings"))
 
-    def test_the_page_never_prints_a_fitness_age_for_a_demographic_estimate(self):
+    def test_the_page_shows_both_ages_and_never_calls_it_biological(self):
         Profile.objects.create(
             user=self.user, date_of_birth="1990-05-01", sex="male"
         )
@@ -146,8 +154,13 @@ class FitnessPageTests(TestCase):
         response = self.client.get(reverse("health:fitness"))
 
         self.assertEqual(response.status_code, 200)
-        self.assertTrue(response.context["assessment"].available)
-        self.assertIsNone(response.context["assessment"].fitness_age)
-        self.assertContains(response, "Withheld, on purpose")
-        # And it never claims to be a biological age anywhere on the page.
-        self.assertNotContains(response, "biological age measurement")
+        assessment = response.context["assessment"]
+        self.assertTrue(assessment.available)
+
+        # Both numbers on the page, and the caveat that has to travel with them.
+        self.assertEqual(assessment.fitness_age, 31)
+        self.assertContains(response, "Fitness age")
+        self.assertContains(response, "Your age")
+        self.assertContains(response, "Read the gap, not the number")
+        # Never claimed as biology.
+        self.assertContains(response, "not a biological age")

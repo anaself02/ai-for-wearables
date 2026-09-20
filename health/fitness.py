@@ -1,8 +1,8 @@
 """Where one VO2 max figure sits against published population norms.
 
-This module deliberately does not compute a "fitness age" from the VO2 max this
-project actually has, and the reason is worth stating in the code rather than
-only in the interface.
+This module reports both a percentile and a fitness age, and the reason the two
+are not equally trustworthy is worth stating in the code rather than only in
+the interface.
 
 The stored figure, 51.15 ml/kg/min, is Google's `demographicVO2Max`. Google
 documents that value as being derived from resting heart rate, age, sex and
@@ -12,13 +12,18 @@ estimate feeds age in and reads age back out. The answer would track the
 calendar by construction, and the only independent signal inside it would be
 resting heart rate. That is not a rounding error, it is the whole number.
 
-So the default output here is a percentile: where this figure sits in the
-normative distribution for a given age and sex. That comparison is honest even
-when the input is an estimate, because it makes no claim to invert anything.
+The percentile does not have that problem: where this figure sits in the
+normative distribution for a given age and sex is honest even when the input is
+modelled, because it compares rather than inverts.
 
-A fitness age is computed only from a *measured* VO2 max, which on this account
-means one derived from a GPS-tracked outdoor run. Until such a run exists, the
-page says why the number is missing rather than printing a circular one.
+A fitness age is still reported, because the comparison between a calendar age
+and a fitness age is the thing people actually want from this. What the page
+does instead of withholding it is refuse to let it stand alone: it is shown
+beside the percentile, labelled as an estimate of cardiorespiratory fitness
+rather than of a body, and accompanied by the reason the absolute figure is
+partly circular. The gap between the two ages is flagged as the more
+trustworthy half, because age appears on both sides of that subtraction and
+largely cancels out of it.
 
 Sources
 -------
@@ -177,10 +182,13 @@ class Assessment:
     position: str = ""
     band: str = ""
 
-    #: Populated only when `measured` is True. See the module docstring.
     fitness_age: int | None = None
     fitness_age_position: str = ""
-    fitness_age_withheld_because: str = ""
+    #: age - fitness_age. Positive means the fitness age is the lower number.
+    difference: int | None = None
+    #: True when the VO2 max behind it was modelled from age rather than
+    #: measured from exercise. The number is still shown; see WHY_CIRCULAR.
+    circular: bool = False
 
     notes: list = field(default_factory=list)
 
@@ -197,12 +205,21 @@ OFF_TABLE = (
     "The published norms cover ages 20 to 79. Outside that range there is no "
     "table to compare against."
 )
-WHY_NO_FITNESS_AGE = (
-    "This figure is a demographic estimate, which Google derives from resting "
-    "heart rate, age, sex and weight. A fitness age asks at what age a VO2 max "
-    "would be average, so computing one here would put age in and take age "
-    "back out. It is withheld until a VO2 max measured from a GPS-tracked run "
-    "exists."
+WHY_CIRCULAR = (
+    "The VO2 max behind this is a demographic estimate, which Google derives "
+    "from resting heart rate, age, sex and weight. Because your age is one of "
+    "its inputs, the absolute fitness age partly restates the birthday it was "
+    "calculated from."
+)
+
+WHY_THE_GAP_IS_THE_PART_TO_READ = (
+    "The difference is the more honest half of it. Age appears on both sides "
+    "of the subtraction and largely cancels, so what is left is driven by the "
+    "inputs that are not your age: resting heart rate and weight. A gap in "
+    "either direction says your heart rate for your age sits above or below "
+    "what the model expects, which is a real thing to know. The absolute "
+    "number will only stand on its own once a VO2 max measured from a "
+    "GPS-tracked run exists."
 )
 
 
@@ -230,11 +247,11 @@ def assess(vo2max, *, source: str, measured: bool, born, sex: str, today: date):
         band=band_for(percentile),
     )
 
-    if measured:
-        value, where = fitness_age(float(vo2max), sex)
-        assessment.fitness_age = value
-        assessment.fitness_age_position = where
-    else:
-        assessment.fitness_age_withheld_because = WHY_NO_FITNESS_AGE
+    value, where = fitness_age(float(vo2max), sex)
+    assessment.fitness_age = value
+    assessment.fitness_age_position = where
+    assessment.circular = not measured
+    if value is not None:
+        assessment.difference = age - value
 
     return assessment

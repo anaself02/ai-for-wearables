@@ -45,39 +45,42 @@
 
     <h2 class="section-title">Fitness age estimate</h2>
 
-    {% if assessment.measured %}
+    <div class="age-compare">
+      <div class="age-figure">
+        <span class="k">Your age</span>
+        <span class="age-number">{{ assessment.age }}</span>
+      </div>
+      <div class="age-gap" aria-hidden="true">&rarr;</div>
+      <div class="age-figure is-headline">
+        <span class="k">Fitness age</span>
+        <span class="age-number">{% if assessment.fitness_age_position == "below" %}&lt;{% elif assessment.fitness_age_position == "above" %}&gt;{% endif %}{{ assessment.fitness_age }}</span>
+      </div>
+      <p class="age-verdict">
+        {% if assessment.difference > 0 %}
+          Your cardiorespiratory fitness matches the average for someone
+          <strong>{{ assessment.difference }} year{{ assessment.difference|pluralize }} younger</strong> than you.
+        {% elif assessment.difference < 0 %}
+          Your cardiorespiratory fitness matches the average for someone
+          <strong>{{ assessment.difference|cut:"-" }} year{{ assessment.difference|cut:"-"|pluralize }} older</strong> than you.
+        {% else %}
+          Your cardiorespiratory fitness is <strong>average for your age</strong>.
+        {% endif %}
+        Fitness, not biology: this is an estimate of aerobic capacity expressed
+        in years, not a biological age and not a medical measurement. A real
+        biological age needs blood biomarkers this project has no access to.
+      </p>
+    </div>
+
+    {% if assessment.circular %}
       <article class="insight dir-neutral">
         <div class="insight-head">
-          <h3 class="insight-title">Fitness age estimate</h3>
-          <span class="insight-value">
-            {% if assessment.fitness_age_position == "below" %}under {% elif assessment.fitness_age_position == "above" %}over {% endif %}{{ assessment.fitness_age }}<span class="unit">years</span>
-          </span>
+          <h3 class="insight-title">Read the gap, not the number</h3>
         </div>
-        <p class="insight-detail">
-          The age at which this VO2 max would be the population average, by the
-          HUNT3 means. It is an estimate of cardiorespiratory fitness expressed
-          in years. It is <strong>not</strong> a biological age and not a
-          medical measurement: a true biological age needs blood biomarkers
-          that this project has no access to.
-        </p>
-      </article>
-    {% else %}
-      <article class="insight inconclusive">
-        <div class="insight-head">
-          <h3 class="insight-title">Withheld, on purpose</h3>
-          <span class="insight-value">&mdash;</span>
-        </div>
-        <p class="insight-detail">{{ assessment.fitness_age_withheld_because }}</p>
-        <p class="insight-detail muted">
-          In short: a fitness age asks what age this figure would be average
-          for, and the figure was itself calculated from your age. The answer
-          would mostly be your own birthday handed back to you. The percentile
-          above does not have that problem, because it compares rather than
-          inverts.
-        </p>
+        <p class="insight-detail">{{ why_circular }}</p>
+        <p class="insight-detail">{{ why_the_gap }}</p>
         <p class="insight-footnote">
           Record a GPS-tracked outdoor run of 10+ minutes and the API will
-          produce a VO2 max from the run itself. That one can carry an age.
+          derive a VO2 max from the run itself. That one stands on its own.
         </p>
       </article>
     {% endif %}

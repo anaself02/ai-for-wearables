@@ -853,3 +853,50 @@ dl.meta dd { margin: 0; overflow-wrap: anywhere; }
 /* The reader's own row in a table of population norms. */
 tbody tr.is-yours { background: var(--surface-2); }
 tbody tr.is-yours td { font-weight: var(--w-semi); }
+
+/* ---- the two-age comparison -------------------------------------------
+   Calendar age beside fitness age, which is the comparison people actually
+   come here for. The verdict sentence sits under both so the numbers are
+   never read without it. */
+
+.age-compare {
+  display: grid;
+  grid-template-columns: auto auto auto 1fr;
+  align-items: center;
+  gap: var(--s4) var(--s5);
+  padding: var(--s5);
+  border: 1px solid var(--rule);
+  border-radius: var(--r-3);
+  background: var(--surface);
+}
+.age-figure { display: flex; flex-direction: column; gap: var(--s1); }
+.age-figure .k {
+  font-size: var(--t-micro);
+  font-weight: var(--w-semi);
+  text-transform: uppercase;
+  letter-spacing: .08em;
+  color: var(--ink-3);
+}
+.age-number {
+  font: var(--w-semi) 56px/1 var(--mono);
+  letter-spacing: -.04em;
+  font-variant-numeric: tabular-nums;
+  color: var(--ink-3);
+}
+/* The fitness age is the answer; the calendar age is the reference it is read
+   against, so only one of them is at full contrast. */
+.age-figure.is-headline .age-number { color: var(--ink); }
+.age-gap { font-size: var(--t-h2); color: var(--ink-3); }
+.age-verdict {
+  grid-column: 1 / -1;
+  margin: 0;
+  padding-top: var(--s4);
+  border-top: 1px solid var(--rule);
+  max-width: var(--measure);
+}
+
+@media (max-width: 560px) {
+  .age-compare { grid-template-columns: auto auto; }
+  .age-gap { display: none; }
+  .age-number { font-size: 44px; }
+}

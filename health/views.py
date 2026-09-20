@@ -651,6 +651,8 @@ def fitness(request):
             "profile": profile,
             "norms": fitness_module.NORMS.get(assessment.sex or "male", {}),
             "percentile_columns": fitness_module.PERCENTILES,
+            "why_circular": fitness_module.WHY_CIRCULAR,
+            "why_the_gap": fitness_module.WHY_THE_GAP_IS_THE_PART_TO_READ,
         },
     )
 
