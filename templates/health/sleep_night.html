@@ -29,9 +29,11 @@
     </div>
 
   {% elif hypnogram %}
-    {# Each band is a track of absolutely positioned segments. Every segment is
-       a real element, so hover text and screen-reader output come from the
-       markup itself rather than needing a parallel table beside a canvas. #}
+    {% comment %}
+      Each band is a track of absolutely positioned segments. Every segment is
+      a real element, so hover text and screen-reader output come from the
+      markup itself rather than needing a parallel table beside a canvas.
+    {% endcomment %}
     <div class="panel hypnogram-card">
       {% for row in hypnogram.rows %}
         <div class="hypno-row">
