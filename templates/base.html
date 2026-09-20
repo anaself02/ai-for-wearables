@@ -1,14 +1,31 @@
-{% load static %}<title>{% block title %}Health Dashboard{% endblock %}</title>
+{% load static %}<!doctype html>
+<html lang="en">
+<head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
+<title>{% block title %}Health Dashboard{% endblock %}</title>
+<meta name="description" content="{% block description %}A personal dashboard for one person&#39;s own Google Health API data.{% endblock %}">
+{# Renders scrollbars and form controls dark, without waiting for the CSS. #}
+<meta name="color-scheme" content="dark">
+<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect width='32' height='32' rx='7' fill='%230e1016'/%3E%3Cpath d='M4 17h5l3-7 4 14 3-9 2 2h7' fill='none' stroke='%236ea8fe' stroke-width='2.6' stroke-linecap='round' stroke-linejoin='round'/%3E%3C/svg%3E">
 <link rel="stylesheet" href="{% static 'app.css' %}">
+</head>
+<body>
+
+<a class="skip-link" href="#content">Skip to content</a>
 
 <header class="topbar">
   <a class="brand" href="/">Health Dashboard</a>
   {% if user.is_authenticated %}
+    {% comment %}
+      aria-current marks the page you are on for a screen reader, and .active
+      is the styling hook app.css already carried but nothing ever set.
+    {% endcomment %}
     <nav>
-      <a href="{% url 'health:index' %}">Overview</a>
-      <a href="{% url 'health:raw_index' %}">Raw data</a>
+      {% with here=request.resolver_match.url_name %}
+        <a href="{% url 'health:index' %}"{% if here == "index" %} class="active" aria-current="page"{% endif %}>Overview</a>
+        <a href="{% url 'health:raw_index' %}"{% if here == "raw_index" %} class="active" aria-current="page"{% endif %}>Raw data</a>
+      {% endwith %}
     </nav>
     <form method="post" action="{% url 'accounts:sign_out' %}">
       {% csrf_token %}
@@ -18,7 +35,7 @@
   {% endif %}
 </header>
 
-<main>
+<main id="content">
   {% if messages %}
     <ul class="messages">
       {% for message in messages %}<li class="muted">{{ message }}</li>{% endfor %}
@@ -28,3 +45,6 @@
 </main>
 
 {% block scripts %}{% endblock %}
+
+</body>
+</html>

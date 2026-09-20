@@ -19,7 +19,7 @@
     {% endfor %}
   </ul>
 
-  {% if metric.blurb %}<p class="muted small" style="margin-top:-8px">{{ metric.blurb }}</p>{% endif %}
+  {% if metric.blurb %}<p class="muted small section-note">{{ metric.blurb }}</p>{% endif %}
 
   {% if error %}
     <div class="notice error"><strong>{{ error }}</strong></div>
@@ -35,7 +35,7 @@
         {% if value_label %}
           <div class="stat">
             <div class="k">As of</div>
-            <div class="v" style="font-size:1.1rem">{{ value_label }}</div>
+            <div class="v compact">{{ value_label }}</div>
           </div>
         {% endif %}
       </div>
@@ -124,7 +124,7 @@
 
   {% endif %}
 
-  <p class="small muted" style="margin-top:28px">
+  <p class="small muted page-end">
     <a href="{% url 'health:raw' data_type.slug %}?days={{ days }}">View the raw JSON for this data type</a>
   </p>
 {% endblock %}

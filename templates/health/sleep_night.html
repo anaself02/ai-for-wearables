@@ -67,7 +67,7 @@
     </div>
 
     {% if summary %}
-      <div class="stats" style="margin-top:22px">
+      <div class="stats stack-top">
         <div class="stat">
           <div class="k">Asleep</div>
           <div class="v">{{ summary.asleep_hm }}</div>
@@ -120,7 +120,7 @@
       </table>
     </div>
 
-    <p class="muted small" style="margin-top:12px">
+    <p class="muted small footnote">
       Restlessness is drawn from the API's <code>shortAwakenings</code>, which sit
       <em>inside</em> the stage segments rather than alongside them. It has its own
       band so the pattern is visible, but its minutes are not added to the awake
@@ -132,7 +132,7 @@
     <div class="notice">No sleep session recorded for this night.</div>
   {% endif %}
 
-  <p class="small muted" style="margin-top:28px">
+  <p class="small muted page-end">
     <a href="{% url 'health:raw' 'sleep' %}?days=7">View the raw sleep JSON</a>
   </p>
 {% endblock %}

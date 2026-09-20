@@ -18,17 +18,17 @@
       </div>
       <div class="stat">
         <div class="k">Recorded</div>
-        <div class="v" style="font-size:1.1rem">{{ historical.date }}</div>
+        <div class="v compact">{{ historical.date }}</div>
       </div>
       <div class="stat">
         <div class="k">Readings</div>
-        <div class="v" style="font-size:1.1rem">
+        <div class="v compact">
           {{ historical_count }}{% if historical_first %} &middot; from {{ historical_first.date }}{% endif %}
         </div>
       </div>
       <div class="stat">
         <div class="k">Source</div>
-        <div class="v" style="font-size:1.1rem">{{ historical.source }}</div>
+        <div class="v compact">{{ historical.source }}</div>
       </div>
     </div>
 
@@ -44,11 +44,11 @@
     {% endif %}
   {% endif %}
 
-  <div class="panel" style="margin-top:18px">
-    <p style="margin-top:0">
+  <div class="panel stack-top">
+    <p>
       <strong>Live sync:</strong> {{ metric.empty_message }}
     </p>
-    <p class="muted small" style="margin-bottom:0">
+    <p class="muted small">
       This is expected rather than broken. The API returned HTTP 200 with zero
       data points over a 90-day window, and the exercise history in that period
       contains no running sessions. Google Health only derives VO2 max from
@@ -60,7 +60,7 @@
     </p>
   </div>
 
-  <p class="small muted" style="margin-top:24px">
+  <p class="small muted page-end">
     <a href="{% url 'health:raw' metric.slug %}?days=90">Check the raw live response for yourself</a>
   </p>
 {% endblock %}
