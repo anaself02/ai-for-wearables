@@ -997,3 +997,50 @@ tbody tr.is-yours td { font-weight: var(--w-semi); }
   color: #e3e3e3;
 }
 :root[data-theme="dark"] .gsi-button:hover { background: #1c1c1d; }
+
+/* ---- the moment after signing in ---------------------------------------
+   Covers the cold-cache fetch the dashboard is about to need. Everything here
+   is ink on ground: a greeting has no data in it, so it gets no colour. */
+
+.welcome {
+  min-height: 62vh;
+  display: grid;
+  place-content: center;
+  justify-items: center;
+  gap: var(--s5);
+  text-align: center;
+}
+.welcome-greeting {
+  font-size: var(--t-h1);
+  font-weight: var(--w-semi);
+  letter-spacing: -.025em;
+  margin: 0;
+  text-wrap: balance;
+}
+.welcome-sub { margin: 0; color: var(--ink-3); font-size: var(--t-sm); }
+
+/* The mark's three bars, at 24 -> 64 scale, with the same offsets and widths.
+   They ease from the left as a readout settling rather than spinning: nothing
+   here is pretending to measure progress, because nothing can. */
+.loader { width: 64px; display: flex; flex-direction: column; gap: 6px; }
+.loader span {
+  height: 5px;
+  border-radius: 2.5px;
+  background: var(--ink);
+  transform-origin: left center;
+  animation: settle 1.5s ease-in-out infinite;
+}
+.loader span:nth-child(1) { margin-left: 13px; width: 27px; animation-delay: 0s; }
+.loader span:nth-child(2) { margin-left: 24px; width: 27px; animation-delay: .18s; }
+.loader span:nth-child(3) { margin-left: 13px; width: 19px; animation-delay: .36s; }
+
+@keyframes settle {
+  0%, 100% { opacity: .22; transform: scaleX(.7); }
+  50%      { opacity: 1;   transform: scaleX(1); }
+}
+
+/* The global reduced-motion rule stops the animation but would leave the bars
+   frozen at their faintest keyframe. Hold them at the mark instead. */
+@media (prefers-reduced-motion: reduce) {
+  .loader span { opacity: .9; transform: none; }
+}

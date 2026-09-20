@@ -6,11 +6,14 @@ from django.conf import settings
 from django.contrib import messages
 from django.contrib.auth import get_user_model, login, logout
 from django.contrib.auth.decorators import login_required
+from django.http import HttpResponse
+from django.utils import timezone
 from django.shortcuts import redirect, render
 from django.urls import reverse
 from django.views.decorators.http import require_http_methods
 
 from .forms import ProfileForm
+from .greeting import display_name, greeting_for
 from .models import GoogleCredential, Profile
 from .oauth import authorization_url, build_flow, verify_id_token
 
@@ -114,13 +117,20 @@ def oauth_callback(request):
     credential, _ = GoogleCredential.objects.get_or_create(
         user=user, defaults={"google_sub": claims["sub"]}
     )
+    # Google owns the display name, and _get_or_create_user only writes it
+    # when the row is new, so a name changed later would never arrive.
+    given = claims.get("given_name", "")[:150]
+    if given and given != user.first_name:
+        user.first_name = given
+        user.save(update_fields=["first_name"])
+
     credential.google_sub = claims["sub"]
     credential.email = claims.get("email", "")
     credential.update_from_credentials(credentials)
 
     login(request, user)
     messages.success(request, "Google account connected.")
-    return redirect("health:index")
+    return redirect("accounts:welcome")
 
 
 def _get_or_create_user(claims: dict) -> User:
@@ -176,3 +186,41 @@ def profile_settings(request):
         form = ProfileForm(instance=profile)
 
     return render(request, "accounts/settings.html", {"form": form, "profile": profile})
+
+
+@login_required
+def welcome(request):
+    """The moment between signing in and the dashboard being ready.
+
+    Straight after the OAuth round trip the cache is cold, and the overview is
+    one API call per metric. This screen covers work that is genuinely
+    happening rather than a timer pretending something is: the page renders
+    immediately, then asks for the fetch to be done, then leaves.
+    """
+    return render(
+        request,
+        "accounts/welcome.html",
+        {
+            "greeting": greeting_for(timezone.localtime()),
+            "name": display_name(request.user),
+        },
+    )
+
+
+@login_required
+def welcome_warm(request):
+    """Fill the cache the dashboard is about to read. Always answers 204.
+
+    Failure here is not worth reporting to the visitor: every error this can
+    raise is one the dashboard already handles per card, and the only thing a
+    failure changes is that the next page is slow rather than fast. What it
+    must never do is strand somebody on an interstitial.
+    """
+    from health.views import OVERVIEW_WINDOW_DAYS, _load_window
+
+    try:
+        _load_window(request, OVERVIEW_WINDOW_DAYS)
+    except Exception as exc:  # noqa: BLE001 - see docstring
+        logger.warning("Warming the dashboard cache failed: %s", exc)
+
+    return HttpResponse(status=204)
