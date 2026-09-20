@@ -213,14 +213,9 @@ header.topbar {
   letter-spacing: -.01em;
   text-decoration: none;
 }
-/* The mark is two bars and a gap: a reading, at the smallest size that still
-   reads as one. */
-.brand-mark {
-  width: 14px;
-  height: 14px;
-  border-radius: var(--r-1);
-  background: linear-gradient(var(--ink) 0 45%, transparent 45% 55%, var(--ink) 55% 100%);
-}
+/* The mark is an SVG in templates/_mark.html, drawn in currentColor, so these
+   rules only have to say how big it is. */
+.brand-mark { width: 18px; height: 18px; display: block; }
 
 /* Segmented buttons, built from the same parts as the Day/Night/Auto control
    on the other end of the bar: one pill, hairline border, the current choice
@@ -900,3 +895,105 @@ tbody tr.is-yours td { font-weight: var(--w-semi); }
   .age-gap { display: none; }
   .age-number { font-size: 44px; }
 }
+
+/* ---- the front door ----------------------------------------------------
+   No top bar, no navigation, nothing to sell. One mark, one sentence about
+   what this is, and the way in. */
+
+.landing {
+  max-width: 44ch;
+  margin: 0 auto;
+  padding: var(--s7) 0;
+  text-align: center;
+}
+.landing-mark {
+  width: 56px;
+  height: 56px;
+  margin: 0 auto var(--s5);
+  color: var(--ink);
+}
+.landing h1 { font-size: var(--t-h1); margin: 0 0 var(--s3); }
+.landing-line {
+  color: var(--ink-2);
+  font-size: var(--t-lead);
+  line-height: 1.45;
+  margin: 0 auto var(--s6);
+  max-width: 38ch;
+}
+.landing-note {
+  color: var(--ink-3);
+  font-size: var(--t-sm);
+  line-height: 1.55;
+  margin: var(--s6) auto 0;
+  max-width: 42ch;
+}
+
+/* ---- Sign in with Google -----------------------------------------------
+ *
+ * Built to Google's identity branding guidelines rather than to this app's
+ * button style, because the guidelines are a condition of using the mark:
+ *
+ *   text     "Sign in with Google", one of the three permitted strings
+ *   light    #FFFFFF ground, #747775 1px inside border, #1F1F1F text
+ *   dark     #131314 ground, #8E918F 1px inside border, #E3E3E3 text
+ *   padding  12px before the logo, 10px after it, 12px after the text
+ *   logo     the colour "G", unmodified, never monochrome and never recoloured
+ *
+ * This is the one place in the app where colour is not data and where a
+ * hardcoded hex is correct: the palette belongs to Google, so it does not
+ * move with the theme tokens. The light and dark variants are switched on the
+ * app's own theme so the button always sits on a ground it is approved for.
+ *
+ * The mark is the published asset, pasted unmodified into the template and
+ * pinned by accounts/test_landing.py.
+ *
+ * Two deviations from Google's reference CSS, recorded rather than hidden:
+ *
+ *   font-family    theirs is 'Roboto', arial, sans-serif. This project ships
+ *                  no webfonts by decision, so it uses the system sans at the
+ *                  same 14px/20px, weight 500, letter-spacing .25px.
+ *   border-radius  theirs is 4px. This app has one radius scale and controls
+ *                  sit at --r-2, so the button matches its neighbours rather
+ *                  than importing a second shape language.
+ *
+ * Everything else - the colours, the 40px height, the 12/10/12 padding, the
+ * 20px icon box, the string - follows the published button.
+ */
+
+.gsi-button {
+  display: inline-flex;
+  align-items: center;
+  gap: 10px;
+  height: 40px;
+  padding: 0 12px;
+  border: 1px solid #747775;
+  border-radius: var(--r-2);
+  background: #ffffff;
+  color: #1f1f1f;
+  font: var(--w-mid) 14px/20px var(--sans);
+  letter-spacing: .25px;
+  text-decoration: none;
+  transition: box-shadow var(--speed) ease, background var(--speed) ease;
+}
+.gsi-button:hover { background: #f7f8f8; box-shadow: 0 1px 2px rgba(0, 0, 0, .18); }
+.gsi-button:active { transform: translateY(1px); }
+/* 20px, which is the size Google's own button CSS gives the icon box. The
+   guidelines forbid resizing the mark, so this follows their number rather
+   than one of ours. */
+.gsi-icon { display: block; width: 20px; height: 20px; min-width: 20px; }
+.gsi-icon svg { display: block; width: 20px; height: 20px; }
+
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) .gsi-button {
+    background: #131314;
+    border-color: #8e918f;
+    color: #e3e3e3;
+  }
+  :root:not([data-theme="light"]) .gsi-button:hover { background: #1c1c1d; }
+}
+:root[data-theme="dark"] .gsi-button {
+  background: #131314;
+  border-color: #8e918f;
+  color: #e3e3e3;
+}
+:root[data-theme="dark"] .gsi-button:hover { background: #1c1c1d; }

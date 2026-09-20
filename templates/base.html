@@ -7,7 +7,7 @@
 <meta name="description" content="{% block description %}A personal dashboard for one person&#39;s own Google Health API data.{% endblock %}">
 {# Both themes are real, so let the browser paint native controls either way. #}
 <meta name="color-scheme" content="light dark">
-<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect width='32' height='32' rx='7' fill='%231a1917'/%3E%3Cpath d='M4 17h5l3-7 4 14 3-9 2 2h7' fill='none' stroke='%23f5f4f1' stroke-width='2.6' stroke-linecap='round' stroke-linejoin='round'/%3E%3C/svg%3E">
+<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24'%3E%3Crect width='24' height='24' rx='5' fill='%231b1a18'/%3E%3Crect x='5' y='5.5' width='10' height='3' rx='1.5' fill='%23f4f3f0'/%3E%3Crect x='9' y='10.5' width='10' height='3' rx='1.5' fill='%23f4f3f0'/%3E%3Crect x='5' y='15.5' width='7' height='3' rx='1.5' fill='%23f4f3f0'/%3E%3C/svg%3E">
 <link rel="stylesheet" href="{% static 'app.css' %}">
 {% comment %}
   Inline and before the body on purpose. A stored theme has to be on the html
@@ -31,9 +31,10 @@
 
 <a class="skip-link" href="#content">Skip to content</a>
 
+{% block chrome %}
 <header class="topbar">
   <a class="brand" href="/">
-    <span class="brand-mark" aria-hidden="true"></span>
+    {% include "_mark.html" with class="brand-mark" %}
     Health Dashboard
   </a>
 
@@ -94,6 +95,7 @@
     </div>
   {% endif %}
 </header>
+{% endblock %}
 
 <main id="content">
   {% if messages %}
