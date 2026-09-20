@@ -1,0 +1,58 @@
+{
+  "model_file": "svm_hr_only.joblib",
+  "algorithm": "SVM (RBF kernel) inside a StandardScaler pipeline",
+  "trained_on": {
+    "dataset": "WESAD",
+    "signals": "wrist (Empatica E4) heart rate, derived from BVP",
+    "n_subjects": 15,
+    "n_windows": 1015,
+    "window_seconds": 60,
+    "step_seconds": 30,
+    "class_balance": {
+      "baseline": 557,
+      "stress": 302,
+      "amusement": 156
+    }
+  },
+  "classes": {
+    "1": "baseline",
+    "2": "stress",
+    "3": "amusement"
+  },
+  "validation": "leave-one-subject-out cross-validation (15 folds)",
+  "scores": {
+    "full": {
+      "random_forest": {
+        "accuracy": 0.7714285714285715,
+        "f1_macro": 0.6305178038101128
+      },
+      "svm": {
+        "accuracy": 0.7625615763546798,
+        "f1_macro": 0.716951732295367
+      }
+    },
+    "hr_only": {
+      "random_forest": {
+        "accuracy": 0.6295566502463055,
+        "f1_macro": 0.4977246139717865
+      },
+      "svm": {
+        "accuracy": 0.548768472906404,
+        "f1_macro": 0.4994678389427316
+      }
+    }
+  },
+  "always_guess_largest_class": {
+    "accuracy": 0.548768472906404,
+    "f1_macro": 0.23621713316369805
+  },
+  "limitations": [
+    "Trained on laboratory-induced stress (the Trier Social Stress Test) and amusement (funny video clips), not on real-world daily stress.",
+    "Has no 'none of these' class. Every window it is given comes back as baseline, stress or amusement, whether or not any of those describe what was happening.",
+    "Restricted to wrist heart rate, it loses 0.217 macro-F1 against the full 8-channel sensor model (0.717 -> 0.499), because electrodermal activity and skin temperature carry much of the signal.",
+    "Its heart rate is beat-to-beat, computed by our own peak detection on a 64 Hz PPG signal. A consumer wearable reports an already-smoothed rate every few seconds, so the same feature names describe different quantities and the inputs sit measurably outside the training distribution.",
+    "15 subjects, all young adults, one lab, one session each.",
+    "Applied to personal data there is no ground truth, so no accuracy can be claimed for any prediction it makes there."
+  ],
+  "honest_summary": "A demonstration that a wrist-heart-rate stress classifier can be trained, validated subject-wise and applied end to end. Not a validated real-world stress detector."
+}

@@ -269,6 +269,78 @@ def save_training_distribution(table, path):
         json.dump(distribution, f, indent=2)
 
 
+def save_model_card(table, all_scores, path):
+    """
+    Write a model card: what this model was trained on, how it was validated,
+    how well it scored, and what it cannot be trusted to do.
+
+    A model card is the standard way to ship that context WITH a model
+    instead of leaving it in a report the model gets separated from. Here it
+    has a concrete job: the Django dashboard shows a "how this works" page
+    next to its prediction, and that page renders this file. Without it the
+    dashboard would have to hard-code performance figures, which would then
+    quietly disagree with RESULTS.md the first time anything is retrained.
+    """
+    majority_share = (table["label_name"].value_counts().max() / len(table))
+
+    card = {
+        "model_file": OUTPUT_FILENAMES["hr_only"]["model"],
+        "algorithm": "SVM (RBF kernel) inside a StandardScaler pipeline",
+        "trained_on": {
+            "dataset": "WESAD",
+            "signals": "wrist (Empatica E4) heart rate, derived from BVP",
+            "n_subjects": int(table["subject_id"].nunique()),
+            "n_windows": int(len(table)),
+            "window_seconds": config.WINDOW_SECONDS,
+            "step_seconds": config.STEP_SECONDS,
+            "class_balance": {
+                name: int(count)
+                for name, count in table["label_name"].value_counts().items()
+            },
+        },
+        "classes": {str(k): v for k, v in config.LABEL_NAMES.items()},
+        "validation": "leave-one-subject-out cross-validation ({} folds)".format(
+            table["subject_id"].nunique()),
+        "scores": all_scores,
+        "always_guess_largest_class": {
+            "accuracy": float(majority_share),
+            # F1 of the majority class is 2p/(p+1); the other two score 0.
+            "f1_macro": float((2.0 * majority_share / (majority_share + 1.0)) / 3.0),
+        },
+        "limitations": [
+            "Trained on laboratory-induced stress (the Trier Social Stress "
+            "Test) and amusement (funny video clips), not on real-world "
+            "daily stress.",
+            "Has no 'none of these' class. Every window it is given comes "
+            "back as baseline, stress or amusement, whether or not any of "
+            "those describe what was happening.",
+            "Restricted to wrist heart rate, it loses {:.3f} macro-F1 "
+            "against the full 8-channel sensor model ({:.3f} -> {:.3f}), "
+            "because electrodermal activity and skin temperature carry much "
+            "of the signal.".format(
+                all_scores["full"][MODEL_TO_SAVE]["f1_macro"]
+                - all_scores["hr_only"][MODEL_TO_SAVE]["f1_macro"],
+                all_scores["full"][MODEL_TO_SAVE]["f1_macro"],
+                all_scores["hr_only"][MODEL_TO_SAVE]["f1_macro"]),
+            "Its heart rate is beat-to-beat, computed by our own peak "
+            "detection on a 64 Hz PPG signal. A consumer wearable reports an "
+            "already-smoothed rate every few seconds, so the same feature "
+            "names describe different quantities and the inputs sit measurably "
+            "outside the training distribution.",
+            "15 subjects, all young adults, one lab, one session each.",
+            "Applied to personal data there is no ground truth, so no "
+            "accuracy can be claimed for any prediction it makes there.",
+        ],
+        "honest_summary": (
+            "A demonstration that a wrist-heart-rate stress classifier can be "
+            "trained, validated subject-wise and applied end to end. Not a "
+            "validated real-world stress detector."),
+    }
+
+    with open(path, "w") as f:
+        json.dump(card, f, indent=2)
+
+
 def train_one_feature_set(feature_set_name, table):
     """
     Train and cross-validate every model on ONE feature set, save the results,
@@ -410,6 +482,13 @@ def main():
         s = all_scores[feature_set_name][MODEL_TO_SAVE]
         print("{:10s} {:9.3f} {:10.3f}".format(
             feature_set_name, s["accuracy"], s["f1_macro"]))
+
+    # The model card needs the scores, so it is written once both feature
+    # sets have been cross-validated.
+    card_path = os.path.join(config.MODELS_DIR, "model_card.json")
+    save_model_card(table, all_scores, card_path)
+    print("Saved model card -> " + card_path)
+    print()
 
     full = all_scores["full"][MODEL_TO_SAVE]
     hr = all_scores["hr_only"][MODEL_TO_SAVE]
