@@ -222,29 +222,31 @@ header.topbar {
   background: linear-gradient(var(--ink) 0 45%, transparent 45% 55%, var(--ink) 55% 100%);
 }
 
-.tabs { display: flex; gap: var(--s4); align-items: center; }
+/* Segmented buttons, built from the same parts as the Day/Night/Auto control
+   on the other end of the bar: one pill, hairline border, the current choice
+   filled in ink. Two controls that do the same kind of job should not look
+   like two different ideas. */
+.tabs {
+  display: inline-flex;
+  gap: 2px;
+  padding: 2px;
+  align-items: center;
+  border: 1px solid var(--rule);
+  border-radius: var(--r-pill);
+  background: var(--surface);
+}
 .tab {
-  position: relative;
-  padding: var(--s2) 0;
+  padding: var(--s1) var(--s4);
+  border-radius: var(--r-pill);
   color: var(--ink-3);
   font-size: var(--t-sm);
   font-weight: var(--w-semi);
   text-decoration: none;
-  transition: color var(--speed) ease;
+  white-space: nowrap;
+  transition: background var(--speed) ease, color var(--speed) ease;
 }
-.tab:hover { color: var(--ink); }
-/* The current tab is marked by a rule under it rather than by a colour, so it
-   reads identically in both themes. */
-.tab.is-current { color: var(--ink); }
-.tab.is-current::after {
-  content: "";
-  position: absolute;
-  left: 0;
-  right: 0;
-  bottom: -13px;
-  height: 2px;
-  background: var(--ink);
-}
+.tab:hover { color: var(--ink); background: var(--surface-2); }
+.tab.is-current { background: var(--ink); color: var(--ground); }
 
 .topbar-end { display: flex; align-items: center; gap: var(--s4); }
 .topbar-end form { display: flex; align-items: center; gap: var(--s3); }
@@ -732,8 +734,8 @@ dl.meta dd { margin: 0; overflow-wrap: anywhere; }
 
 @media (max-width: 720px) {
   header.topbar { padding: var(--s3) var(--s4); gap: var(--s3); }
-  .tabs { order: 3; width: 100%; gap: var(--s5); }
-  .tab.is-current::after { bottom: -13px; }
+  .tabs { order: 3; width: 100%; justify-content: space-between; }
+  .tab { padding: var(--s1) var(--s3); }
   main { padding: var(--s5) var(--s4) var(--s6); }
   .who { display: none; }
 }
