@@ -24,6 +24,11 @@ urlpatterns = [
     # Everything the dashboard derives rather than measures, including
     # the arousal card, which is an interpretation and not a reading.
     path("insights/", views.insights, name="insights"),
+    # Neither of these needs the live API on every load: the fitness page
+    # reads stored values only, and the calculator falls back to the
+    # textbook cycle when no nights can be fetched.
+    path("fitness/", views.fitness, name="fitness"),
+    path("sleep-calculator/", views.sleep_calculator, name="sleep_calculator"),
     # The arousal card: a POST computes today's assessment, and the
     # methodology page explains what it can and cannot mean.
     path("arousal/compute/", views.arousal_compute, name="arousal_compute"),

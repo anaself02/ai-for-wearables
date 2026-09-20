@@ -5,11 +5,13 @@ import logging
 from django.conf import settings
 from django.contrib import messages
 from django.contrib.auth import get_user_model, login, logout
+from django.contrib.auth.decorators import login_required
 from django.shortcuts import redirect, render
 from django.urls import reverse
 from django.views.decorators.http import require_http_methods
 
-from .models import GoogleCredential
+from .forms import ProfileForm
+from .models import GoogleCredential, Profile
 from .oauth import authorization_url, build_flow, verify_id_token
 
 logger = logging.getLogger(__name__)
@@ -151,3 +153,26 @@ def _get_or_create_user(claims: dict) -> User:
 def sign_out(request):
     logout(request)
     return redirect(reverse("accounts:landing"))
+
+
+@login_required
+@require_http_methods(["GET", "POST"])
+def profile_settings(request):
+    """Date of birth and sex, which the fitness norms cannot work without.
+
+    Nothing else lives here. The dashboard reads everything else from the API,
+    and asking for more than the comparison needs would be collecting personal
+    data for no stated purpose.
+    """
+    profile, _ = Profile.objects.get_or_create(user=request.user)
+
+    if request.method == "POST":
+        form = ProfileForm(request.POST, instance=profile)
+        if form.is_valid():
+            form.save()
+            messages.success(request, "Saved.")
+            return redirect("health:fitness")
+    else:
+        form = ProfileForm(instance=profile)
+
+    return render(request, "accounts/settings.html", {"form": form, "profile": profile})

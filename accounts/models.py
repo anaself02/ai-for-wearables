@@ -112,3 +112,50 @@ class GoogleCredential(models.Model):
         self.needs_reconnect = True
         self.access_token = ""
         self.save(update_fields=["needs_reconnect", "access_token", "updated_at"])
+
+
+class Profile(models.Model):
+    """The two facts the population fitness norms need, and nothing else.
+
+    Date of birth rather than age, so the figure never silently goes stale on a
+    birthday. It is stored with the same encrypted field the OAuth tokens use:
+    a date of birth is a direct identifier, this project already holds a key,
+    and there is no reason to keep it in the clear when the token beside it is
+    not.
+
+    Sex has two values because the published norms have two columns. That is a
+    limitation of the reference tables (Cooper Institute / ACSM and HUNT3), not
+    a claim about people, and the settings page says so rather than leaving the
+    reader to assume the software is making the claim.
+    """
+
+    class Sex(models.TextChoices):
+        FEMALE = "female", "Female"
+        MALE = "male", "Male"
+
+    user = models.OneToOneField(
+        settings.AUTH_USER_MODEL,
+        on_delete=models.CASCADE,
+        related_name="profile",
+    )
+    #: ISO 8601 date held as ciphertext, so the column cannot be queried.
+    date_of_birth = EncryptedTextField(blank=True, default="")
+    sex = models.CharField(max_length=16, choices=Sex.choices, blank=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    def __str__(self):
+        return f"Profile for {self.user}"
+
+    @property
+    def born(self):
+        """The stored date, or None if it was never set or cannot be parsed."""
+        from datetime import date
+
+        try:
+            return date.fromisoformat(self.date_of_birth)
+        except (TypeError, ValueError):
+            return None
+
+    @property
+    def is_complete(self) -> bool:
+        return self.born is not None and bool(self.sex)

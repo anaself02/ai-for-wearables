@@ -753,3 +753,103 @@ dl.meta dd { margin: 0; overflow-wrap: anywhere; }
     transition-duration: .01ms !important;
   }
 }
+
+/* ---- forms ------------------------------------------------------------- */
+
+.field { margin-bottom: var(--s4); max-width: 34ch; }
+.field label {
+  display: block;
+  font-size: var(--t-micro);
+  font-weight: var(--w-semi);
+  text-transform: uppercase;
+  letter-spacing: .08em;
+  color: var(--ink-3);
+  margin-bottom: var(--s1);
+}
+.field input, .field select {
+  width: 100%;
+  background: var(--ground);
+  color: var(--ink);
+  border: 1px solid var(--rule);
+  border-radius: var(--r-2);
+  padding: var(--s2) var(--s3);
+  font: var(--t-body)/1.4 var(--sans);
+}
+.field input:focus-visible, .field select:focus-visible { border-color: var(--ink); }
+/* Label above, help under the control, error under that: one order everywhere. */
+.field-help { margin: var(--s1) 0 0; font-size: var(--t-label); color: var(--ink-3); }
+.field-error { margin: var(--s1) 0 0; font-size: var(--t-label); color: var(--neg); }
+
+.settings-form { max-width: 46ch; }
+
+/* ---- the sleep calculator ---------------------------------------------- */
+
+.wake-form {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--s3);
+  padding: var(--s3) var(--s4);
+  border: 1px solid var(--rule);
+  border-radius: var(--r-3);
+  background: var(--surface);
+}
+.wake-form label {
+  font-size: var(--t-micro);
+  font-weight: var(--w-semi);
+  text-transform: uppercase;
+  letter-spacing: .08em;
+  color: var(--ink-3);
+}
+.wake-form input {
+  background: var(--ground);
+  color: var(--ink);
+  border: 1px solid var(--rule);
+  border-radius: var(--r-2);
+  padding: var(--s2) var(--s3);
+  font: var(--w-semi) var(--t-lead)/1.2 var(--mono);
+}
+
+.cycle-columns {
+  display: grid;
+  gap: var(--s5) var(--s6);
+  grid-template-columns: repeat(auto-fit, minmax(300px, 1fr));
+  align-items: start;
+}
+
+.bedtimes {
+  border: 1px solid var(--rule);
+  border-radius: var(--r-3);
+  overflow: hidden;
+  background: var(--surface);
+}
+/* One row per option, hairline between. The clock is the thing being read, so
+   it gets the display size and everything else stays out of its way. */
+.bedtime {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: var(--s3);
+  padding: var(--s3) var(--s4);
+  border-top: 1px solid var(--rule);
+}
+.bedtime:first-child { border-top: 0; }
+.bedtime-cycles {
+  font-size: var(--t-micro);
+  font-weight: var(--w-semi);
+  text-transform: uppercase;
+  letter-spacing: .08em;
+  color: var(--ink-3);
+  flex: 0 0 auto;
+}
+.bedtime-clock {
+  font: var(--w-semi) var(--t-num)/1.1 var(--mono);
+  letter-spacing: -.03em;
+  font-variant-numeric: tabular-nums;
+  margin-left: auto;
+}
+.bedtime-length { font-size: var(--t-label); color: var(--ink-3); flex: 0 0 auto; }
+
+/* The reader's own row in a table of population norms. */
+tbody tr.is-yours { background: var(--surface-2); }
+tbody tr.is-yours td { font-weight: var(--w-semi); }

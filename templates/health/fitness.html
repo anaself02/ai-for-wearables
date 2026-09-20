@@ -1,0 +1,159 @@
+{% extends "base.html" %}
+{% block title %}Fitness - Health Dashboard{% endblock %}
+{% block description %}Where one VO2 max estimate sits against published population norms for age and sex.{% endblock %}
+
+{% block content %}
+  <div class="page-head">
+    <h1>Fitness</h1>
+    <p class="lede">
+      One VO2 max figure, placed against the population norms for your age and
+      sex. A percentile, not a verdict, and not a medical measurement.
+    </p>
+  </div>
+
+  {% if not assessment.available %}
+
+    <div class="notice">{{ assessment.reason }}</div>
+    {% if not profile.is_complete %}
+      <p class="stack-top">
+        <a class="btn" href="{% url 'accounts:settings' %}">Add your date of birth and sex</a>
+      </p>
+    {% endif %}
+
+  {% else %}
+
+    <div class="stats">
+      <div class="stat">
+        <div class="k">VO2 max</div>
+        <div class="v">{{ assessment.vo2max }}<span class="unit">ml/kg/min</span></div>
+      </div>
+      <div class="stat">
+        <div class="k">Percentile</div>
+        <div class="v">
+          {% if assessment.position == "below" %}&lt;5{% elif assessment.position == "above" %}&gt;95{% else %}{{ assessment.percentile }}{% endif %}<span class="unit">th</span>
+        </div>
+      </div>
+      <div class="stat">
+        <div class="k">Compared with</div>
+        <div class="v compact">{{ assessment.sex|capfirst }}, age {{ assessment.age }}</div>
+      </div>
+      <div class="stat">
+        <div class="k">Reads as</div>
+        <div class="v compact">{{ assessment.band }}</div>
+      </div>
+    </div>
+
+    <h2 class="section-title">Fitness age estimate</h2>
+
+    {% if assessment.measured %}
+      <article class="insight dir-neutral">
+        <div class="insight-head">
+          <h3 class="insight-title">Fitness age estimate</h3>
+          <span class="insight-value">
+            {% if assessment.fitness_age_position == "below" %}under {% elif assessment.fitness_age_position == "above" %}over {% endif %}{{ assessment.fitness_age }}<span class="unit">years</span>
+          </span>
+        </div>
+        <p class="insight-detail">
+          The age at which this VO2 max would be the population average, by the
+          HUNT3 means. It is an estimate of cardiorespiratory fitness expressed
+          in years. It is <strong>not</strong> a biological age and not a
+          medical measurement: a true biological age needs blood biomarkers
+          that this project has no access to.
+        </p>
+      </article>
+    {% else %}
+      <article class="insight inconclusive">
+        <div class="insight-head">
+          <h3 class="insight-title">Withheld, on purpose</h3>
+          <span class="insight-value">&mdash;</span>
+        </div>
+        <p class="insight-detail">{{ assessment.fitness_age_withheld_because }}</p>
+        <p class="insight-detail muted">
+          In short: a fitness age asks what age this figure would be average
+          for, and the figure was itself calculated from your age. The answer
+          would mostly be your own birthday handed back to you. The percentile
+          above does not have that problem, because it compares rather than
+          inverts.
+        </p>
+        <p class="insight-footnote">
+          Record a GPS-tracked outdoor run of 10+ minutes and the API will
+          produce a VO2 max from the run itself. That one can carry an age.
+        </p>
+      </article>
+    {% endif %}
+
+    <h2 class="section-title">What this is, and is not</h2>
+    <div class="insights">
+      <article class="insight">
+        <div class="insight-head"><h3 class="insight-title">Where the figure comes from</h3></div>
+        <p class="insight-detail">
+          {{ assessment.vo2max }} ml/kg/min, recorded {{ reading.date }}, source
+          <strong>{{ assessment.source }}</strong>. Google derives a demographic
+          estimate from resting heart rate, age, sex and weight. No run, no
+          treadmill and no gas analysis went into it.
+        </p>
+      </article>
+      <article class="insight">
+        <div class="insight-head"><h3 class="insight-title">What the percentile means</h3></div>
+        <p class="insight-detail">
+          Of people of your age and sex in the reference population, about
+          {% if assessment.position == "inside" %}{{ assessment.percentile|floatformat:0 }}%{% else %}this many{% endif %}
+          have a lower VO2 max. The reference is the Cooper Institute Aerobics
+          Center Longitudinal Study, as published in ACSM guidelines. Those are
+          measured values; yours is modelled, so read the placement as
+          approximate.
+        </p>
+      </article>
+      <article class="insight">
+        <div class="insight-head"><h3 class="insight-title">It is not a health check</h3></div>
+        <p class="insight-detail">
+          Cardiorespiratory fitness is one measure among many, and a percentile
+          against a reference cohort is not a diagnosis, a risk score or a
+          medical opinion. Nothing here should be used to decide anything
+          clinical.
+        </p>
+      </article>
+    </div>
+
+    <h2 class="section-title">The norms this was read against</h2>
+    <p class="section-note muted small">
+      VO2 max in ml/kg/min for {{ assessment.sex }}s. Your bracket is marked.
+    </p>
+    <div class="panel table-scroll">
+      <table>
+        <thead>
+          <tr>
+            <th>Age</th>
+            {% for column in percentile_columns %}<th class="num">{{ column }}th</th>{% endfor %}
+          </tr>
+        </thead>
+        <tbody>
+          {% for bounds, values in norms.items %}
+            <tr{% if assessment.age >= bounds.0 and assessment.age <= bounds.1 %} class="is-yours"{% endif %}>
+              <td>{{ bounds.0 }}&ndash;{{ bounds.1 }}</td>
+              {% for value in values %}<td class="num">{{ value }}</td>{% endfor %}
+            </tr>
+          {% endfor %}
+        </tbody>
+      </table>
+    </div>
+
+    <h2 class="section-title">The signals underneath it</h2>
+    <p>
+      Resting heart rate is already an input to the estimate above, so it is not
+      independent evidence of the same thing. It is worth reading on its own
+      terms instead:
+      <a href="{% url 'health:metric' 'daily-resting-heart-rate' %}?days=30">resting heart rate</a>,
+      <a href="{% url 'health:metric' 'steps' %}?days=30">steps</a> and
+      <a href="{% url 'health:metric' 'active-minutes' %}?days=30">active minutes</a>
+      are all measured rather than modelled.
+    </p>
+
+    <p class="small muted page-end">
+      Norms: Cooper Institute / ACSM Guidelines 11th ed. Table 4.7.
+      Age inversion: HUNT3, Nes et al. 2011.
+      <a href="{% url 'accounts:settings' %}">Change your date of birth or sex</a>
+    </p>
+
+  {% endif %}
+{% endblock %}

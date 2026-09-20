@@ -56,6 +56,18 @@
           <a class="tab" href="{% url 'health:insights' %}">Insights</a>
         {% endif %}
 
+        {% if here == "fitness" or here == "settings" %}
+          <a class="tab is-current" href="{% url 'health:fitness' %}" aria-current="page">Fitness</a>
+        {% else %}
+          <a class="tab" href="{% url 'health:fitness' %}">Fitness</a>
+        {% endif %}
+
+        {% if here == "sleep_calculator" %}
+          <a class="tab is-current" href="{% url 'health:sleep_calculator' %}" aria-current="page">Sleep</a>
+        {% else %}
+          <a class="tab" href="{% url 'health:sleep_calculator' %}">Sleep</a>
+        {% endif %}
+
         {% if here == "raw_index" or here == "raw" %}
           <a class="tab is-current" href="{% url 'health:raw_index' %}" aria-current="page">Raw data</a>
         {% else %}

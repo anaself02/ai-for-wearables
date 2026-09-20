@@ -1,0 +1,117 @@
+{% extends "base.html" %}
+{% block title %}Sleep calculator - Health Dashboard{% endblock %}
+{% block description %}Bedtimes for a target wake time, counted in whole sleep cycles.{% endblock %}
+
+{% block content %}
+  <div class="page-head">
+    <h1>Sleep calculator</h1>
+    <p class="lede">
+      Working back from when you need to be awake, in whole sleep cycles, so an
+      alarm is less likely to land in the middle of one.
+    </p>
+  </div>
+
+  <form class="wake-form" method="get" action="{% url 'health:sleep_calculator' %}">
+    <label for="wake">Wake up at</label>
+    <input id="wake" name="wake" type="time" value="{{ wake }}" required>
+    <button class="btn" type="submit">Work back</button>
+  </form>
+
+  <div class="cycle-columns">
+    <section>
+      <h2 class="section-title">Standard cycle</h2>
+      <p class="section-note muted small">
+        {{ cycle_minutes }} minutes per cycle plus {{ latency_minutes }} minutes to fall
+        asleep. A population average, not a measurement of you.
+      </p>
+      <div class="bedtimes">
+        {% for option in standard %}
+          <div class="bedtime">
+            <span class="bedtime-cycles">{{ option.cycles }} cycles</span>
+            <span class="bedtime-clock">{{ option.bedtime }}</span>
+            <span class="bedtime-length">{{ option.asleep_label }} asleep</span>
+          </div>
+        {% endfor %}
+      </div>
+    </section>
+
+    <section>
+      <h2 class="section-title">Measured from your nights</h2>
+      {% if measured and personal.reliable %}
+        <p class="section-note muted small">
+          {{ personal.cycle_minutes }} minutes per cycle, the median of
+          {{ personal.cycles_measured }} cycles across
+          {{ personal.nights_contributing }} nights, give or take
+          {{ personal.spread_minutes }} minutes.
+        </p>
+        <div class="bedtimes">
+          {% for option in measured %}
+            <div class="bedtime">
+              <span class="bedtime-cycles">{{ option.cycles }} cycles</span>
+              <span class="bedtime-clock">{{ option.bedtime }}</span>
+              <span class="bedtime-length">{{ option.asleep_label }} asleep</span>
+            </div>
+          {% endfor %}
+        </div>
+      {% else %}
+        <div class="notice">
+          <strong>Not enough to go on.</strong>
+          {{ personal.reason }}
+          The column on the left uses the standard {{ cycle_minutes }}-minute figure instead.
+        </div>
+        {% if personal.cycle_minutes %}
+          <p class="muted small footnote">
+            For what it is worth, the nights that were readable put the median at
+            {{ personal.cycle_minutes }} minutes across {{ personal.cycles_measured }}
+            cycles. That is shown here rather than hidden, but it is below the bar
+            for preferring it to the standard figure.
+          </p>
+        {% endif %}
+      {% endif %}
+    </section>
+  </div>
+
+  <h2 class="section-title">How this is worked out, and what it cannot tell you</h2>
+  <div class="insights">
+    <article class="insight">
+      <div class="insight-head"><h3 class="insight-title">Where a cycle starts and ends</h3></div>
+      <p class="insight-detail">
+        A cycle is measured from one REM onset to the next, which is the
+        convention in sleep medicine. The stage timeline from the API carries
+        real timestamps, so those intervals can be read off it directly.
+      </p>
+    </article>
+    <article class="insight">
+      <div class="insight-head"><h3 class="insight-title">The stages are themselves estimates</h3></div>
+      <p class="insight-detail">
+        A wrist device agrees with clinical polysomnography on roughly 60 to
+        70% of epochs when sorting sleep into four stages. Every cycle length
+        here inherits that error: this is an estimate derived from an estimate.
+      </p>
+    </article>
+    <article class="insight">
+      <div class="insight-head"><h3 class="insight-title">Cycles are not all the same length</h3></div>
+      <p class="insight-detail">
+        The first cycle of a night is usually shorter and later ones longer,
+        so a single median flattens something real. The spread is reported with
+        it for that reason, and both numbers describe past nights rather than
+        predicting tonight.
+      </p>
+    </article>
+    <article class="insight">
+      <div class="insight-head"><h3 class="insight-title">What was discarded</h3></div>
+      <p class="insight-detail">
+        {{ personal.nights_with_stages }} night{{ personal.nights_with_stages|pluralize }} in
+        the last {{ window_days }} days carried stage data;
+        {{ personal.nights_contributing }} had two or more separate REM periods.
+        {{ personal.cycles_dropped }} interval{{ personal.cycles_dropped|pluralize }} fell
+        outside 45 to 150 minutes and {{ personal.cycles_dropped|pluralize:"was,were" }}
+        dropped as staging artefacts rather than averaged in.
+      </p>
+    </article>
+  </div>
+
+  <p class="small muted page-end">
+    <a href="{% url 'health:metric' 'sleep' %}?days=30">Your recorded nights</a>
+  </p>
+{% endblock %}

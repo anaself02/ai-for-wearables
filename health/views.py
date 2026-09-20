@@ -19,6 +19,8 @@ from django.utils import timezone
 from . import arousal as arousal_module
 from . import cache as health_cache
 from . import datatypes, insights as insights_module, metrics
+from . import fitness as fitness_module
+from . import sleep_cycles
 from .client import GoogleHealthClient, GoogleHealthError, GoogleReconnectRequired
 from .models import HistoricalMetric
 
@@ -606,3 +608,134 @@ def raw_data_points(request, slug):
     context["truncated"] = len(points) > len(shown)
     context["payload"] = json.dumps(shown, indent=2, ensure_ascii=False)
     return render(request, "health/raw.html", context)
+
+
+# ---------------------------------------------------------------------------
+# fitness: one VO2 max figure against published norms
+# ---------------------------------------------------------------------------
+
+
+@login_required
+def fitness(request):
+    """Where the stored VO2 max sits in the population norms for age and sex.
+
+    Needs no API call. The three VO2 max metrics are all in the UNAVAILABLE
+    group - the live endpoint only produces a figure from GPS-tracked outdoor
+    runs, of which this account has none - so the only figure that exists is
+    the one imported from Takeout, and that is already in the database.
+    """
+    profile = getattr(request.user, "profile", None)
+    reading = HistoricalMetric.latest_for(request.user, "vo2-max")
+
+    source = reading.source if reading else ""
+    # A demographic estimate is modelled from age, sex, weight and resting
+    # heart rate. Anything else is derived from actual exercise, and only that
+    # can carry an age inversion. See health/fitness.py.
+    measured = bool(source) and "demographic" not in source.lower()
+
+    assessment = fitness_module.assess(
+        reading.value if reading else None,
+        source=source,
+        measured=measured,
+        born=profile.born if profile else None,
+        sex=profile.sex if profile else "",
+        today=timezone.localdate(),
+    )
+
+    return render(
+        request,
+        "health/fitness.html",
+        {
+            "assessment": assessment,
+            "reading": reading,
+            "profile": profile,
+            "norms": fitness_module.NORMS.get(assessment.sex or "male", {}),
+            "percentile_columns": fitness_module.PERCENTILES,
+        },
+    )
+
+
+# ---------------------------------------------------------------------------
+# the sleep/wake calculator
+# ---------------------------------------------------------------------------
+
+
+DEFAULT_WAKE_TIME = "07:00"
+CYCLE_WINDOW_DAYS = 30
+
+
+def _parse_wake_time(raw):
+    """'07:00' -> time(7, 0). Anything unparseable falls back to the default."""
+    from datetime import datetime as _datetime
+
+    for text in (raw, DEFAULT_WAKE_TIME):
+        try:
+            return _datetime.strptime(str(text).strip(), "%H:%M").time()
+        except (TypeError, ValueError):
+            continue
+    return None
+
+
+def _personal_cycle(request):
+    """Measure this sleeper's cycle length, or explain why it could not be.
+
+    One metric, one cached fetch. A failure here is never fatal: the page falls
+    back to the textbook figure and says that it did.
+    """
+    credential = _credential_or_none(request)
+    if credential is None or not credential.is_usable:
+        return sleep_cycles.Estimate(
+            reason="Not signed in to Google, so no recorded nights could be read."
+        )
+
+    days, start, end = _window(request, CYCLE_WINDOW_DAYS)
+    try:
+        client = GoogleHealthClient(credential)
+        fetched = health_cache.fetch_points(
+            client,
+            metrics.get("sleep"),
+            start,
+            end,
+            user=request.user,
+            force=health_cache.wants_refresh(request),
+        )
+    except (GoogleHealthError, GoogleReconnectRequired) as exc:
+        logger.warning("Sleep fetch for the cycle estimate failed: %s", exc)
+        return sleep_cycles.Estimate(
+            reason="The recorded nights could not be fetched, so only the standard figure is available."
+        )
+
+    return sleep_cycles.estimate(fetched.points)
+
+
+@login_required
+def sleep_calculator(request):
+    """Bedtimes for a target wake time, by whole sleep cycles.
+
+    Shows the textbook 90-minute cycle and, when enough nights support one, a
+    cycle length measured from this sleeper's own stage transitions - side by
+    side, never silently substituted.
+    """
+    wake_time = _parse_wake_time(request.GET.get("wake", DEFAULT_WAKE_TIME))
+    personal = _personal_cycle(request)
+
+    standard = sleep_cycles.bedtimes(wake_time, sleep_cycles.TEXTBOOK_CYCLE_MINUTES)
+    measured = (
+        sleep_cycles.bedtimes(wake_time, personal.cycle_minutes)
+        if personal.cycle_minutes
+        else []
+    )
+
+    return render(
+        request,
+        "health/sleep_calculator.html",
+        {
+            "wake": wake_time.strftime("%H:%M"),
+            "standard": standard,
+            "measured": measured,
+            "personal": personal,
+            "cycle_minutes": sleep_cycles.TEXTBOOK_CYCLE_MINUTES,
+            "latency_minutes": sleep_cycles.FALL_ASLEEP_MINUTES,
+            "window_days": CYCLE_WINDOW_DAYS,
+        },
+    )
