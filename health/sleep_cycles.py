@@ -15,8 +15,14 @@ alongside the number rather than hidden inside it.
   light sleep are one REM period physiologically, but arrive as several
   segments. Without a merge rule the estimator would report spurious
   twenty-minute cycles, so bouts closer together than MERGE_GAP are joined.
-* The first cycle of a night is genuinely shorter than later ones. A single
-  median flattens that, which is why the spread is reported with it.
+* A missed REM period joins two cycles into one. When the result exceeds the
+  ceiling it is discarded and counted, but a miss that lands under the ceiling
+  is indistinguishable from one long cycle and inflates the median. Nothing in
+  the data can correct for that, so `dropped_long` is surfaced instead: it is
+  the only available evidence of how often REM is being missed at all.
+* The first cycle of a night is normally the shortest. The estimator measures
+  that rather than assuming it, because if the two come out equal the staging
+  is probably not resolving cycle architecture, and the reader should be told.
 * A handful of nights is not a sample. The estimate is marked unreliable, and
   the interface falls back to the textbook figure, until the gates below pass.
 
@@ -49,9 +55,28 @@ MIN_CYCLES = 10
 TEXTBOOK_CYCLE_MINUTES = 90
 FALL_ASLEEP_MINUTES = 15
 
-#: Cycle counts offered as bedtime options. Five and six cycles are 7.5 and 9
-#: hours at the textbook length, which brackets the usual adult recommendation.
+#: Bedtime options are chosen by how much sleep they buy, not by a fixed set
+#: of cycle counts. At the textbook 90 minutes, four to six cycles lands on
+#: 6h/7h30/9h and a fixed (4, 5, 6) works. At a measured 110 it would offer
+#: eleven hours in bed, which is not advice anyone wants, so the counts follow
+#: the cycle length instead.
+MIN_SENSIBLE_SLEEP = 330   # 5h30
+MAX_SENSIBLE_SLEEP = 570   # 9h30
+MAX_OPTIONS = 3
+
+#: Used only if a cycle length is so long or short that nothing lands in the
+#: sensible band at all.
 CYCLE_OPTIONS = (4, 5, 6)
+
+
+def cycle_counts(cycle_minutes: int) -> tuple:
+    """Cycle counts whose total sleep lands in a range worth suggesting."""
+    counts = [
+        count
+        for count in range(2, 10)
+        if MIN_SENSIBLE_SLEEP <= count * cycle_minutes <= MAX_SENSIBLE_SLEEP
+    ]
+    return tuple(counts[:MAX_OPTIONS]) or CYCLE_OPTIONS
 
 
 def _rem_periods(sleep: dict) -> list:
@@ -86,18 +111,25 @@ def night_cycles(point: dict) -> dict:
     sleep = (point or {}).get("sleep") or {}
     periods = _rem_periods(sleep)
 
-    lengths, dropped = [], 0
+    lengths, short, overlong = [], 0, 0
     for earlier, later in zip(periods, periods[1:]):
         minutes = (later[0] - earlier[0]).total_seconds() / 60
-        if MIN_PLAUSIBLE_CYCLE <= minutes <= MAX_PLAUSIBLE_CYCLE:
-            lengths.append(round(minutes, 1))
+        if minutes < MIN_PLAUSIBLE_CYCLE:
+            short += 1
+        elif minutes > MAX_PLAUSIBLE_CYCLE:
+            # Almost certainly a missed REM period: the interval spans two
+            # cycles or more. Counted separately because the count is evidence
+            # about the estimate itself - see Estimate.dropped_long.
+            overlong += 1
         else:
-            dropped += 1
+            lengths.append(round(minutes, 1))
 
     return {
         "cycles": lengths,
         "rem_periods": len(periods),
-        "dropped": dropped,
+        "dropped": short + overlong,
+        "dropped_short": short,
+        "dropped_long": overlong,
         "has_stages": bool(sleep.get("stages")),
     }
 
@@ -120,13 +152,28 @@ class Estimate:
     cycles_measured: int = 0
     cycles_dropped: int = 0
 
+    #: Intervals too short to be a cycle: stage fragmentation.
+    dropped_short: int = 0
+    #: Intervals too long to be one cycle, which means a REM period was missed.
+    #: This one is not just bookkeeping. A miss long enough to exceed the
+    #: ceiling gets discarded, but a miss that lands under it is counted as a
+    #: single long cycle and silently inflates the median. The visible count is
+    #: the only evidence available about how often that is happening.
+    dropped_long: int = 0
+
+    #: The first cycle of a night is normally the shortest. If these two come
+    #: out equal, the staging is probably not resolving cycle architecture.
+    first_cycle_minutes: int | None = None
+    later_cycle_minutes: int | None = None
+
     per_night: list = field(default_factory=list)
 
 
 def estimate(points) -> Estimate:
     """Median cycle length across every night with usable stage transitions."""
     lengths, per_night = [], []
-    nights_with_stages = nights_contributing = dropped = 0
+    nights_with_stages = nights_contributing = 0
+    dropped = dropped_short = dropped_long = 0
 
     for point in points or []:
         night = night_cycles(point)
@@ -134,6 +181,8 @@ def estimate(points) -> Estimate:
             continue
         nights_with_stages += 1
         dropped += night["dropped"]
+        dropped_short += night["dropped_short"]
+        dropped_long += night["dropped_long"]
         if night["cycles"]:
             nights_contributing += 1
             lengths.extend(night["cycles"])
@@ -144,8 +193,17 @@ def estimate(points) -> Estimate:
         nights_contributing=nights_contributing,
         cycles_measured=len(lengths),
         cycles_dropped=dropped,
+        dropped_short=dropped_short,
+        dropped_long=dropped_long,
         per_night=per_night,
     )
+
+    firsts = [night[0] for night in per_night]
+    laters = [value for night in per_night for value in night[1:]]
+    if firsts:
+        result.first_cycle_minutes = round(median(firsts))
+    if laters:
+        result.later_cycle_minutes = round(median(laters))
 
     if not lengths:
         result.reason = (
@@ -179,7 +237,7 @@ def estimate(points) -> Estimate:
 
 
 def bedtimes(wake_time, cycle_minutes: int, *, latency_minutes: int = FALL_ASLEEP_MINUTES,
-             counts=CYCLE_OPTIONS) -> list:
+             counts=None) -> list:
     """Bedtime for each cycle count, working back from a target wake time.
 
     `wake_time` is a datetime.time. The date is irrelevant to the arithmetic
@@ -189,7 +247,7 @@ def bedtimes(wake_time, cycle_minutes: int, *, latency_minutes: int = FALL_ASLEE
     anchor = datetime(2000, 1, 2, wake_time.hour, wake_time.minute)
 
     options = []
-    for count in counts:
+    for count in counts if counts is not None else cycle_counts(cycle_minutes):
         asleep = count * cycle_minutes
         bedtime = anchor - timedelta(minutes=asleep + latency_minutes)
         options.append(

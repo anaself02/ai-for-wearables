@@ -99,6 +99,51 @@ class NightCycleTests(TestCase):
         self.assertEqual(result["dropped"], 1)
 
 
+#: REM onsets at 00:30 and 05:00: a 270-minute gap, which is not a cycle but
+#: two or three with the REM between them missed.
+MISSED_REM = night(
+    [
+        segment("00:00", "00:30", "REM"),
+        segment("00:30", "05:00", "LIGHT"),
+        segment("05:00", "05:30", "REM"),
+    ]
+)
+
+
+class DiscardTests(TestCase):
+    def test_short_and_long_discards_are_counted_separately(self):
+        """They mean different things, so one counter cannot serve both."""
+        result = sleep_cycles.night_cycles(MISSED_REM)
+        self.assertEqual(result["dropped_long"], 1)
+        self.assertEqual(result["dropped_short"], 0)
+
+        # Two REM periods 30 minutes apart onset to onset: far enough apart to
+        # escape the merge window, too close together to be a cycle.
+        crowded = night(
+            [
+                segment("00:00", "00:10", "REM"),
+                segment("00:10", "00:30", "LIGHT"),
+                segment("00:30", "00:50", "REM"),
+            ]
+        )
+        result = sleep_cycles.night_cycles(crowded)
+        self.assertEqual(result["rem_periods"], 2)
+        self.assertEqual(result["dropped_short"], 1)
+        self.assertEqual(result["dropped_long"], 0)
+
+    def test_an_overlong_interval_is_evidence_rem_was_missed(self):
+        """The count is surfaced because it bounds nothing but points at bias."""
+        result = sleep_cycles.estimate([THREE_CYCLES] * 6 + [MISSED_REM])
+        self.assertEqual(result.dropped_long, 1)
+        self.assertTrue(result.reliable)
+
+    def test_first_and_later_cycles_are_compared_not_assumed(self):
+        result = sleep_cycles.estimate([THREE_CYCLES] * 6)
+        # THREE_CYCLES is 90 then 100, so the first is the shorter one.
+        self.assertEqual(result.first_cycle_minutes, 90)
+        self.assertEqual(result.later_cycle_minutes, 100)
+
+
 class EstimateTests(TestCase):
     def test_one_night_is_reported_but_not_called_reliable(self):
         result = sleep_cycles.estimate([THREE_CYCLES])
@@ -138,6 +183,19 @@ class BedtimeTests(TestCase):
     def test_more_cycles_means_an_earlier_bedtime(self):
         options = sleep_cycles.bedtimes(time(7, 0), 90, counts=(4, 5, 6))
         clocks = [option["bedtime"] for option in options]
+        self.assertEqual(clocks, ["00:45", "23:15", "21:45"])
+
+    def test_option_counts_follow_the_cycle_length(self):
+        """A fixed (4, 5, 6) offers eleven hours in bed at a 110-minute cycle."""
+        self.assertEqual(sleep_cycles.cycle_counts(90), (4, 5, 6))
+        self.assertEqual(sleep_cycles.cycle_counts(110), (3, 4, 5))
+        for length in (80, 90, 100, 110, 120, 140):
+            for option in sleep_cycles.bedtimes(time(7, 0), length):
+                self.assertGreaterEqual(option["asleep_minutes"], sleep_cycles.MIN_SENSIBLE_SLEEP)
+                self.assertLessEqual(option["asleep_minutes"], sleep_cycles.MAX_SENSIBLE_SLEEP)
+
+    def test_at_the_textbook_length_the_options_are_unchanged(self):
+        clocks = [o["bedtime"] for o in sleep_cycles.bedtimes(time(7, 0), 90)]
         self.assertEqual(clocks, ["00:45", "23:15", "21:45"])
 
     def test_a_measured_cycle_length_changes_the_answer(self):
@@ -189,3 +247,13 @@ class CalculatorPageTests(TestCase):
         self.assertTrue(response.context["personal"].reliable)
         self.assertTrue(response.context["measured"])
         self.assertContains(response, "Measured from your nights")
+
+    def test_a_missed_rem_period_puts_the_upward_bias_warning_on_the_page(self):
+        response = self._get(points=[THREE_CYCLES] * 6 + [MISSED_REM])
+        self.assertEqual(response.context["personal"].dropped_long, 1)
+        self.assertContains(response, "probably a little high")
+
+    def test_no_overlong_intervals_means_no_bias_warning(self):
+        response = self._get(points=[THREE_CYCLES] * 6)
+        self.assertEqual(response.context["personal"].dropped_long, 0)
+        self.assertNotContains(response, "probably a little high")
