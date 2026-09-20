@@ -2,7 +2,12 @@
 {% block title %}Overview - Health Dashboard{% endblock %}
 
 {% block content %}
-  <h1>Overview</h1>
+  {% comment %}
+    The heading greets rather than naming the page: the current tab already
+    says Overview, and so does the browser tab, so repeating it a third time
+    spends the largest type on the page saying nothing.
+  {% endcomment %}
+  <h1>{{ greeting }}{% if name %}, {{ name }}{% endif %}</h1>
   <p class="lede">Live from the Google Health API &middot; last {{ days }} days ({{ start }} to {{ end }})</p>
   {% include "health/_freshness.html" %}
 

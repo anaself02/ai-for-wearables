@@ -390,6 +390,32 @@ class DashboardViewTests(TestCase):
         # VO2 max empty state, rendered rather than errored.
         self.assertContains(response, "GPS-tracked outdoor run")
 
+    def test_the_overview_greets_by_name(self):
+        """Same greeting as the welcome screen, from the same two functions."""
+        from accounts.greeting import display_name, greeting_for
+        from django.utils import timezone
+
+        self.user.first_name = "ANAS"
+        self.user.save(update_fields=["first_name"])
+
+        fake = self._fake_client({"steps": STEPS_ROLLUP})
+        with mock.patch("health.views.GoogleHealthClient", return_value=fake):
+            response = self.client.get("/dashboard/")
+
+        expected = greeting_for(timezone.localtime())
+        self.assertEqual(response.context["greeting"], expected)
+        self.assertContains(response, f"{expected}, Anas")
+        # Calmed down here exactly as it is on the welcome screen.
+        self.assertNotContains(response, "ANAS")
+
+    def test_the_overview_greets_without_a_name_when_there_is_none(self):
+        fake = self._fake_client({"steps": STEPS_ROLLUP})
+        with mock.patch("health.views.GoogleHealthClient", return_value=fake):
+            response = self.client.get("/dashboard/")
+
+        self.assertEqual(response.context["name"], "")
+        self.assertNotContains(response, f"{response.context['greeting']},")
+
     def test_detail_chooses_rollup_for_steps_and_list_for_resting_hr(self):
         fake = self._fake_client({"steps": STEPS_ROLLUP})
         with mock.patch("health.views.GoogleHealthClient", return_value=fake):

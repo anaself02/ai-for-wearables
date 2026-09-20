@@ -16,6 +16,8 @@ from django.http import Http404
 from django.shortcuts import redirect, render
 from django.utils import timezone
 
+from accounts.greeting import display_name, greeting_for
+
 from . import arousal as arousal_module
 from . import cache as health_cache
 from . import datatypes, insights as insights_module, metrics
@@ -203,6 +205,11 @@ def index(request):
         request,
         "health/dashboard.html",
         {
+            # The same greeting as the welcome screen, from the same two
+            # functions, so the two can never disagree about the hour or about
+            # how somebody's name is spelled.
+            "greeting": greeting_for(timezone.localtime()),
+            "name": display_name(request.user),
             "cards": cards,
             "days": days,
             "start": data["start"],
