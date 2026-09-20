@@ -8,9 +8,34 @@
 (function () {
   "use strict";
 
+  /* Chart colours come from app.css. Chart.js paints to a canvas and cannot
+   * resolve var() itself, so the tokens are read once at startup instead of
+   * being copied here - which is what they were, and a second copy of a
+   * palette drifts from the first the moment either is touched.
+   *
+   * The fallbacks are the same values app.css holds, and only apply if the
+   * stylesheet has not loaded by the time this runs.
+   */
+  function token(name, fallback) {
+    var value = getComputedStyle(document.documentElement).getPropertyValue(name);
+    return value.trim() || fallback;
+  }
+
   var PALETTE = ["#6ea8fe", "#45d9c0", "#f0b849", "#f2777a", "#b58cf0"];
   var GRID = "rgba(255,255,255,0.06)";
   var TICK = "#949db4";
+
+  function readTheme() {
+    PALETTE = [
+      token("--accent", PALETTE[0]),
+      token("--pos", PALETTE[1]),
+      token("--warn", PALETTE[2]),
+      token("--neg", PALETTE[3]),
+      token("--series-5", PALETTE[4]),
+    ];
+    GRID = token("--chart-grid", GRID);
+    TICK = token("--muted", TICK);
+  }
 
   function readSeries(id) {
     var node = document.getElementById(id);
@@ -115,6 +140,7 @@
 
   function init() {
     if (typeof Chart === "undefined") return;
+    readTheme();
     Chart.defaults.color = TICK;
     Chart.defaults.font.family =
       'ui-sans-serif, system-ui, "Segoe UI", Roboto, sans-serif';

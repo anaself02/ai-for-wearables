@@ -1,15 +1,87 @@
+/* Design tokens.
+ *
+ * Everything below this block spends these and nothing else: no loose pixel
+ * values, no one-off hexes. The dashboard was built card by card across many
+ * sessions, and the drift that produced (four card paddings, eight radii,
+ * half-pixel font sizes) is what this scale exists to stop.
+ */
+
 :root {
+  /* ---- space: one 4px scale. Every gap, padding and margin snaps to it. -- */
+  --s1: 4px;
+  --s2: 8px;
+  --s3: 12px;
+  --s4: 16px;
+  --s5: 24px;
+  --s6: 32px;
+  --s7: 48px;
+
+  /* ---- radius: containers are softer than the things inside them. ------- */
+  --r-0: 3px;      /* smallest marks: sleep segments, stage dots */
+  --r-2: 10px;     /* controls: buttons, select, pre */
+  --r-3: 14px;     /* containers: cards, panels, notices */
+  --r-pill: 999px; /* chips, tags, the hypnogram track */
+
+  /* ---- type: integer steps only. -------------------------------------- */
+  --t-micro: 11px; /* eyebrow labels */
+  --t-label: 12px;
+  --t-sm: 13px;
+  --t-body: 15px;
+  --t-lead: 17px;
+  --t-h2: 19px;
+  --t-h1: 26px;
+  --t-num: 30px;   /* the measured number on a metric card */
+
+  --w-mid: 500;
+  --w-semi: 600;
+  --w-num: 680;
+
+  /* ---- surfaces ---- */
   --bg: #0e1016;
   --panel: #161a23;
   --panel-2: #1c212c;
   --line: #262c3a;
   --text: #e8ebf3;
   --muted: #949db4;
+
+  /* The only accent used as chrome. Links, focus, hover, the pressed state. */
   --accent: #6ea8fe;
-  --accent-2: #45d9c0;
+  --accent-hi: #8dbcff;                    /* hover on a filled accent */
+  --accent-soft: rgba(110, 168, 254, .12); /* hover fill on a quiet control */
+
+  /* Semantic colours. These carry meaning about the data and are never
+     spent on decoration - a teal border does not appear because teal looks
+     nice, only because something improved. */
+  --pos: #45d9c0;
   --warn: #f0b849;
-  --danger: #f2777a;
-  --radius: 12px;
+  --neg: #f2777a;
+
+  /* Prose measure. Long-form paragraphs (methodology, caveats) read badly at
+     the full 1120px container - roughly 150 characters a line. */
+  --measure: 68ch;
+
+  /* Tinted grounds. Each is its own hue rather than a flat overlay, so a
+     warning reads warm and an error reads red before a word is read. */
+  --notice-bg: #1d1b14;
+  --notice-error-bg: #1f1416;
+  --code-bg: #0a0c11;
+
+  /* Chart series, read at runtime by charts.js - Chart.js cannot resolve
+     var() itself, so the palette lives here and the JS looks it up rather
+     than keeping a second copy that drifts. The first four are the semantic
+     colours; the fifth exists only because a chart can carry five series. */
+  --series-5: #b58cf0;
+  --chart-grid: rgba(255, 255, 255, .06);
+
+  --speed: .15s;
+}
+
+/* Keyboard focus. There was none in this file: every card, chip, button,
+   summary and select fell back to the browser default ring, which is close to
+   invisible on this background. */
+:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 2px;
 }
 
 * { box-sizing: border-box; }
@@ -18,7 +90,7 @@ body {
   margin: 0;
   background: var(--bg);
   color: var(--text);
-  font: 15px/1.55 ui-sans-serif, system-ui, "Segoe UI", Roboto, sans-serif;
+  font: var(--t-body)/1.55 ui-sans-serif, system-ui, "Segoe UI", Roboto, sans-serif;
   -webkit-font-smoothing: antialiased;
 }
 
@@ -27,69 +99,165 @@ a { color: var(--accent); }
 header.topbar {
   display: flex;
   flex-wrap: wrap;
-  gap: 12px;
+  gap: var(--s3);
   align-items: center;
   justify-content: space-between;
-  padding: 14px 20px;
+  padding: var(--s3) var(--s5);
   border-bottom: 1px solid var(--line);
-  background: var(--panel);
+  /* Page ground, not panel: on --panel it was the same fill as a metric card,
+     so cards scrolling under it blended into the bar. */
+  background: var(--bg);
   position: sticky;
   top: 0;
   z-index: 5;
 }
-header.topbar .brand { color: var(--text); font-weight: 650; text-decoration: none; letter-spacing: -.01em; }
-header.topbar nav { display: flex; gap: 16px; align-items: center; }
-header.topbar nav a { color: var(--muted); text-decoration: none; font-size: 14px; }
+header.topbar .brand { color: var(--text); font-weight: var(--w-semi); text-decoration: none; letter-spacing: -.01em; }
+header.topbar nav { display: flex; gap: var(--s4); align-items: center; }
+header.topbar nav a { color: var(--muted); text-decoration: none; font-size: var(--t-sm); }
 header.topbar nav a:hover, header.topbar nav a.active { color: var(--text); }
-header.topbar form { display: flex; gap: 10px; align-items: center; }
+header.topbar form { display: flex; gap: var(--s3); align-items: center; }
 
-main { max-width: 1120px; margin: 0 auto; padding: 24px 20px 72px; }
+main { max-width: 1120px; margin: 0 auto; padding: var(--s5) var(--s5) var(--s7); }
 
-h1 { font-size: 1.6rem; margin: 0 0 6px; letter-spacing: -.02em; }
-h2 { font-size: 1.05rem; margin: 30px 0 12px; letter-spacing: -.01em; }
-p.lede { color: var(--muted); margin: 0 0 24px; }
+h1 { font-size: var(--t-h1); margin: 0 0 var(--s2); letter-spacing: -.02em; }
+h2 { font-size: var(--t-h2); margin: var(--s6) 0 var(--s3); letter-spacing: -.01em; }
+p.lede { color: var(--muted); margin: 0 0 var(--s5); max-width: var(--measure); }
 .muted { color: var(--muted); }
-.small { font-size: 13px; }
+.small { font-size: var(--t-sm); }
 
-/* ---- buttons & chips ---- */
+/* Long-form text is capped at a readable measure wherever it appears. The
+   methodology pages were running paragraphs the full 1120px, which is about
+   150 characters a line. */
+main p, main li, main dd { max-width: var(--measure); }
 
-.btn {
-  display: inline-block;
-  padding: 9px 16px;
-  border-radius: 8px;
+/* Skip link. Keyboard users otherwise tab the whole header on every page. */
+.skip-link {
+  position: absolute;
+  left: var(--s3);
+  top: calc(var(--s7) * -1);
+  z-index: 10;
+  padding: var(--s2) var(--s3);
   background: var(--accent);
-  color: #0e1016;
-  font-weight: 600;
+  color: var(--bg);
+  border-radius: var(--r-2);
+  font-weight: var(--w-semi);
   text-decoration: none;
-  border: 0;
-  cursor: pointer;
-  font-size: 14px;
+  transition: top var(--speed) ease;
 }
-.btn.secondary { background: transparent; color: var(--text); border: 1px solid var(--line); }
-.btn.secondary:hover { border-color: var(--muted); }
+.skip-link:focus { top: var(--s3); }
 
-.chips { display: flex; flex-wrap: wrap; gap: 8px; margin: 0 0 20px; padding: 0; list-style: none; }
+/* ---- spacing utilities -----------------------------------------------
+   These exist so templates stop carrying inline style attributes. There were
+   30 of them, several negative margins cancelling the heading rhythm, and
+   seven separate copies of font-size:1.1rem. They were the visible symptom
+   of the missing scale, so they belong here now that there is one. */
+
+/* A note that belongs to the heading directly above it. */
+.section-note { margin: calc(var(--s2) * -1) 0 var(--s4); }
+/* A note that qualifies the block above it. */
+.footnote { margin-top: var(--s3); }
+/* A block that is a new thought, not a continuation. */
+.stack-top { margin-top: var(--s5); }
+/* The last thing on a page, usually a link out to the raw data. */
+.page-end { margin-top: var(--s6); }
+
+/* Panels set their own padding, so the first and last child inside one must
+   not add their own margins on top of it. */
+.panel > :first-child { margin-top: 0; }
+.panel > :last-child { margin-bottom: 0; }
+
+/* One label style for every eyebrow in the app: the name on a metric card,
+   the key on a stat, the title on an insight, a table header, the summary on
+   the methodology block. Four sizes and two capitalisations before this pass,
+   and the metric card - the thing on screen most often - was the odd one out
+   at 13px sentence case. */
+.card .name,
+.stat .k,
+.insight-title,
+details.methodology summary,
+th {
+  font-size: var(--t-micro);
+  font-weight: var(--w-semi);
+  text-transform: uppercase;
+  letter-spacing: .06em;
+  color: var(--muted);
+}
+
+/* ---- buttons & chips -------------------------------------------------
+ *
+ * One button, three weights. There were two independent systems before this:
+ * .btn from the first pages and .button added later with the arousal card,
+ * differing in padding, radius, size and fill for no reason anyone could
+ * name. Both names are kept so no template has to change; .button is simply
+ * the quiet weight.
+ *
+ *   .btn              filled accent. One per view at most.
+ *   .btn.secondary    quiet. Outlined, page ground.
+ *   .button           quiet. Same thing, older name.
+ *   .button.subtle    ghost. No fill, no border until hover.
+ */
+
+.btn, .button {
+  display: inline-block;
+  padding: var(--s2) var(--s4);
+  border: 1px solid transparent;
+  border-radius: var(--r-2);
+  font: inherit;
+  font-size: var(--t-sm);
+  font-weight: var(--w-semi);
+  line-height: 1.3;
+  text-decoration: none;
+  cursor: pointer;
+  transition: background var(--speed) ease, border-color var(--speed) ease,
+              color var(--speed) ease, transform var(--speed) ease;
+}
+
+/* filled */
+.btn { background: var(--accent); color: var(--bg); }
+.btn:hover { background: var(--accent-hi); }
+
+/* quiet */
+.btn.secondary, .button {
+  background: transparent;
+  color: var(--text);
+  border-color: var(--line);
+}
+.btn.secondary:hover, .button:hover { border-color: var(--accent); color: var(--accent); }
+
+/* ghost */
+.button.subtle { background: transparent; border-color: transparent; font-weight: var(--w-mid); color: var(--muted); }
+.button.subtle:hover { color: var(--accent); border-color: var(--line); }
+
+/* Pressed. Every interactive surface in the app moves 1px under the pointer,
+   which is the only thing standing in for the physical feedback a button
+   would otherwise have. */
+.btn:active, .button:active, .chip:active { transform: translateY(1px); }
+a.card:active { transform: translateY(0); }
+
+.chips { display: flex; flex-wrap: wrap; gap: var(--s2); margin: 0 0 var(--s5); padding: 0; list-style: none; }
 .chip {
   display: inline-block;
-  padding: 5px 12px;
+  padding: var(--s1) var(--s3);
   border: 1px solid var(--line);
-  border-radius: 999px;
+  border-radius: var(--r-pill);
   color: var(--muted);
   text-decoration: none;
-  font-size: 13px;
+  font-size: var(--t-sm);
+  transition: background var(--speed) ease, border-color var(--speed) ease,
+              color var(--speed) ease, transform var(--speed) ease;
 }
-.chip:hover { border-color: var(--muted); color: var(--text); }
-.chip.active { background: var(--accent); border-color: var(--accent); color: #0e1016; font-weight: 600; }
+.chip:hover { border-color: var(--accent); background: var(--accent-soft); color: var(--text); }
+.chip.active { background: var(--accent); border-color: var(--accent); color: var(--bg); font-weight: var(--w-semi); }
 
 .tag {
   display: inline-block;
-  font-size: 11px;
+  font-size: var(--t-micro);
   text-transform: uppercase;
-  letter-spacing: .05em;
+  letter-spacing: .06em;
   color: var(--muted);
   border: 1px solid var(--line);
-  border-radius: 999px;
-  padding: 2px 9px;
+  border-radius: var(--r-pill);
+  padding: 2px var(--s2);
 }
 
 /* Imported-from-Takeout data. Visually distinct so it is never read as live. */
@@ -98,177 +266,220 @@ p.lede { color: var(--muted); margin: 0 0 24px; }
 .card.legacy .value { color: var(--warn); }
 a.card.legacy:hover { border-color: var(--warn); }
 
-/* ---- cards ---- */
+/* ---- surface tiers ---------------------------------------------------
+ *
+ * Three levels, and the level a thing sits at says what kind of claim it is
+ * making. Before this pass every container looked the same: filled panel,
+ * hairline border, same radius. A measured step count and a model output
+ * carried identical visual authority.
+ *
+ *   Tier 1, reading         a measured number, straight from the API.
+ *                           The only filled tier, so readings are the most
+ *                           solid objects on the page.  .card
+ *   Tier 2, frame           a holder for a chart or a table. Hairline only,
+ *                           so the chart is not a box inside a box.  .panel
+ *   Tier 3, interpretation  something this app computed rather than read -
+ *                           an insight, the arousal signal, methodology
+ *                           notes. Unfilled and carried by a rail, so it
+ *                           never reads as a measurement.  .insight
+ *
+ * A dashed border means one thing and only one thing: this reading is not
+ * live measured data. Only the legacy Takeout cards carry it. Confidence is
+ * said a different way - an insight that did not clear its threshold keeps a
+ * neutral rail and mutes its own number - because provenance and confidence
+ * are different questions and should not share a signal.
+ */
+
+/* ---- tier 1: readings ---- */
 
 .cards {
   display: grid;
-  gap: 14px;
+  gap: var(--s4);
   grid-template-columns: repeat(auto-fill, minmax(260px, 1fr));
 }
 
 .card {
   background: var(--panel);
   border: 1px solid var(--line);
-  border-radius: var(--radius);
-  padding: 16px 16px 10px;
+  border-radius: var(--r-3);
+  padding: var(--s4);
   display: flex;
   flex-direction: column;
   min-height: 190px;
   text-decoration: none;
   color: inherit;
-  transition: border-color .15s ease, transform .15s ease;
+  transition: border-color var(--speed) ease, transform var(--speed) ease;
 }
 a.card:hover { border-color: var(--accent); transform: translateY(-1px); }
-.card.empty { opacity: .72; }
 
-.card .name { font-size: 13px; color: var(--muted); font-weight: 600; letter-spacing: .01em; }
-.card .value { font-size: 2rem; font-weight: 680; letter-spacing: -.03em; line-height: 1.15; margin-top: 6px; }
-.card .value .unit { font-size: .95rem; font-weight: 500; color: var(--muted); margin-left: 4px; letter-spacing: 0; }
-.card .when { font-size: 12px; color: var(--muted); margin-top: 2px; }
-.card .spark { margin-top: auto; height: 62px; }
-.card .empty-msg { margin-top: 10px; font-size: 13px; color: var(--muted); line-height: 1.5; }
+/* A card with nothing in it is not a reading, so it drops out of the filled
+   tier rather than being dimmed with opacity - which took its text below the
+   contrast floor along with everything else. */
+.card.empty { background: transparent; }
+/* A card that is a link to a data type rather than a reading: no number, no
+   sparkline, so nothing to reserve height for. */
+.card.compact { min-height: 0; }
+.card-tags { margin: var(--s2) 0 var(--s1); display: flex; flex-wrap: wrap; gap: var(--s1); }
+.card.empty .value { color: var(--muted); }
 
-/* ---- insights ---- */
+.card .value {
+  font-size: var(--t-num);
+  font-weight: var(--w-num);
+  letter-spacing: -.03em;
+  line-height: 1.15;
+  margin-top: var(--s1);
+  /* These sit in a grid of identical cards and change on every refresh.
+     Proportional digits make them jitter between refreshes and stop them
+     lining up column to column, which is what a reader compares across. */
+  font-variant-numeric: tabular-nums;
+}
+.card .value .unit { font-size: var(--t-sm); font-weight: var(--w-mid); color: var(--muted); margin-left: var(--s1); letter-spacing: 0; }
 
-.insights-heading { margin-top: 36px; }
+/* The placeholder for "no reading" is an em dash, and at display size and
+   weight it stops looking like punctuation and starts looking like a rule
+   across the card. Drop it to body scale: there is no number to read. */
+.card .value.muted { font-size: var(--t-lead); font-weight: var(--w-semi); }
+.card .when { font-size: var(--t-label); color: var(--muted); margin-top: var(--s1); }
+.card .spark { margin-top: auto; height: 60px; }
+.card .empty-msg { margin-top: var(--s2); font-size: var(--t-sm); color: var(--muted); line-height: 1.5; }
+
+/* ---- tier 3: interpretations ---- */
+
+.insights-heading { margin-top: var(--s6); }
 
 .insights {
   display: grid;
-  gap: 12px;
+  gap: var(--s4);
   grid-template-columns: repeat(auto-fill, minmax(330px, 1fr));
 }
 
 .insight {
-  background: var(--panel);
+  background: transparent;
   border: 1px solid var(--line);
   border-left: 3px solid var(--line);
-  border-radius: 10px;
-  padding: 14px 16px;
+  border-radius: var(--r-3);
+  padding: var(--s4);
 }
 .insight.dir-up { border-left-color: var(--warn); }
-.insight.dir-down { border-left-color: var(--accent-2); }
+.insight.dir-down { border-left-color: var(--pos); }
 
 .insight-head {
   display: flex;
   align-items: baseline;
   justify-content: space-between;
-  gap: 12px;
+  gap: var(--s3);
 }
-.insight-title { font-size: 12px; color: var(--muted); font-weight: 600;
-                 text-transform: uppercase; letter-spacing: .05em; }
-.insight-value { font-size: 1.05rem; font-weight: 650; letter-spacing: -.01em;
+.insight-value { font-size: var(--t-lead); font-weight: var(--w-semi); letter-spacing: -.01em;
                  font-variant-numeric: tabular-nums; white-space: nowrap; }
-.insight-detail { margin: 8px 0 0; font-size: 14.5px; line-height: 1.5; }
-.insight-footnote { margin: 8px 0 0; font-size: 12px; line-height: 1.55; color: var(--muted); }
+.insight-detail { margin: var(--s2) 0 0; font-size: var(--t-body); line-height: 1.5; max-width: var(--measure); }
+.insight-footnote { margin: var(--s2) 0 0; font-size: var(--t-label); line-height: 1.55; color: var(--muted); }
 
 /* An insight whose test did not clear the threshold is shown, not hidden -
    "tested, weak, not distinguishable from chance" is more defensible than
    silence - but it must not look like a finding. */
-.insight.inconclusive { border-left-color: var(--line); opacity: .88; }
+.insight.inconclusive { border-left-color: var(--line); }
+.insight.inconclusive .insight-value { color: var(--muted); font-weight: var(--w-mid); }
 
 .insight-meta {
-  margin: 10px 0 0;
+  margin: var(--s2) 0 0;
   display: flex;
   flex-wrap: wrap;
-  gap: 8px;
+  gap: var(--s2);
   align-items: center;
-  font-size: 11px;
+  font-size: var(--t-micro);
 }
 .sig {
   display: inline-block;
   text-transform: uppercase;
-  letter-spacing: .05em;
-  border-radius: 999px;
-  padding: 2px 9px;
+  letter-spacing: .06em;
+  border-radius: var(--r-pill);
+  padding: 2px var(--s2);
   border: 1px solid var(--line);
 }
-.sig-yes { color: var(--accent-2); border-color: rgba(69, 217, 192, .4); }
+.sig-yes { color: var(--pos); border-color: rgba(69, 217, 192, .4); }
 .sig-no { color: var(--muted); }
 /* Arithmetic on the sample - no test applies, so it is neither pass nor fail. */
 .sig-neutral { color: var(--accent); border-color: rgba(110, 168, 254, .35); }
 
-details.pending { margin-top: 14px; font-size: 13px; color: var(--muted); }
+details.pending { margin-top: var(--s4); font-size: var(--t-sm); color: var(--muted); }
 details.pending summary { cursor: pointer; }
-details.pending ul { margin: 8px 0 0; padding-left: 20px; }
-details.pending li { margin-bottom: 4px; }
+details.pending ul { margin: var(--s2) 0 0; padding-left: var(--s5); }
+details.pending li { margin-bottom: var(--s1); }
 
 details.methodology {
-  margin-top: 22px;
-  background: var(--panel);
+  margin-top: var(--s5);
+  background: transparent;
   border: 1px solid var(--line);
-  border-radius: 10px;
-  padding: 14px 16px;
+  border-left: 3px solid var(--line);
+  border-radius: var(--r-3);
+  padding: var(--s4);
 }
-details.methodology summary {
-  cursor: pointer;
-  font-size: 12px;
-  font-weight: 600;
-  text-transform: uppercase;
-  letter-spacing: .05em;
-  color: var(--muted);
-}
+details.methodology summary { cursor: pointer; }
 .methodology-body {
   display: grid;
-  gap: 16px;
+  gap: var(--s4);
   grid-template-columns: repeat(auto-fit, minmax(300px, 1fr));
-  margin-top: 14px;
+  margin-top: var(--s4);
 }
 .method-note h3 {
-  margin: 0 0 5px;
-  font-size: 13.5px;
-  font-weight: 650;
+  margin: 0 0 var(--s1);
+  font-size: var(--t-sm);
+  font-weight: var(--w-semi);
   letter-spacing: -.01em;
 }
-.method-note p { margin: 0; font-size: 12.5px; line-height: 1.6; color: var(--muted); }
+.method-note p { margin: 0; font-size: var(--t-sm); line-height: 1.6; color: var(--muted); max-width: var(--measure); }
 
-/* ---- panels, stats, charts ---- */
+/* ---- tier 2: frames, plus stats and charts ---- */
 
+/* Unfilled on purpose. A chart or a table inside a filled panel on a filled
+   page is a box in a box in a box; the hairline is enough to say where the
+   frame ends. */
 .panel {
-  background: var(--panel);
+  background: transparent;
   border: 1px solid var(--line);
-  border-radius: var(--radius);
-  padding: 18px;
+  border-radius: var(--r-3);
+  padding: var(--s4);
 }
 
-.stats { display: flex; flex-wrap: wrap; gap: 28px; margin: 0 0 18px; }
-.stat .k { font-size: 12px; color: var(--muted); text-transform: uppercase; letter-spacing: .05em; }
-.stat .v { font-size: 1.5rem; font-weight: 650; letter-spacing: -.02em; }
-.stat .v .unit { font-size: .9rem; color: var(--muted); font-weight: 500; margin-left: 3px; }
+.stats { display: flex; flex-wrap: wrap; gap: var(--s5); margin: 0 0 var(--s5); }
+.stat .v { font-size: var(--t-h1); font-weight: var(--w-semi); letter-spacing: -.02em; font-variant-numeric: tabular-nums; }
+.stat .v .unit { font-size: var(--t-sm); color: var(--muted); font-weight: var(--w-mid); margin-left: var(--s1); }
+/* A stat whose value is a date or a source name rather than a number: it gets
+   the slot but not the display size, which is reserved for measurements. */
+.stat .v.compact { font-size: var(--t-lead); letter-spacing: -.01em; }
 
 /* ---- hypnogram -------------------------------------------------------
    One track per stage, segments positioned by percentage so the whole thing
    reflows with the viewport. No canvas: every segment is a real element, which
    is what gives it hover text and screen-reader output for free. */
 
-.hypnogram-card { padding: 20px 20px 16px; }
-
-.hypno-row { margin-bottom: 18px; }
-.hypno-row:last-of-type { margin-bottom: 8px; }
+.hypno-row { margin-bottom: var(--s4); }
+.hypno-row:last-of-type { margin-bottom: var(--s1); }
 
 .hypno-label {
-  font-size: 13px;
+  font-size: var(--t-sm);
   color: var(--text);
-  margin-bottom: 7px;
+  margin-bottom: var(--s2);
   display: flex;
   align-items: center;
-  gap: 8px;
+  gap: var(--s2);
 }
-.hypno-label strong { font-weight: 650; font-variant-numeric: tabular-nums; }
+.hypno-label strong { font-weight: var(--w-semi); font-variant-numeric: tabular-nums; }
 .hypno-nested {
-  font-size: 10px;
+  font-size: var(--t-micro);
   text-transform: uppercase;
-  letter-spacing: .05em;
+  letter-spacing: .06em;
   color: var(--muted);
   border: 1px solid var(--line);
-  border-radius: 999px;
-  padding: 1px 7px;
+  border-radius: var(--r-pill);
+  padding: 1px var(--s2);
   cursor: help;
 }
 
 .hypno-track {
   position: relative;
   height: 22px;
-  border-radius: 11px;
+  border-radius: var(--r-pill);
   background: var(--panel-2);
   overflow: hidden;
 }
@@ -277,14 +488,15 @@ details.methodology summary {
   position: absolute;
   top: 0;
   bottom: 0;
-  border-radius: 3px;
+  border-radius: var(--r-0);
   /* A 30-second segment is a fraction of a percent wide; without a floor it
      would round away to nothing. */
   min-width: 2px;
 }
 
 /* Stage colours, lifted from the reference and lightened where the original
-   would disappear against a dark panel. */
+   would disappear against a dark panel. This is a data ramp, not UI colour:
+   nothing outside the hypnogram spends these. */
 .seg-awake { background: #ff4f87; }
 .seg-restless { background: #23c26b; }
 .seg-rem { background: #71d5f5; }
@@ -295,22 +507,22 @@ details.methodology summary {
   display: grid;
   grid-template-columns: 1fr auto 1fr;
   align-items: start;
-  margin-top: 14px;
-  padding-top: 10px;
+  margin-top: var(--s4);
+  padding-top: var(--s2);
   border-top: 1px solid var(--line);
   font-variant-numeric: tabular-nums;
 }
 .hypno-axis .mid { text-align: center; }
 .hypno-axis .end { text-align: right; }
-.hypno-axis .time { display: block; font-size: 13px; }
-.hypno-axis .cap { display: block; font-size: 11.5px; color: var(--muted); margin-top: 2px; }
+.hypno-axis .time { display: block; font-size: var(--t-sm); }
+.hypno-axis .cap { display: block; font-size: var(--t-micro); color: var(--muted); margin-top: var(--s1); }
 
 .stage-dot {
   display: inline-block;
   width: 9px;
   height: 9px;
-  border-radius: 2px;
-  margin-right: 8px;
+  border-radius: var(--r-0);
+  margin-right: var(--s2);
   vertical-align: baseline;
 }
 
@@ -321,9 +533,8 @@ details.methodology summary {
 /* ---- tables ---- */
 
 .table-scroll { overflow-x: auto; }
-table { width: 100%; border-collapse: collapse; font-size: 14px; }
-th, td { text-align: left; padding: 10px 12px; border-bottom: 1px solid var(--line); white-space: nowrap; }
-th { color: var(--muted); font-weight: 600; font-size: 12px; text-transform: uppercase; letter-spacing: .05em; }
+table { width: 100%; border-collapse: collapse; font-size: var(--t-sm); }
+th, td { text-align: left; padding: var(--s2) var(--s3); border-bottom: 1px solid var(--line); white-space: nowrap; }
 tbody tr:hover { background: var(--panel-2); }
 td.num, th.num { text-align: right; font-variant-numeric: tabular-nums; }
 
@@ -331,87 +542,82 @@ td.num, th.num { text-align: right; font-variant-numeric: tabular-nums; }
 
 .notice {
   border-left: 3px solid var(--warn);
-  padding: 12px 14px;
-  background: #1d1b14;
-  border-radius: 6px;
-  margin: 16px 0;
+  padding: var(--s3) var(--s4);
+  background: var(--notice-bg);
+  border-radius: var(--r-3);
+  margin: var(--s4) 0;
 }
-.notice.error { border-left-color: var(--danger); background: #1f1416; }
+.notice.error { border-left-color: var(--neg); background: var(--notice-error-bg); }
 
 pre {
-  background: #0a0c11;
+  background: var(--code-bg);
   border: 1px solid var(--line);
-  border-radius: 8px;
-  padding: 14px;
+  border-radius: var(--r-2);
+  padding: var(--s4);
   overflow-x: auto;
-  font-size: 12.5px;
+  font-size: var(--t-label);
   line-height: 1.5;
 }
 code { font-family: ui-monospace, Consolas, monospace; }
 
-dl.meta { display: grid; grid-template-columns: max-content 1fr; gap: 5px 16px; margin: 0; }
+dl.meta { display: grid; grid-template-columns: max-content 1fr; gap: var(--s1) var(--s4); margin: 0; }
 dl.meta dt { color: var(--muted); }
 dl.meta dd { margin: 0; overflow-wrap: anywhere; }
 
-.messages { list-style: none; padding: 0; margin: 0 0 16px; }
+.messages { list-style: none; padding: 0; margin: 0 0 var(--s4); }
 
 select {
   background: var(--panel-2);
   color: var(--text);
   border: 1px solid var(--line);
-  border-radius: 8px;
-  padding: 8px 10px;
-  font-size: 14px;
+  border-radius: var(--r-2);
+  padding: var(--s2) var(--s3);
+  font-size: var(--t-sm);
 }
 
 @media (max-width: 560px) {
-  main { padding: 18px 14px 56px; }
+  main { padding: var(--s4) var(--s4) var(--s6); }
   .cards { grid-template-columns: 1fr; }
   .chart-wrap { height: 260px; }
-  .stats { gap: 18px; }
+  .stats { gap: var(--s4); }
 }
 
 /* --- arousal card ------------------------------------------------------- */
-/* The card that runs the WESAD-trained model against today's heart rate.
+/* The card that runs the WESAD-trained model against the day's heart rate.
    Deliberately styled like an insight rather than like a metric card: it is
    an interpretation, not a reading, and should not look as authoritative as
    a measured number. */
 
-.arousal { margin: 22px 0; }
-.arousal .insight { margin-bottom: 4px; }
+.arousal { margin: var(--s5) 0; }
+.arousal .insight { margin-bottom: var(--s1); }
 
 /* Neutral accent: this card must not imply good or bad news the way the
    up/down insight colours do. */
 .insight.dir-neutral { border-left-color: var(--accent); }
 
-.arousal form { margin-top: 12px; }
+.arousal form { margin-top: var(--s3); }
 
-.button {
-  display: inline-block;
-  background: var(--panel-2);
-  color: var(--text);
-  border: 1px solid var(--line);
-  border-radius: 8px;
-  padding: 8px 14px;
-  font: inherit;
-  font-size: 13px;
-  font-weight: 600;
-  cursor: pointer;
-}
-.button:hover { border-color: var(--accent); color: var(--accent); }
-.button.subtle { background: transparent; font-weight: 500; color: var(--muted); }
-
-.arousal-detail { margin-top: 12px; }
+.arousal-detail { margin-top: var(--s3); }
 .arousal-detail > summary {
   cursor: pointer;
   color: var(--muted);
-  font-size: 13px;
+  font-size: var(--t-sm);
 }
 .arousal-detail > summary:hover { color: var(--accent); }
-.arousal-detail table { margin-top: 10px; }
+.arousal-detail table { margin-top: var(--s2); }
 
 /* The limitations list on the methodology page. Long prose, so these cells
    wrap rather than inheriting the table default of nowrap. */
-.limitations { padding-left: 20px; }
-.limitations li { margin-bottom: 10px; color: var(--text); }
+.limitations { padding-left: var(--s5); max-width: var(--measure); }
+.limitations li { margin-bottom: var(--s2); color: var(--text); }
 .ood td, .ood th { white-space: normal; }
+
+/* Motion is minimal here by design, but the transitions and the 1px card lift
+   still honour a reduced-motion preference. */
+@media (prefers-reduced-motion: reduce) {
+  *, *::before, *::after {
+    animation-duration: .01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: .01ms !important;
+  }
+}
