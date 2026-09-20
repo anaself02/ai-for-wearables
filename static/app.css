@@ -1109,8 +1109,73 @@ tbody tr.is-yours td { font-weight: var(--w-semi); }
    would read as a measured nought. */
 .ring.is-empty .ring-value { color: var(--ink-3); font-size: var(--t-h2); }
 
+/* A legacy dial carries two notes - when it froze, and what it is a fraction
+   of - so they need a gap between them rather than running together. */
+.ring .ring-note + .ring-note { margin-top: calc(var(--s1) * -1); }
+
+/* The provenance line is a tag and a date, and an ISO date broken across two
+   lines after the month reads as two different numbers. It is allowed past the
+   note's measure rather than past its own meaning. */
+.ring-provenance { max-width: none; white-space: nowrap; }
+
+/* ---- fitness age, in the same panel and visibly not a dial --------------
+   A ring is a fraction of something and a fitness age is not a fraction of
+   anything, so it does not get one. It sits behind a hairline at the foot of
+   the panel: adjacent to the dials, and unmistakably a different kind of
+   claim. The rule runs the full width of the panel, so the negative margins
+   cancel the panel's own padding before the block re-adds its own. */
+
+/* A grid rather than a wrapping flex row, and for a reason worth recording:
+   the note carries a max-width so it stays inside a readable measure, and a
+   flex item whose hypothetical size is already clamped below the line width
+   never wraps - it sits beside the link instead of under it. A grid puts it on
+   its own row by declaration rather than by hoping. */
+.rings-age {
+  grid-column: 1 / -1;
+  display: grid;
+  grid-template-columns: auto 1fr;
+  align-items: center;
+  gap: var(--s3) var(--s5);
+  margin: var(--s3) calc(var(--s4) * -1) calc(var(--s5) * -1);
+  padding: var(--s4);
+  border-top: 1px solid var(--rule);
+}
+
+.rings-age-pair { display: flex; align-items: center; gap: var(--s4); }
+.rings-age-figure { display: flex; flex-direction: column; gap: var(--s1); }
+.rings-age-figure .k {
+  font-size: var(--t-micro);
+  font-weight: var(--w-semi);
+  text-transform: uppercase;
+  letter-spacing: .08em;
+  color: var(--ink-3);
+}
+.rings-age-figure .n {
+  font: var(--w-semi) var(--t-num)/1 var(--mono);
+  letter-spacing: -.03em;
+  font-variant-numeric: tabular-nums;
+  color: var(--ink-3);
+}
+/* The fitness age is the answer; the calendar age is the reference it is read
+   against, so only one of them is at full contrast. Same rule as /fitness/. */
+.rings-age-figure.is-headline .n { color: var(--ink); }
+.rings-age-arrow { font-size: var(--t-h2); color: var(--ink-3); }
+
+.rings-age-link { justify-self: end; font-size: var(--t-sm); white-space: nowrap; }
+
+.rings-age-note {
+  grid-column: 1 / -1;
+  margin: 0;
+  font-size: var(--t-sm);
+  color: var(--ink-2);
+  max-width: var(--measure);
+}
+
 .rings-footnote { margin: calc(var(--s3) * -1) 0 var(--s5); max-width: var(--measure); }
 
 @media (max-width: 560px) {
   .rings { grid-template-columns: repeat(2, 1fr); }
+  .rings-age { grid-template-columns: 1fr; }
+  .rings-age-arrow { display: none; }
+  .rings-age-link { justify-self: start; }
 }

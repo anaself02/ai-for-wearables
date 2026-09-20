@@ -87,6 +87,34 @@ def _historical_series(readings, label, unit):
     )
 
 
+def _fitness_assessment(user, reading, today):
+    """One VO2 max reading placed against the published norms.
+
+    Shared by the overview and /fitness/ so the two can never be computed from
+    two different calls. This project has already shipped one panel where a
+    percentile and a fitness age came from different cohorts and contradicted
+    each other; one function answering both is the fix that stays fixed.
+
+    The overview passes the reading it has already loaded for the legacy cards,
+    so this costs it no query beyond the profile.
+    """
+    profile = getattr(user, "profile", None)
+    source = reading.source if reading else ""
+    # A demographic estimate is modelled from age, sex, weight and resting
+    # heart rate. Anything else is derived from actual exercise, and only that
+    # can carry an age inversion. See health/fitness.py.
+    measured = bool(source) and "demographic" not in source.lower()
+
+    return fitness_module.assess(
+        reading.value if reading else None,
+        source=source,
+        measured=measured,
+        born=profile.born if profile else None,
+        sex=profile.sex if profile else "",
+        today=today,
+    )
+
+
 # ---------------------------------------------------------------------------
 # overview
 # ---------------------------------------------------------------------------
@@ -202,6 +230,12 @@ def index(request):
 
         cards.append(card)
 
+    # One call, two consumers: the arc on the VO2 max dial and the fitness age
+    # beneath it. `historical` already holds the VO2 max reading, because the
+    # legacy cards needed it, so the only new query here is the profile.
+    today = timezone.localdate()
+    assessment = _fitness_assessment(request.user, historical.get("vo2-max"), today)
+
     return render(
         request,
         "health/dashboard.html",
@@ -216,8 +250,11 @@ def index(request):
             "rings": rings_module.build(
                 {slug: points for slug, (points, _) in loaded.items()},
                 historical,
-                timezone.localdate(),
+                today,
+                assessment=assessment,
             ),
+            "assessment": assessment,
+            "profile": getattr(request.user, "profile", None),
             "cards": cards,
             "days": days,
             "start": data["start"],
@@ -642,20 +679,9 @@ def fitness(request):
     profile = getattr(request.user, "profile", None)
     reading = HistoricalMetric.latest_for(request.user, "vo2-max")
 
-    source = reading.source if reading else ""
-    # A demographic estimate is modelled from age, sex, weight and resting
-    # heart rate. Anything else is derived from actual exercise, and only that
-    # can carry an age inversion. See health/fitness.py.
-    measured = bool(source) and "demographic" not in source.lower()
-
-    assessment = fitness_module.assess(
-        reading.value if reading else None,
-        source=source,
-        measured=measured,
-        born=profile.born if profile else None,
-        sex=profile.sex if profile else "",
-        today=timezone.localdate(),
-    )
+    # The same call the overview makes, so the dial up there and this page
+    # cannot disagree about a number they both derive from one reading.
+    assessment = _fitness_assessment(request.user, reading, timezone.localdate())
 
     return render(
         request,

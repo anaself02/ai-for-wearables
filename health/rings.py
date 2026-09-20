@@ -1,6 +1,6 @@
-"""Today, measured against the only reference this app is willing to use: you.
+"""The row of dials, and the three different things a full arc can mean.
 
-Every ring here is a fraction whose denominator is the reader's own median
+Most of these dials are a fraction whose denominator is the reader's own median
 over the window, not a target somebody invented. That is a deliberate refusal.
 Ten thousand steps is the name of a 1960s Japanese pedometer, not a finding,
 and the WHO's 150 weekly minutes describes moderate-to-vigorous activity while
@@ -20,6 +20,21 @@ figure is never passed off as more current than it is.
 That day is excluded from its own denominator: a day still in progress is a
 partial count, and letting it drag the median down would flatter the very
 comparison it is being made against.
+
+Two dials do not work that way, and both say so on their face.
+
+The sleep score is out of 100 because Fitbit chose 100, and it can never change
+again. VO2 max is measured against a published norm table rather than against
+this reader, and the reason is arithmetic rather than taste: the stored series
+moves 4% across two months, so the latest reading sits at 99.7% of its own
+median and would pin the arc full for ever. A dial that is always full reads as
+a target hit every day, which is the one verdict this row exists to refuse - and
+it would arrive here by accident rather than by decision. A percentile is
+already a fraction of a hundred, moves when the reading moves (the same series
+runs from the 68th down to the 61st over those two months), and is the half of
+health.fitness that survives a modelled input, because it compares rather than
+inverts. So the arc carries the percentile and the fitness age is not a dial at
+all.
 """
 
 from dataclasses import dataclass
@@ -33,6 +48,12 @@ CIRCUMFERENCE = round(2 * 3.141592653589793 * RADIUS, 2)
 
 #: Below this many prior days there is no meaningful median to divide by.
 MIN_DAYS_FOR_BASELINE = 5
+
+#: Short enough to sit under a 92px dial. The full sentence, with the link to
+#: settings, belongs in the panel below, where there is room for it.
+NEEDS_PROFILE = "Needs your date of birth and sex."
+NEVER_IMPORTED = "Never imported."
+OFF_TABLE = "Norms cover ages 20 to 79."
 
 
 @dataclass
@@ -52,6 +73,10 @@ class Ring:
     #: Length of the drawn arc. Capped at the full circle.
     dash: float = 0.0
 
+    #: What the arc is a fraction of, in words. Not every dial divides by the
+    #: same thing, so each one says which denominator it used rather than
+    #: leaving a single footnote to cover three different claims.
+    comparison: str = ""
     baseline_display: str = ""
     #: Which day the figure is from, always named: "so far today", "yesterday",
     #: or the date. Google stamps a rollup hours late, so a dial often lands on
@@ -119,6 +144,7 @@ def _compare(ring: Ring, pairs, today, fmt) -> Ring:
     ring.percent = round(ratio * 100)
     ring.dash = round(CIRCUMFERENCE * min(ratio, 1.0), 2)
     ring.baseline_display = fmt(baseline)
+    ring.comparison = f"{ring.percent}% of your usual {ring.baseline_display}"
     return ring
 
 
@@ -131,28 +157,118 @@ def _minutes(value) -> str:
     return f"{hours}h {remainder:02d}m" if hours else f"{remainder}m"
 
 
-def build(points_by_slug: dict, historical: dict, today) -> list:
+def _ordinal(number: int) -> str:
+    """61 -> '61st'. The teens are the exception every implementation forgets."""
+    if 10 <= number % 100 <= 20:
+        suffix = "th"
+    else:
+        suffix = {1: "st", 2: "nd", 3: "rd"}.get(number % 10, "th")
+    return f"{number}{suffix}"
+
+
+def _cohort(assessment) -> str:
+    """'men 20-29': who the published table compared this reading against."""
+    from . import fitness
+
+    bounds = fitness.bracket_for(assessment.age, assessment.sex)
+    people = {"male": "men", "female": "women"}.get(assessment.sex, assessment.sex)
+    if bounds is None:
+        return people
+    return f"{people} {bounds[0]}-{bounds[1]}"
+
+
+def _vo2_max(assessment, reading) -> Ring:
+    """VO2 max as a percentile of the published norms, drawn as legacy.
+
+    Legacy in the same sense as the sleep score, and for a stronger reason: the
+    live endpoint exists but only ever produces a figure from a GPS-tracked
+    outdoor run, of which this account has none. Every stored reading is a
+    Fitbit demographic estimate from a one-off Takeout import, and the series
+    stopped the day the import did. Drawing it as a live dial would be the one
+    thing this row is not allowed to do.
+
+    The arc is the percentile rather than a ratio against the reader's own
+    median; the module docstring has the arithmetic for why.
+    """
+    ring = Ring(key="vo2-max", label="VO2 max", legacy=True)
+
+    if reading is None:
+        ring.note = NEVER_IMPORTED
+        return ring
+
+    ring.legacy_date = str(reading.date)
+
+    if assessment is None or not assessment.available:
+        # The reading exists, so the date is real even when the comparison is
+        # not. Showing the figure without a percentile is still honest; showing
+        # a percentile without a date of birth would not be.
+        ring.display = f"{round(float(reading.value), 1)}"
+        reason = getattr(assessment, "reason", "") if assessment else ""
+        from . import fitness
+
+        if reason == fitness.NO_PROFILE:
+            ring.note = NEEDS_PROFILE
+        elif reason == fitness.OFF_TABLE:
+            ring.note = OFF_TABLE
+        else:
+            ring.note = NEVER_IMPORTED
+        return ring
+
+    ring.available = True
+    ring.display = f"{assessment.vo2max}"
+    ring.percent = round(assessment.percentile)
+    ring.dash = round(CIRCUMFERENCE * min(assessment.percentile / 100, 1.0), 2)
+
+    # The table stops at the 5th and the 95th. Beyond either end the honest
+    # answer is a bound, so the arc is drawn at the bound and the words say so.
+    if assessment.position == "below":
+        ring.comparison = f"below the 5th percentile, {_cohort(assessment)}"
+    elif assessment.position == "above":
+        ring.comparison = f"above the 95th percentile, {_cohort(assessment)}"
+    else:
+        ring.comparison = (
+            f"{_ordinal(ring.percent)} percentile, {_cohort(assessment)}"
+        )
+    return ring
+
+
+def _sleep_score(reading) -> Ring:
+    """The one quantity here whose denominator somebody else chose.
+
+    A score out of 100, picked by Fitbit, and also the one quantity that can
+    never change again - so it is drawn dashed and dated rather than sitting in
+    the row looking as current as its neighbours.
+    """
+    ring = Ring(key="sleep-score", label="Sleep score", legacy=True)
+    if reading is None:
+        ring.note = NEVER_IMPORTED
+        return ring
+
+    ring.available = True
+    ring.display = f"{int(round(reading.value))}"
+    ring.percent = int(round(reading.value))
+    ring.dash = round(CIRCUMFERENCE * min(reading.value / 100, 1.0), 2)
+    ring.legacy_date = str(reading.date)
+    ring.comparison = "out of 100, Fitbit's own score"
+    return ring
+
+
+def build(points_by_slug: dict, historical: dict, today, assessment=None) -> list:
     """The row of dials for the overview.
 
-    Reads the points the overview has already fetched. No extra API call: a
+    Reads the points the overview has already fetched, and the historical
+    readings it has already loaded. No extra API call and no extra query: a
     decorative row at the top of a page must not cost a round trip.
+
+    `assessment` is the health.fitness.Assessment the overview built for the
+    panel under the dials. It is passed in rather than computed here so that
+    the dial and the fitness age below it can never be derived from two
+    different calls, which is the failure this project has already had once.
     """
     from . import metrics
 
-    rings = []
+    rings = [_vo2_max(assessment, historical.get("vo2-max"))]
 
-    # -- sleep ------------------------------------------------------------
-    asleep, _deep = metrics.sleep_pairs(points_by_slug.get("sleep") or [])
-    rings.append(
-        _compare(
-            Ring(key="sleep", label="Sleep"),
-            asleep,
-            today,
-            _minutes,
-        )
-    )
-
-    # -- steps and active minutes ----------------------------------------
     for key, label, fmt in (
         ("steps", "Steps", _count),
         ("active-minutes", "Active", _minutes),
@@ -168,22 +284,6 @@ def build(points_by_slug: dict, historical: dict, today) -> list:
             )
         )
 
-    # -- the legacy one ---------------------------------------------------
-    #
-    # A score out of 100 is the one quantity here with a denominator that is
-    # not the reader, because Fitbit chose it. It is also the one quantity
-    # that can never change again, so it is drawn dashed and dated rather than
-    # sitting in the row looking as current as its neighbours.
-    reading = historical.get("sleep-score")
-    score = Ring(key="sleep-score", label="Sleep score", legacy=True)
-    if reading is None:
-        score.note = "Never imported."
-    else:
-        score.available = True
-        score.display = f"{int(round(reading.value))}"
-        score.percent = int(round(reading.value))
-        score.dash = round(CIRCUMFERENCE * min(reading.value / 100, 1.0), 2)
-        score.legacy_date = str(reading.date)
-    rings.append(score)
+    rings.append(_sleep_score(historical.get("sleep-score")))
 
     return rings
