@@ -25,20 +25,32 @@ partly circular. The gap between the two ages is flagged as the more
 trustworthy half, because age appears on both sides of that subtraction and
 largely cancels out of it.
 
-Sources
--------
-Percentiles:
-    The Cooper Institute, Aerobics Center Longitudinal Study, as published in
-    ACSM's Guidelines for Exercise Testing and Prescription, 11th ed. (2021),
-    Table 4.7. Values below transcribed from a secondary rendering of that
-    table and cross-checked against two independent renderings.
+Source, and exactly how far it has been checked
+-----------------------------------------------
+Both the percentile and the fitness age are read off one table: The Cooper
+Institute, Aerobics Center Longitudinal Study, as published in ACSM's
+Guidelines for Exercise Testing and Prescription, 11th ed., Wolters Kluwer,
+2021, Table 4.7.
 
-Population means used for the age inversion:
-    The HUNT3 Fitness Study, reported by NTNU/CERG, which is the source of the
-    "fitness age" idea itself. Nes BM, Janszky I, Wisloff U, Stoylen A,
-    Karlsen T. "Estimating VO2peak from a nonexercise prediction model: the
-    HUNT Study, Norway." Med Sci Sports Exerc. 2011;43(11):2024-30.
-    https://www.ntnu.edu/cerg/fitness-numbers
+Provenance, stated precisely rather than generously: the values in NORMS were
+transcribed from a secondary web rendering of that table. Two of the 84
+entries - men 20-29 at the 50th (48.0) and men 70-79 at the 50th (24.4) -
+were spot-checked against a different secondary rendering and matched. Nothing
+here has been compared against the printed edition. This is an unverified
+secondary transcription, spot-checked in two places, and should be read as
+that until someone opens the book.
+
+The idea of a fitness age comes from the HUNT3 work at NTNU: Nes BM, Janszky
+I, Wisloff U, Stoylen A, Karlsen T, "Estimating VO2peak from a nonexercise
+prediction model: the HUNT Study, Norway", Med Sci Sports Exerc.
+2011;43(11):2024-30. The concept is theirs. The numbers here are not.
+
+An earlier version of this module inverted the HUNT3 Norwegian means while
+taking percentiles from Cooper, and the two cohorts differ by about six
+ml/kg/min in the same age band - Cooper puts the median male 20-29 at 48.0,
+HUNT3 puts the mean at 54.0. That let one reading be called above average for
+its age and older than its age in the same panel. One population now answers
+both questions, so they cannot contradict each other again.
 """
 
 from dataclasses import dataclass, field
@@ -47,7 +59,8 @@ from datetime import date
 #: The percentile each column of NORMS corresponds to.
 PERCENTILES = (5, 10, 25, 50, 75, 90, 95)
 
-#: VO2 max in ml/kg/min by (age_low, age_high) bracket. Cooper / ACSM.
+#: VO2 max in ml/kg/min by (age_low, age_high) bracket, Cooper / ACSM.
+#: Unverified secondary transcription; see the provenance note above.
 NORMS = {
     "male": {
         (20, 29): (29.0, 32.1, 40.1, 48.0, 55.2, 61.8, 66.3),
@@ -65,12 +78,6 @@ NORMS = {
         (60, 69): (13.4, 14.6, 17.2, 20.0, 23.8, 27.0, 29.4),
         (70, 79): (13.1, 13.6, 15.6, 18.3, 20.8, 23.1, 24.1),
     },
-}
-
-#: Mean VO2 max at the midpoint of each HUNT3 decade band, ml/kg/min.
-HUNT_MEANS = {
-    "male": ((25, 54.0), (35, 49.0), (45, 47.0), (55, 42.0), (65, 39.0), (75, 34.0)),
-    "female": ((25, 43.0), (35, 40.0), (45, 38.0), (55, 34.0), (65, 31.0), (75, 27.0)),
 }
 
 #: Plain-language bands. Deliberately coarse: the input is an estimate with a
@@ -140,26 +147,46 @@ def band_for(percentile: float) -> str:
     return BANDS[-1][1]
 
 
-def fitness_age(vo2max: float, sex: str):
-    """The age at which this VO2 max would be the population mean.
+def median_curve(sex: str) -> list:
+    """(age, median VO2 max) anchors for one sex, youngest first.
 
-    Inverts the HUNT3 mean curve, which is what "fitness age" means in the
-    literature that coined the term. Returns (age, position); position is
-    "below"/"above" when the value falls off the ends of the published range,
-    because the curve says nothing outside 25 to 75.
+    The published table reports a decade band rather than a value per year, so
+    each band's 50th percentile is anchored at the midpoint of its own age
+    range. Everything between two anchors is straight-line interpolation done
+    here. That interpolation is mine, not the publication's; only the anchors
+    are published figures.
     """
-    means = HUNT_MEANS.get(sex)
-    if not means:
+    return [
+        ((low + high) // 2, values[PERCENTILES.index(50)])
+        for (low, high), values in NORMS.get(sex, {}).items()
+    ]
+
+
+def fitness_age(vo2max: float, sex: str):
+    """The age at which this VO2 max would be the median for the population.
+
+    Read off the same Cooper/ACSM table as the percentile, deliberately: the
+    two answers describe one cohort, so they can no longer disagree about
+    whether a reading is good for its age.
+
+    Returns (age, position). "below" and "above" mean the reading falls off the
+    young or the old end of the table, and the answer is a bound rather than a
+    number - there is no published anchor beyond it to interpolate towards,
+    and inventing one is exactly what this module exists not to do.
+    """
+    curve = median_curve(sex)
+    if not curve:
         return None, "off-table"
 
-    # Sorted by increasing VO2 max, which means decreasing age.
-    points = [(value, age) for age, value in reversed(means)]
-    highest = points[-1][0]
-    lowest = points[0][0]
-    if vo2max > highest:
-        return points[-1][1], "below"
-    if vo2max < lowest:
-        return points[0][1], "above"
+    youngest_age, highest_median = curve[0]
+    oldest_age, lowest_median = curve[-1]
+    if vo2max > highest_median:
+        return youngest_age, "below"
+    if vo2max < lowest_median:
+        return oldest_age, "above"
+
+    # Ascending by VO2 max, which is descending by age.
+    points = [(value, age) for age, value in reversed(curve)]
     return round(_interpolate(vo2max, points)), "inside"
 
 
@@ -251,7 +278,9 @@ def assess(vo2max, *, source: str, measured: bool, born, sex: str, today: date):
     assessment.fitness_age = value
     assessment.fitness_age_position = where
     assessment.circular = not measured
-    if value is not None:
+    # Only when the fitness age is a number rather than a bound: the distance
+    # to "under 24" is not a number of years.
+    if value is not None and where == "inside":
         assessment.difference = age - value
 
     return assessment

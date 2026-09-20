@@ -123,9 +123,9 @@ class Profile(models.Model):
     and there is no reason to keep it in the clear when the token beside it is
     not.
 
-    Sex has two values because the published norms have two columns. That is a
-    limitation of the reference tables (Cooper Institute / ACSM and HUNT3), not
-    a claim about people, and the settings page says so rather than leaving the
+    Sex has two values because the published norm table has two columns. That
+    is a limitation of the reference data (Cooper Institute / ACSM), not a
+    claim about people, and the settings page says so rather than leaving the
     reader to assume the software is making the claim.
     """
 

@@ -56,14 +56,31 @@
         <span class="age-number">{% if assessment.fitness_age_position == "below" %}&lt;{% elif assessment.fitness_age_position == "above" %}&gt;{% endif %}{{ assessment.fitness_age }}</span>
       </div>
       <p class="age-verdict">
-        {% if assessment.difference > 0 %}
-          Your cardiorespiratory fitness matches the average for someone
+        {% comment %}
+          The bounds are tested before the difference, and not only for
+          readability: off the ends of the table the difference is None, and
+          a None comparison inside an {% templatetag openblock %} if {% templatetag closeblock %}
+          quietly evaluates false, which would print "average for your age" for
+          a reading the table cannot place at all.
+        {% endcomment %}
+        {% if assessment.fitness_age_position == "below" %}
+          Your VO2 max is above the median for every age band this table covers.
+          The youngest band it resolves sits at {{ assessment.fitness_age }}, so the
+          honest answer is <strong>under {{ assessment.fitness_age }}</strong> rather
+          than a single number.
+        {% elif assessment.fitness_age_position == "above" %}
+          Your VO2 max is below the median for every age band this table covers.
+          The oldest band it resolves sits at {{ assessment.fitness_age }}, so the
+          honest answer is <strong>over {{ assessment.fitness_age }}</strong> rather
+          than a single number.
+        {% elif assessment.difference > 0 %}
+          Your cardiorespiratory fitness matches the median for someone
           <strong>{{ assessment.difference }} year{{ assessment.difference|pluralize }} younger</strong> than you.
         {% elif assessment.difference < 0 %}
-          Your cardiorespiratory fitness matches the average for someone
+          Your cardiorespiratory fitness matches the median for someone
           <strong>{{ assessment.difference|cut:"-" }} year{{ assessment.difference|cut:"-"|pluralize }} older</strong> than you.
         {% else %}
-          Your cardiorespiratory fitness is <strong>average for your age</strong>.
+          Your cardiorespiratory fitness is <strong>median for your age</strong>.
         {% endif %}
         Fitness, not biology: this is an estimate of aerobic capacity expressed
         in years, not a biological age and not a medical measurement. A real
@@ -74,10 +91,25 @@
     {% if assessment.circular %}
       <article class="insight dir-neutral">
         <div class="insight-head">
-          <h3 class="insight-title">Read the gap, not the number</h3>
+          <h3 class="insight-title">
+            {% if assessment.difference is not None %}Read the gap, not the number{% else %}Read the percentile instead{% endif %}
+          </h3>
         </div>
         <p class="insight-detail">{{ why_circular }}</p>
-        <p class="insight-detail">{{ why_the_gap }}</p>
+        {% if assessment.difference is not None %}
+          <p class="insight-detail">{{ why_the_gap }}</p>
+        {% else %}
+          {% comment %}
+            There is no gap to read when the fitness age is a bound, so the
+            advice that applies to a two-number comparison would be wrong here.
+          {% endcomment %}
+          <p class="insight-detail">
+            There is no gap to read this time: the fitness age came out as a
+            bound rather than a number, so there is nothing to subtract. The
+            percentile above is the figure carrying information here, and it
+            does not depend on inverting anything.
+          </p>
+        {% endif %}
         <p class="insight-footnote">
           Record a GPS-tracked outdoor run of 10+ minutes and the API will
           derive a VO2 max from the run itself. That one stands on its own.
@@ -101,10 +133,31 @@
         <p class="insight-detail">
           Of people of your age and sex in the reference population, about
           {% if assessment.position == "inside" %}{{ assessment.percentile|floatformat:0 }}%{% else %}this many{% endif %}
-          have a lower VO2 max. The reference is the Cooper Institute Aerobics
-          Center Longitudinal Study, as published in ACSM guidelines. Those are
-          measured values; yours is modelled, so read the placement as
+          have a lower VO2 max. The reference cohort was measured on a
+          treadmill; your figure is modelled, so read the placement as
           approximate.
+        </p>
+      </article>
+      <article class="insight">
+        <div class="insight-head"><h3 class="insight-title">How far the source is checked</h3></div>
+        <p class="insight-detail">
+          The table is the Cooper Institute Aerobics Center Longitudinal Study
+          as published in <strong>ACSM&#39;s Guidelines for Exercise Testing and
+          Prescription, 11th ed., Wolters Kluwer, 2021, Table 4.7</strong>. The
+          values here were transcribed from a secondary rendering of it, and two
+          of the 84 entries were spot-checked against a second rendering. Nobody
+          has compared them against the printed edition, so treat this as an
+          unverified transcription rather than a checked citation.
+        </p>
+      </article>
+      <article class="insight">
+        <div class="insight-head"><h3 class="insight-title">Both numbers, one cohort</h3></div>
+        <p class="insight-detail">
+          The percentile and the fitness age are read off the same table. An
+          earlier version of this page took the percentile from Cooper and the
+          fitness age from a Norwegian cohort whose means run about six
+          ml/kg/min higher in the same age band, which let it call one reading
+          above average for its age and older than its age at the same time.
         </p>
       </article>
       <article class="insight">
@@ -120,7 +173,10 @@
 
     <h2 class="section-title">The norms this was read against</h2>
     <p class="section-note muted small">
-      VO2 max in ml/kg/min for {{ assessment.sex }}s. Your bracket is marked.
+      VO2 max in ml/kg/min for {{ assessment.sex }}s. Your bracket is marked. The
+      fitness age above is the 50th percentile column of this table, anchored at
+      the midpoint of each band and interpolated straight between those anchors;
+      only the anchors are published figures.
     </p>
     <div class="panel table-scroll">
       <table>
@@ -153,8 +209,12 @@
     </p>
 
     <p class="small muted page-end">
-      Norms: Cooper Institute / ACSM Guidelines 11th ed. Table 4.7.
-      Age inversion: HUNT3, Nes et al. 2011.
+      Percentiles and the median curve: The Cooper Institute, Aerobics Center
+      Longitudinal Study, in ACSM&#39;s Guidelines for Exercise Testing and
+      Prescription, 11th ed., Wolters Kluwer, 2021, Table 4.7 - secondary
+      transcription, spot-checked on two values, not verified against the
+      printed edition. The fitness age idea is from Nes et al. 2011 (HUNT3);
+      the numbers here are not.
       <a href="{% url 'accounts:settings' %}">Change your date of birth or sex</a>
     </p>
 

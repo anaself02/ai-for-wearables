@@ -61,21 +61,49 @@ class PercentileTests(TestCase):
 
 
 class FitnessAgeTests(TestCase):
-    def test_a_mean_value_returns_the_age_it_is_the_mean_for(self):
-        # 49.0 is the HUNT3 mean for men in their thirties, midpoint 35.
-        age, position = fitness.fitness_age(49.0, "male")
+    def test_a_median_value_returns_the_midpoint_of_its_own_band(self):
+        # 42.4 is the 50th percentile for men 30-39, whose midpoint is 34.
+        age, position = fitness.fitness_age(42.4, "male")
         self.assertEqual(position, "inside")
-        self.assertEqual(age, 35)
+        self.assertEqual(age, 34)
 
-    def test_fitter_than_the_youngest_band_is_reported_as_below_it(self):
+    def test_fitter_than_the_youngest_median_is_a_bound_not_a_number(self):
         age, position = fitness.fitness_age(70.0, "male")
         self.assertEqual(position, "below")
-        self.assertEqual(age, 25)
+        self.assertEqual(age, 24)
+
+    def test_below_the_oldest_median_is_a_bound_at_the_other_end(self):
+        age, position = fitness.fitness_age(15.0, "male")
+        self.assertEqual(position, "above")
+        self.assertEqual(age, 74)
 
     def test_a_higher_vo2max_gives_a_lower_fitness_age(self):
-        younger, _ = fitness.fitness_age(50.0, "male")
-        older, _ = fitness.fitness_age(40.0, "male")
+        younger, _ = fitness.fitness_age(40.0, "male")
+        older, _ = fitness.fitness_age(30.0, "male")
         self.assertLess(younger, older)
+
+    def test_the_curve_is_the_fiftieth_percentile_column_of_the_norms(self):
+        """Not a second table: the anchors are read out of NORMS itself."""
+        curve = dict(fitness.median_curve("male"))
+        for (low, high), values in fitness.NORMS["male"].items():
+            self.assertEqual(curve[(low + high) // 2], values[3])
+
+    def test_percentile_and_fitness_age_cannot_contradict_each_other(self):
+        """The invariant the old two-cohort version broke.
+
+        Someone sitting exactly on the median for their own band must come out
+        as the 50th percentile AND as a fitness age equal to their own band
+        midpoint. Reading the two numbers off one table is what guarantees it.
+        """
+        for sex in ("male", "female"):
+            for (low, high), values in fitness.NORMS[sex].items():
+                midpoint = (low + high) // 2
+                median = values[3]
+                percentile, _ = fitness.percentile_for(median, midpoint, sex)
+                age, position = fitness.fitness_age(median, sex)
+                self.assertEqual(percentile, 50.0, f"{sex} {low}-{high}")
+                self.assertEqual(position, "inside", f"{sex} {low}-{high}")
+                self.assertEqual(age, midpoint, f"{sex} {low}-{high}")
 
 
 class AssessTests(TestCase):
@@ -103,16 +131,28 @@ class AssessTests(TestCase):
         )
         self.assertTrue(result.available)
         self.assertIsNotNone(result.percentile)
-        self.assertEqual(result.fitness_age, 31)
+        # Above the median of every band, so the answer is the young bound.
+        self.assertEqual(result.fitness_age, 24)
+        self.assertEqual(result.fitness_age_position, "below")
         self.assertTrue(result.circular)
 
     def test_the_difference_is_calendar_age_minus_fitness_age(self):
         result = fitness.assess(
-            51.15, source="Fitbit demographic estimate", measured=False,
+            42.4, source="Fitbit demographic estimate", measured=False,
             born=date(1990, 5, 1), sex="male", today=TODAY,
         )
         self.assertEqual(result.age, 36)
-        self.assertEqual(result.difference, 5)
+        self.assertEqual(result.fitness_age, 34)
+        self.assertEqual(result.difference, 2)
+
+    def test_a_bounded_fitness_age_has_no_difference_in_years(self):
+        """The distance to "under 24" is not a number of years, so it is None."""
+        result = fitness.assess(
+            51.15, source="Fitbit demographic estimate", measured=False,
+            born=date(1990, 5, 1), sex="male", today=TODAY,
+        )
+        self.assertEqual(result.fitness_age_position, "below")
+        self.assertIsNone(result.difference)
 
     def test_a_measured_value_is_not_flagged_circular(self):
         result = fitness.assess(
@@ -158,9 +198,54 @@ class FitnessPageTests(TestCase):
         self.assertTrue(assessment.available)
 
         # Both numbers on the page, and the caveat that has to travel with them.
-        self.assertEqual(assessment.fitness_age, 31)
+        self.assertEqual(assessment.fitness_age, 24)
+        self.assertEqual(assessment.fitness_age_position, "below")
         self.assertContains(response, "Fitness age")
         self.assertContains(response, "Your age")
-        self.assertContains(response, "Read the gap, not the number")
+        # A bound, phrased as one, rather than a made-up single number - and
+        # the caveat panel gives the advice that fits a bound, since there is
+        # no gap to subtract.
+        self.assertContains(response, "under 24")
+        self.assertContains(response, "Read the percentile instead")
+        self.assertContains(response, "partly restates the birthday")
+        self.assertNotContains(response, "Read the gap, not the number")
         # Never claimed as biology.
         self.assertContains(response, "not a biological age")
+
+    def test_a_fitness_age_inside_the_table_reads_as_a_gap_in_years(self):
+        """The other branch: a real number, so the gap advice applies."""
+        Profile.objects.create(
+            user=self.user, date_of_birth="1990-05-01", sex="male"
+        )
+        HistoricalMetric.objects.create(
+            user=self.user,
+            metric_type="vo2-max",
+            date=date(2026, 9, 11),
+            value=42.4,
+            unit="ml/kg/min",
+            source="Fitbit demographic estimate",
+        )
+        response = self.client.get(reverse("health:fitness"))
+
+        self.assertEqual(response.context["assessment"].difference, 2)
+        self.assertContains(response, "2 years younger")
+        self.assertContains(response, "Read the gap, not the number")
+
+    def test_the_page_states_how_far_the_source_was_actually_checked(self):
+        """The citation claims no more than was done."""
+        Profile.objects.create(
+            user=self.user, date_of_birth="1990-05-01", sex="male"
+        )
+        HistoricalMetric.objects.create(
+            user=self.user,
+            metric_type="vo2-max",
+            date=date(2026, 9, 11),
+            value=51.15,
+            unit="ml/kg/min",
+            source="Fitbit demographic estimate",
+        )
+        response = self.client.get(reverse("health:fitness"))
+
+        self.assertContains(response, "11th ed., Wolters Kluwer, 2021, Table 4.7")
+        self.assertContains(response, "spot-checked")
+        self.assertContains(response, "not verified against the")
