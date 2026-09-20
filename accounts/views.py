@@ -188,6 +188,24 @@ def profile_settings(request):
     return render(request, "accounts/settings.html", {"form": form, "profile": profile})
 
 
+#: How long the greeting stays up at minimum, in milliseconds.
+#:
+#: This is a legibility floor, not a loading time. When the cache is already
+#: warm the fetch behind this screen finishes in a few hundred milliseconds,
+#: and at that speed the greeting is a flicker on the way to somewhere else -
+#: which is worse than not greeting anybody. Two seconds is a full cycle of
+#: the loader plus enough to read a short line.
+#:
+#: It is worth being straight about the trade: on a warm cache this is time
+#: the visitor waits for the sake of reading the screen rather than for work.
+#: That is a different thing from a timer dressed up as loading, which is what
+#: the ceiling below and the fetch itself exist to avoid.
+WELCOME_FLOOR_MS = 2000
+
+#: The longest this screen may hold somebody when the fetch is slow or failing.
+WELCOME_CEILING_MS = 8000
+
+
 @login_required
 def welcome(request):
     """The moment between signing in and the dashboard being ready.
@@ -203,6 +221,8 @@ def welcome(request):
         {
             "greeting": greeting_for(timezone.localtime()),
             "name": display_name(request.user),
+            "floor_ms": WELCOME_FLOOR_MS,
+            "ceiling_ms": WELCOME_CEILING_MS,
         },
     )
 

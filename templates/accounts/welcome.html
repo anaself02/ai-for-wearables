@@ -44,17 +44,18 @@
    * that would fetch it.
    *
    * The screen leaves when the cache is warm, not when a timer says so: the
-   * fetch below is the dashboard's own fan-out, so the wait is exactly as long
-   * as the work. Two guards around that - a floor so a warm cache does not
-   * make the greeting flash past, and a ceiling so a slow or failing fetch
-   * cannot stand anybody here. replace() rather than assign() so the back
-   * button skips over this and lands on the front door.
+   * fetch below is the dashboard's own fan-out, so on a cold cache the wait is
+   * exactly as long as the work. Two guards around that - a floor so the
+   * greeting is readable rather than a flicker, and a ceiling so a slow or
+   * failing fetch cannot stand anybody here. Both live in accounts/views.py,
+   * where the reasoning for the floor is written down. replace() rather than
+   * assign() so the back button skips over this and lands on the front door.
    */
   (function () {
     var DASHBOARD = "{% url 'health:index' %}";
     var WARM = "{% url 'accounts:welcome_warm' %}";
-    var FLOOR_MS = 700;
-    var CEILING_MS = 8000;
+    var FLOOR_MS = {{ floor_ms }};
+    var CEILING_MS = {{ ceiling_ms }};
 
     var startedAt = Date.now();
     var left = false;

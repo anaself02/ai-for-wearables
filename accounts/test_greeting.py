@@ -114,6 +114,21 @@ class WelcomeScreenTests(TestCase):
         self.assertContains(response, "http-equiv=\"refresh\"")
         self.assertContains(response, reverse("health:index"))
 
+    def test_the_greeting_stays_up_long_enough_to_read(self):
+        """A floor below about a second makes the greeting a flicker.
+
+        Pinned as a range rather than an exact number so the value can be
+        tuned, but not quietly optimised back down to a flash.
+        """
+        from accounts.views import WELCOME_CEILING_MS, WELCOME_FLOOR_MS
+
+        self.assertGreaterEqual(WELCOME_FLOOR_MS, 1500)
+        self.assertLess(WELCOME_FLOOR_MS, WELCOME_CEILING_MS)
+
+        response = self.client.get(reverse("accounts:welcome"))
+        self.assertContains(response, f"var FLOOR_MS = {WELCOME_FLOOR_MS};")
+        self.assertContains(response, f"var CEILING_MS = {WELCOME_CEILING_MS};")
+
     def test_the_warm_endpoint_answers_no_content(self):
         response = self.client.get(reverse("accounts:welcome_warm"))
         self.assertEqual(response.status_code, 204)
