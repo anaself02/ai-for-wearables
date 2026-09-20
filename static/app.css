@@ -1,13 +1,33 @@
-/* Design tokens.
+/* Health dashboard - visual system.
  *
- * Everything below this block spends these and nothing else: no loose pixel
- * values, no one-off hexes. The dashboard was built card by card across many
- * sessions, and the drift that produced (four card paddings, eight radii,
- * half-pixel font sizes) is what this scale exists to stop.
+ * The direction, in one line: an instrument panel, not a set of cards.
+ *
+ * Three rules hold the rest of this file together.
+ *
+ *   1. Colour means data. The interface itself is monochrome - text, rules,
+ *      fills and the pressed state are all ink on ground. Nothing is tinted
+ *      to look designed. When something on this page is coloured, the colour
+ *      is carrying information: a sleep stage, a direction of travel, a
+ *      failed request. That is also why there is no brand accent to collide
+ *      with the data colours, which is what the old blue chrome did.
+ *
+ *   2. Numbers are set in mono, prose is not. Every figure lines up with the
+ *      figure above it, and a reader can compare a column without reading it.
+ *
+ *   3. Structure is drawn with hairlines, not with boxes. Twelve floating
+ *      rounded rectangles is the look of a template; one ruled grid is the
+ *      look of an instrument.
+ *
+ * Both themes are first-class. Day and Night are the same design with the
+ * ground and the ink exchanged, and every colour below is defined for both.
  */
 
+/* ---- tokens: day ------------------------------------------------------ */
+
 :root {
-  /* ---- space: one 4px scale. Every gap, padding and margin snaps to it. -- */
+  color-scheme: light;
+
+  /* space: one 4px scale */
   --s1: 4px;
   --s2: 8px;
   --s3: 12px;
@@ -16,129 +36,152 @@
   --s6: 32px;
   --s7: 48px;
 
-  /* ---- radius: containers are softer than the things inside them. ------- */
-  --r-0: 3px;      /* smallest marks: sleep segments, stage dots */
-  --r-2: 10px;     /* controls: buttons, select, pre */
-  --r-3: 14px;     /* containers: cards, panels, notices */
-  --r-pill: 999px; /* chips, tags, the hypnogram track */
+  /* radius: tighter than before, because less is rounded now */
+  --r-1: 4px;
+  --r-2: 8px;
+  --r-3: 12px;
+  --r-pill: 999px;
 
-  /* ---- type: integer steps only. -------------------------------------- */
-  --t-micro: 11px; /* eyebrow labels */
+  /* type */
+  --sans: ui-sans-serif, system-ui, "Segoe UI", Roboto, sans-serif;
+  --mono: ui-monospace, "SF Mono", "Cascadia Mono", "Segoe UI Mono", Menlo, Consolas, monospace;
+
+  --t-micro: 11px;
   --t-label: 12px;
   --t-sm: 13px;
   --t-body: 15px;
   --t-lead: 17px;
-  --t-h2: 19px;
-  --t-h1: 26px;
-  --t-num: 30px;   /* the measured number on a metric card */
+  --t-h2: 20px;
+  --t-h1: 30px;
+  --t-num: 32px;
 
   --w-mid: 500;
   --w-semi: 600;
-  --w-num: 680;
 
-  /* ---- surfaces ---- */
-  --bg: #0e1016;
-  --panel: #161a23;
-  --panel-2: #1c212c;
-  --line: #262c3a;
-  --text: #e8ebf3;
-  --muted: #949db4;
+  /* surfaces: warm neutral, one grey family */
+  --ground: #f4f3f0;
+  --surface: #fbfaf8;
+  --surface-2: #eeece7;
+  --rule: #e2dfd9;
+  --rule-strong: #cdc9c1;
 
-  /* The only accent used as chrome. Links, focus, hover, the pressed state. */
-  --accent: #6ea8fe;
-  --accent-hi: #8dbcff;                    /* hover on a filled accent */
-  --accent-soft: rgba(110, 168, 254, .12); /* hover fill on a quiet control */
+  /* ink */
+  --ink: #1b1a18;
+  --ink-2: #55514a;
+  --ink-3: #6e6a62;
 
-  /* Semantic colours. These carry meaning about the data and are never
-     spent on decoration - a teal border does not appear because teal looks
-     nice, only because something improved. */
-  --pos: #45d9c0;
-  --warn: #f0b849;
-  --neg: #f2777a;
+  /* data colours. These are the only colours in the system, and every one of
+     them means something. */
+  --pos: #0d8a7c;
+  --warn: #a97a12;
+  --neg: #c0413f;
+  --data-4: #4550c2;
+  --data-5: #7d45b0;
+  --chart-grid: rgba(0, 0, 0, .09);
 
-  /* Prose measure. Long-form paragraphs (methodology, caveats) read badly at
-     the full 1120px container - roughly 150 characters a line. */
+  /* tinted grounds for the two states that need one */
+  --notice-bg: #f8f1dc;
+  --notice-error-bg: #fbeceb;
+  --code-bg: #f1efeb;
+
   --measure: 68ch;
-
-  /* Tinted grounds. Each is its own hue rather than a flat overlay, so a
-     warning reads warm and an error reads red before a word is read. */
-  --notice-bg: #1d1b14;
-  --notice-error-bg: #1f1416;
-  --code-bg: #0a0c11;
-
-  /* Chart series, read at runtime by charts.js - Chart.js cannot resolve
-     var() itself, so the palette lives here and the JS looks it up rather
-     than keeping a second copy that drifts. The first four are the semantic
-     colours; the fifth exists only because a chart can carry five series. */
-  --series-5: #b58cf0;
-  --chart-grid: rgba(255, 255, 255, .06);
-
   --speed: .15s;
 }
 
-/* Keyboard focus. There was none in this file: every card, chip, button,
-   summary and select fell back to the browser default ring, which is close to
-   invisible on this background. */
-:focus-visible {
-  outline: 2px solid var(--accent);
-  outline-offset: 2px;
+/* ---- tokens: night ---------------------------------------------------- */
+
+/* Defined twice on purpose: once for a system that asks for dark and has not
+   been overridden, once for an explicit choice of Night. Without the second
+   block the toggle could turn dark on but never back off. */
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) {
+    color-scheme: dark;
+
+    --ground: #121110;
+    --surface: #1a1917;
+    --surface-2: #232120;
+    --rule: #2e2b28;
+    --rule-strong: #454039;
+
+    --ink: #eceae6;
+    --ink-2: #a9a49c;
+    --ink-3: #8d887f;
+
+    --pos: #45d9c0;
+    --warn: #f0b849;
+    --neg: #f2777a;
+    --data-4: #9aa7ff;
+    --data-5: #c58cf0;
+    --chart-grid: rgba(255, 255, 255, .07);
+
+    --notice-bg: #211d13;
+    --notice-error-bg: #241618;
+    --code-bg: #0d0c0b;
+  }
 }
+
+:root[data-theme="dark"] {
+  color-scheme: dark;
+
+  --ground: #121110;
+  --surface: #1a1917;
+  --surface-2: #232120;
+  --rule: #2e2b28;
+  --rule-strong: #454039;
+
+  --ink: #eceae6;
+  --ink-2: #a9a49c;
+  --ink-3: #8d887f;
+
+  --pos: #45d9c0;
+  --warn: #f0b849;
+  --neg: #f2777a;
+  --data-4: #9aa7ff;
+  --data-5: #c58cf0;
+  --chart-grid: rgba(255, 255, 255, .07);
+
+  --notice-bg: #211d13;
+  --notice-error-bg: #241618;
+  --code-bg: #0d0c0b;
+}
+
+/* ---- base ------------------------------------------------------------- */
 
 * { box-sizing: border-box; }
 
 body {
   margin: 0;
-  background: var(--bg);
-  color: var(--text);
-  font: var(--t-body)/1.55 ui-sans-serif, system-ui, "Segoe UI", Roboto, sans-serif;
+  background: var(--ground);
+  color: var(--ink);
+  font: var(--t-body)/1.55 var(--sans);
   -webkit-font-smoothing: antialiased;
 }
 
-a { color: var(--accent); }
-
-header.topbar {
-  display: flex;
-  flex-wrap: wrap;
-  gap: var(--s3);
-  align-items: center;
-  justify-content: space-between;
-  padding: var(--s3) var(--s5);
-  border-bottom: 1px solid var(--line);
-  /* Page ground, not panel: on --panel it was the same fill as a metric card,
-     so cards scrolling under it blended into the bar. */
-  background: var(--bg);
-  position: sticky;
-  top: 0;
-  z-index: 5;
+/* Monochrome chrome means links cannot be identified by colour, so they are
+   identified the way print does it: an underline that is quieter than the
+   text until you are on it. */
+a {
+  color: inherit;
+  text-decoration: underline;
+  text-decoration-color: var(--rule-strong);
+  text-underline-offset: 3px;
+  transition: text-decoration-color var(--speed) ease;
 }
-header.topbar .brand { color: var(--text); font-weight: var(--w-semi); text-decoration: none; letter-spacing: -.01em; }
-header.topbar nav { display: flex; gap: var(--s4); align-items: center; }
-header.topbar nav a { color: var(--muted); text-decoration: none; font-size: var(--t-sm); }
-header.topbar nav a:hover, header.topbar nav a.active { color: var(--text); }
-header.topbar form { display: flex; gap: var(--s3); align-items: center; }
+a:hover { text-decoration-color: currentColor; }
 
-main { max-width: 1120px; margin: 0 auto; padding: var(--s5) var(--s5) var(--s7); }
+:focus-visible {
+  outline: 2px solid var(--ink);
+  outline-offset: 2px;
+}
 
-h1 { font-size: var(--t-h1); margin: 0 0 var(--s2); letter-spacing: -.02em; }
-h2 { font-size: var(--t-h2); margin: var(--s6) 0 var(--s3); letter-spacing: -.01em; }
-p.lede { color: var(--muted); margin: 0 0 var(--s5); max-width: var(--measure); }
-.muted { color: var(--muted); }
-.small { font-size: var(--t-sm); }
-
-/* Long-form text is capped at a readable measure wherever it appears. The
-   methodology pages were running paragraphs the full 1120px, which is about
-   150 characters a line. */
-main p, main li, main dd { max-width: var(--measure); }
-
-/* Skip link. Keyboard users otherwise tab the whole header on every page. */
 .skip-link {
   position: absolute;
   left: var(--s3);
   top: calc(var(--s7) * -1);
   z-index: 10;
   padding: var(--s2) var(--s3);
-  background: var(--accent);
-  color: var(--bg);
+  background: var(--ink);
+  color: var(--ground);
   border-radius: var(--r-2);
   font-weight: var(--w-semi);
   text-decoration: none;
@@ -146,31 +189,120 @@ main p, main li, main dd { max-width: var(--measure); }
 }
 .skip-link:focus { top: var(--s3); }
 
-/* ---- spacing utilities -----------------------------------------------
-   These exist so templates stop carrying inline style attributes. There were
-   30 of them, several negative margins cancelling the heading rhythm, and
-   seven separate copies of font-size:1.1rem. They were the visible symptom
-   of the missing scale, so they belong here now that there is one. */
+/* ---- top bar ---------------------------------------------------------- */
 
-/* A note that belongs to the heading directly above it. */
-.section-note { margin: calc(var(--s2) * -1) 0 var(--s4); }
-/* A note that qualifies the block above it. */
-.footnote { margin-top: var(--s3); }
-/* A block that is a new thought, not a continuation. */
-.stack-top { margin-top: var(--s5); }
-/* The last thing on a page, usually a link out to the raw data. */
-.page-end { margin-top: var(--s6); }
+header.topbar {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--s4);
+  align-items: center;
+  justify-content: space-between;
+  padding: var(--s3) var(--s5);
+  border-bottom: 1px solid var(--rule);
+  background: var(--ground);
+  position: sticky;
+  top: 0;
+  z-index: 5;
+}
 
-/* Panels set their own padding, so the first and last child inside one must
-   not add their own margins on top of it. */
-.panel > :first-child { margin-top: 0; }
-.panel > :last-child { margin-bottom: 0; }
+.brand {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--s2);
+  font-weight: var(--w-semi);
+  letter-spacing: -.01em;
+  text-decoration: none;
+}
+/* The mark is two bars and a gap: a reading, at the smallest size that still
+   reads as one. */
+.brand-mark {
+  width: 14px;
+  height: 14px;
+  border-radius: var(--r-1);
+  background: linear-gradient(var(--ink) 0 45%, transparent 45% 55%, var(--ink) 55% 100%);
+}
 
-/* One label style for every eyebrow in the app: the name on a metric card,
-   the key on a stat, the title on an insight, a table header, the summary on
-   the methodology block. Four sizes and two capitalisations before this pass,
-   and the metric card - the thing on screen most often - was the odd one out
-   at 13px sentence case. */
+.tabs { display: flex; gap: var(--s4); align-items: center; }
+.tab {
+  position: relative;
+  padding: var(--s2) 0;
+  color: var(--ink-3);
+  font-size: var(--t-sm);
+  font-weight: var(--w-semi);
+  text-decoration: none;
+  transition: color var(--speed) ease;
+}
+.tab:hover { color: var(--ink); }
+/* The current tab is marked by a rule under it rather than by a colour, so it
+   reads identically in both themes. */
+.tab.is-current { color: var(--ink); }
+.tab.is-current::after {
+  content: "";
+  position: absolute;
+  left: 0;
+  right: 0;
+  bottom: -13px;
+  height: 2px;
+  background: var(--ink);
+}
+
+.topbar-end { display: flex; align-items: center; gap: var(--s4); }
+.topbar-end form { display: flex; align-items: center; gap: var(--s3); }
+.who { color: var(--ink-3); font-size: var(--t-sm); }
+
+/* Day / Night / Auto. A segmented control rather than a sun-and-moon switch,
+   because there are three states and two of them are not opposites. */
+.theme {
+  display: inline-flex;
+  padding: 2px;
+  gap: 2px;
+  border: 1px solid var(--rule);
+  border-radius: var(--r-pill);
+  background: var(--surface);
+}
+.theme-option {
+  border: 0;
+  border-radius: var(--r-pill);
+  padding: var(--s1) var(--s3);
+  background: transparent;
+  color: var(--ink-3);
+  font: var(--w-semi) var(--t-micro)/1.4 var(--sans);
+  letter-spacing: .04em;
+  cursor: pointer;
+  transition: background var(--speed) ease, color var(--speed) ease;
+}
+.theme-option:hover { color: var(--ink); }
+.theme-option[aria-pressed="true"] { background: var(--ink); color: var(--ground); }
+
+/* ---- page furniture --------------------------------------------------- */
+
+main { max-width: 1180px; margin: 0 auto; padding: var(--s6) var(--s5) var(--s7); }
+
+.page-head { margin-bottom: var(--s5); }
+
+h1 {
+  font-size: var(--t-h1);
+  line-height: 1.15;
+  margin: 0 0 var(--s2);
+  letter-spacing: -.025em;
+  font-weight: var(--w-semi);
+}
+h2, .section-title {
+  font-size: var(--t-h2);
+  margin: var(--s6) 0 var(--s3);
+  letter-spacing: -.015em;
+  font-weight: var(--w-semi);
+}
+h3 { font-size: var(--t-body); margin: 0 0 var(--s1); font-weight: var(--w-semi); }
+
+p.lede { color: var(--ink-2); margin: 0 0 var(--s3); max-width: var(--measure); }
+.muted { color: var(--ink-3); }
+.small { font-size: var(--t-sm); }
+.freshness { color: var(--ink-3); }
+
+main p, main li, main dd { max-width: var(--measure); }
+
+/* Every label in the app: the name over a number, a stat key, a table head. */
 .card .name,
 .stat .k,
 .insight-title,
@@ -179,189 +311,189 @@ th {
   font-size: var(--t-micro);
   font-weight: var(--w-semi);
   text-transform: uppercase;
-  letter-spacing: .06em;
-  color: var(--muted);
+  letter-spacing: .08em;
+  color: var(--ink-3);
 }
 
-/* ---- buttons & chips -------------------------------------------------
- *
- * One button, three weights. There were two independent systems before this:
- * .btn from the first pages and .button added later with the arousal card,
- * differing in padding, radius, size and fill for no reason anyone could
- * name. Both names are kept so no template has to change; .button is simply
- * the quiet weight.
- *
- *   .btn              filled accent. One per view at most.
- *   .btn.secondary    quiet. Outlined, page ground.
- *   .button           quiet. Same thing, older name.
- *   .button.subtle    ghost. No fill, no border until hover.
- */
+/* Utilities, so no template carries an inline style. */
+.section-note { margin: calc(var(--s2) * -1) 0 var(--s4); }
+.footnote { margin-top: var(--s3); }
+.stack-top { margin-top: var(--s5); }
+.page-end { margin-top: var(--s6); }
+.panel > :first-child { margin-top: 0; }
+.panel > :last-child { margin-bottom: 0; }
+
+.next-link {
+  font-weight: var(--w-semi);
+  text-decoration-color: var(--rule-strong);
+}
+
+.messages { list-style: none; padding: 0; margin: 0 0 var(--s4); }
+
+/* ---- controls --------------------------------------------------------- */
 
 .btn, .button {
   display: inline-block;
   padding: var(--s2) var(--s4);
   border: 1px solid transparent;
   border-radius: var(--r-2);
-  font: inherit;
-  font-size: var(--t-sm);
-  font-weight: var(--w-semi);
-  line-height: 1.3;
+  font: var(--w-semi) var(--t-sm)/1.3 var(--sans);
   text-decoration: none;
   cursor: pointer;
   transition: background var(--speed) ease, border-color var(--speed) ease,
               color var(--speed) ease, transform var(--speed) ease;
 }
+.btn { background: var(--ink); color: var(--ground); }
+.btn:hover { background: var(--ink-2); }
 
-/* filled */
-.btn { background: var(--accent); color: var(--bg); }
-.btn:hover { background: var(--accent-hi); }
-
-/* quiet */
 .btn.secondary, .button {
-  background: transparent;
-  color: var(--text);
-  border-color: var(--line);
+  background: var(--surface);
+  color: var(--ink);
+  border-color: var(--rule);
 }
-.btn.secondary:hover, .button:hover { border-color: var(--accent); color: var(--accent); }
+.btn.secondary:hover, .button:hover { border-color: var(--ink); background: var(--surface-2); }
 
-/* ghost */
-.button.subtle { background: transparent; border-color: transparent; font-weight: var(--w-mid); color: var(--muted); }
-.button.subtle:hover { color: var(--accent); border-color: var(--line); }
+.button.subtle { background: transparent; border-color: transparent; font-weight: var(--w-mid); color: var(--ink-3); }
+.button.subtle:hover { color: var(--ink); border-color: var(--rule); background: transparent; }
 
-/* Pressed. Every interactive surface in the app moves 1px under the pointer,
-   which is the only thing standing in for the physical feedback a button
-   would otherwise have. */
 .btn:active, .button:active, .chip:active { transform: translateY(1px); }
-a.card:active { transform: translateY(0); }
 
 .chips { display: flex; flex-wrap: wrap; gap: var(--s2); margin: 0 0 var(--s5); padding: 0; list-style: none; }
 .chip {
   display: inline-block;
   padding: var(--s1) var(--s3);
-  border: 1px solid var(--line);
+  border: 1px solid var(--rule);
   border-radius: var(--r-pill);
-  color: var(--muted);
+  background: var(--surface);
+  color: var(--ink-2);
   text-decoration: none;
   font-size: var(--t-sm);
+  font-variant-numeric: tabular-nums;
   transition: background var(--speed) ease, border-color var(--speed) ease,
               color var(--speed) ease, transform var(--speed) ease;
 }
-.chip:hover { border-color: var(--accent); background: var(--accent-soft); color: var(--text); }
-.chip.active { background: var(--accent); border-color: var(--accent); color: var(--bg); font-weight: var(--w-semi); }
+.chip:hover { border-color: var(--ink); color: var(--ink); }
+.chip.active { background: var(--ink); border-color: var(--ink); color: var(--ground); font-weight: var(--w-semi); }
 
 .tag {
   display: inline-block;
-  font-size: var(--t-micro);
+  font: var(--w-semi) var(--t-micro)/1.5 var(--sans);
   text-transform: uppercase;
-  letter-spacing: .06em;
-  color: var(--muted);
-  border: 1px solid var(--line);
-  border-radius: var(--r-pill);
-  padding: 2px var(--s2);
+  letter-spacing: .08em;
+  color: var(--ink-3);
+  border: 1px solid var(--rule);
+  border-radius: var(--r-1);
+  padding: 1px var(--s2);
 }
 
-/* Imported-from-Takeout data. Visually distinct so it is never read as live. */
-.tag.legacy-tag { color: var(--warn); border-color: rgba(240, 184, 73, .45); }
-.card.legacy { border-style: dashed; }
-.card.legacy .value { color: var(--warn); }
-a.card.legacy:hover { border-color: var(--warn); }
+select {
+  background: var(--surface);
+  color: var(--ink);
+  border: 1px solid var(--rule);
+  border-radius: var(--r-2);
+  padding: var(--s2) var(--s3);
+  font-size: var(--t-sm);
+}
 
-/* ---- surface tiers ---------------------------------------------------
+/* ---- the instrument grid ---------------------------------------------
  *
- * Three levels, and the level a thing sits at says what kind of claim it is
- * making. Before this pass every container looked the same: filled panel,
- * hairline border, same radius. A measured step count and a model output
- * carried identical visual authority.
- *
- *   Tier 1, reading         a measured number, straight from the API.
- *                           The only filled tier, so readings are the most
- *                           solid objects on the page.  .card
- *   Tier 2, frame           a holder for a chart or a table. Hairline only,
- *                           so the chart is not a box inside a box.  .panel
- *   Tier 3, interpretation  something this app computed rather than read -
- *                           an insight, the arousal signal, methodology
- *                           notes. Unfilled and carried by a rail, so it
- *                           never reads as a measurement.  .insight
- *
- * A dashed border means one thing and only one thing: this reading is not
- * live measured data. Only the legacy Takeout cards carry it. Confidence is
- * said a different way - an insight that did not clear its threshold keeps a
- * neutral rail and mutes its own number - because provenance and confidence
- * are different questions and should not share a signal.
+ * The readings. One hairline grid rather than a dozen separate boxes: the
+ * 1px gap over a ruled background draws every divider, which means no cell
+ * has to know whether it sits on an edge.
  */
-
-/* ---- tier 1: readings ---- */
 
 .cards {
   display: grid;
-  gap: var(--s4);
-  grid-template-columns: repeat(auto-fill, minmax(260px, 1fr));
+  grid-template-columns: repeat(auto-fill, minmax(232px, 1fr));
+  gap: 1px;
+  /* Surface, not rule. The dividers are drawn by each cell rather than by the
+     container showing through the gaps, because the last row is rarely full
+     and a container in rule colour paints the leftover space as a slab. */
+  background: var(--surface);
+  border: 1px solid var(--rule);
+  border-radius: var(--r-3);
+  overflow: hidden;
 }
 
 .card {
-  background: var(--panel);
-  border: 1px solid var(--line);
-  border-radius: var(--r-3);
-  padding: var(--s4);
   display: flex;
   flex-direction: column;
-  min-height: 190px;
-  text-decoration: none;
+  min-height: 178px;
+  padding: var(--s4);
+  background: var(--surface);
+  /* The ring paints into the 1px gap from both sides, so neighbours share one
+     hairline and no cell needs to know whether it sits on an edge. */
+  box-shadow: 0 0 0 1px var(--rule);
   color: inherit;
-  transition: border-color var(--speed) ease, transform var(--speed) ease;
+  text-decoration: none;
+  transition: background var(--speed) ease;
 }
-a.card:hover { border-color: var(--accent); transform: translateY(-1px); }
-
-/* A card with nothing in it is not a reading, so it drops out of the filled
-   tier rather than being dimmed with opacity - which took its text below the
-   contrast floor along with everything else. */
-.card.empty { background: transparent; }
-/* A card that is a link to a data type rather than a reading: no number, no
-   sparkline, so nothing to reserve height for. */
-.card.compact { min-height: 0; }
-.card-tags { margin: var(--s2) 0 var(--s1); display: flex; flex-wrap: wrap; gap: var(--s1); }
-.card.empty .value { color: var(--muted); }
+a.card:hover { background: var(--surface-2); }
 
 .card .value {
-  font-size: var(--t-num);
-  font-weight: var(--w-num);
+  font: var(--w-semi) var(--t-num)/1.1 var(--mono);
   letter-spacing: -.03em;
-  line-height: 1.15;
-  margin-top: var(--s1);
-  /* These sit in a grid of identical cards and change on every refresh.
-     Proportional digits make them jitter between refreshes and stop them
-     lining up column to column, which is what a reader compares across. */
+  margin-top: var(--s2);
   font-variant-numeric: tabular-nums;
 }
-.card .value .unit { font-size: var(--t-sm); font-weight: var(--w-mid); color: var(--muted); margin-left: var(--s1); letter-spacing: 0; }
+.card .value .unit {
+  font: var(--w-mid) var(--t-sm)/1 var(--sans);
+  color: var(--ink-3);
+  margin-left: var(--s1);
+  letter-spacing: 0;
+}
+/* No reading is not a number, so it does not get a number's size. */
+.card .value.muted { font-size: var(--t-lead); color: var(--ink-3); }
 
-/* The placeholder for "no reading" is an em dash, and at display size and
-   weight it stops looking like punctuation and starts looking like a rule
-   across the card. Drop it to body scale: there is no number to read. */
-.card .value.muted { font-size: var(--t-lead); font-weight: var(--w-semi); }
-.card .when { font-size: var(--t-label); color: var(--muted); margin-top: var(--s1); }
-.card .spark { margin-top: auto; height: 60px; }
-.card .empty-msg { margin-top: var(--s2); font-size: var(--t-sm); color: var(--muted); line-height: 1.5; }
+.card .when { font-size: var(--t-label); color: var(--ink-3); margin-top: var(--s1); }
+.card .spark { margin-top: auto; height: 52px; }
+.card .empty-msg { margin-top: var(--s2); font-size: var(--t-sm); color: var(--ink-3); line-height: 1.5; }
 
-/* ---- tier 3: interpretations ---- */
+/* A cell with nothing in it recedes to the page ground rather than sitting
+   at surface level pretending to hold something. */
+.card.empty { background: var(--ground); }
 
-.insights-heading { margin-top: var(--s6); }
+/* Imported from a Takeout export. Dashed means one thing across the whole
+   app: not live measured data. */
+.card.legacy { background: var(--ground); }
+.card.legacy .value { color: var(--warn); }
+.tag.legacy-tag { color: var(--warn); border-color: var(--warn); }
+
+.card-tags { margin: var(--s2) 0 var(--s1); display: flex; flex-wrap: wrap; gap: var(--s1); }
+.card.compact { min-height: 0; }
+
+/* ---- derived blocks --------------------------------------------------- */
 
 .insights {
   display: grid;
-  gap: var(--s4);
+  gap: 1px;
   grid-template-columns: repeat(auto-fill, minmax(330px, 1fr));
+  background: var(--surface);
+  border: 1px solid var(--rule);
+  border-radius: var(--r-3);
+  overflow: hidden;
 }
 
+/* Carried by a rail rather than a box. The rail is the only place an insight
+   is allowed to use colour, and it is saying which way the number moved. */
 .insight {
-  background: transparent;
-  border: 1px solid var(--line);
-  border-left: 3px solid var(--line);
-  border-radius: var(--r-3);
   padding: var(--s4);
+  background: var(--surface);
+  box-shadow: 0 0 0 1px var(--rule);
+  border-left: 3px solid var(--rule-strong);
 }
 .insight.dir-up { border-left-color: var(--warn); }
 .insight.dir-down { border-left-color: var(--pos); }
+.insight.dir-neutral { border-left-color: var(--rule-strong); }
+
+.arousal { margin: var(--s5) 0 0; }
+.arousal .insight {
+  border: 1px solid var(--rule);
+  border-left: 3px solid var(--rule-strong);
+  border-radius: var(--r-3);
+  box-shadow: none;
+}
+.arousal form { margin-top: var(--s3); }
 
 .insight-head {
   display: flex;
@@ -369,251 +501,249 @@ a.card:hover { border-color: var(--accent); transform: translateY(-1px); }
   justify-content: space-between;
   gap: var(--s3);
 }
-.insight-value { font-size: var(--t-lead); font-weight: var(--w-semi); letter-spacing: -.01em;
-                 font-variant-numeric: tabular-nums; white-space: nowrap; }
-.insight-detail { margin: var(--s2) 0 0; font-size: var(--t-body); line-height: 1.5; max-width: var(--measure); }
-.insight-footnote { margin: var(--s2) 0 0; font-size: var(--t-label); line-height: 1.55; color: var(--muted); }
+.insight-title { margin: 0; }
+.insight-value {
+  font: var(--w-semi) var(--t-lead)/1.2 var(--mono);
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+  letter-spacing: -.01em;
+}
+.insight-value .unit { font-size: var(--t-sm); color: var(--ink-3); }
+.insight-detail { margin: var(--s2) 0 0; line-height: 1.5; }
+.insight-footnote { margin: var(--s2) 0 0; font-size: var(--t-label); line-height: 1.55; color: var(--ink-3); }
 
-/* An insight whose test did not clear the threshold is shown, not hidden -
-   "tested, weak, not distinguishable from chance" is more defensible than
-   silence - but it must not look like a finding. */
-.insight.inconclusive { border-left-color: var(--line); }
-.insight.inconclusive .insight-value { color: var(--muted); font-weight: var(--w-mid); }
+/* Tested and weak is worth showing, but it must not read as a finding: the
+   number goes quiet rather than the whole block being dimmed. */
+.insight.inconclusive .insight-value { color: var(--ink-3); font-weight: var(--w-mid); }
 
 .insight-meta {
-  margin: var(--s2) 0 0;
+  margin: var(--s3) 0 0;
   display: flex;
   flex-wrap: wrap;
   gap: var(--s2);
   align-items: center;
-  font-size: var(--t-micro);
+  font: var(--t-micro)/1.4 var(--mono);
+  color: var(--ink-3);
 }
 .sig {
   display: inline-block;
   text-transform: uppercase;
-  letter-spacing: .06em;
-  border-radius: var(--r-pill);
+  letter-spacing: .08em;
+  border-radius: var(--r-1);
   padding: 2px var(--s2);
-  border: 1px solid var(--line);
+  border: 1px solid var(--rule);
 }
-.sig-yes { color: var(--pos); border-color: rgba(69, 217, 192, .4); }
-.sig-no { color: var(--muted); }
+.sig-yes { color: var(--pos); border-color: var(--pos); }
+.sig-no { color: var(--ink-3); }
 /* Arithmetic on the sample - no test applies, so it is neither pass nor fail. */
-.sig-neutral { color: var(--accent); border-color: rgba(110, 168, 254, .35); }
+.sig-neutral { color: var(--ink-2); border-color: var(--rule-strong); }
 
-details.pending { margin-top: var(--s4); font-size: var(--t-sm); color: var(--muted); }
+details.pending { margin-top: var(--s5); font-size: var(--t-sm); color: var(--ink-2); }
 details.pending summary { cursor: pointer; }
 details.pending ul { margin: var(--s2) 0 0; padding-left: var(--s5); }
 details.pending li { margin-bottom: var(--s1); }
 
 details.methodology {
   margin-top: var(--s5);
-  background: transparent;
-  border: 1px solid var(--line);
-  border-left: 3px solid var(--line);
-  border-radius: var(--r-3);
-  padding: var(--s4);
+  border-top: 1px solid var(--rule);
+  padding-top: var(--s4);
 }
 details.methodology summary { cursor: pointer; }
 .methodology-body {
   display: grid;
-  gap: var(--s4);
-  grid-template-columns: repeat(auto-fit, minmax(300px, 1fr));
+  gap: var(--s4) var(--s5);
+  grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
   margin-top: var(--s4);
 }
-.method-note h3 {
-  margin: 0 0 var(--s1);
-  font-size: var(--t-sm);
-  font-weight: var(--w-semi);
-  letter-spacing: -.01em;
-}
-.method-note p { margin: 0; font-size: var(--t-sm); line-height: 1.6; color: var(--muted); max-width: var(--measure); }
+.method-note h3 { font-size: var(--t-sm); }
+.method-note p { margin: 0; font-size: var(--t-sm); line-height: 1.6; color: var(--ink-2); }
 
-/* ---- tier 2: frames, plus stats and charts ---- */
+.arousal-detail { margin-top: var(--s3); }
+.arousal-detail > summary { cursor: pointer; color: var(--ink-3); font-size: var(--t-sm); }
+.arousal-detail > summary:hover { color: var(--ink); }
+.arousal-detail table { margin-top: var(--s2); }
 
-/* Unfilled on purpose. A chart or a table inside a filled panel on a filled
-   page is a box in a box in a box; the hairline is enough to say where the
-   frame ends. */
+.limitations { padding-left: var(--s5); }
+.limitations li { margin-bottom: var(--s2); }
+.ood td, .ood th { white-space: normal; }
+
+/* ---- panels, stats, charts -------------------------------------------- */
+
 .panel {
-  background: transparent;
-  border: 1px solid var(--line);
+  background: var(--surface);
+  border: 1px solid var(--rule);
   border-radius: var(--r-3);
   padding: var(--s4);
 }
 
-.stats { display: flex; flex-wrap: wrap; gap: var(--s5); margin: 0 0 var(--s5); }
-.stat .v { font-size: var(--t-h1); font-weight: var(--w-semi); letter-spacing: -.02em; font-variant-numeric: tabular-nums; }
-.stat .v .unit { font-size: var(--t-sm); color: var(--muted); font-weight: var(--w-mid); margin-left: var(--s1); }
-/* A stat whose value is a date or a source name rather than a number: it gets
-   the slot but not the display size, which is reserved for measurements. */
+.stats {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 1px;
+  margin: 0 0 var(--s5);
+  background: var(--rule);
+  border: 1px solid var(--rule);
+  border-radius: var(--r-3);
+  overflow: hidden;
+}
+.stat { flex: 1 1 150px; padding: var(--s3) var(--s4); background: var(--surface); }
+.stat .v {
+  font: var(--w-semi) var(--t-h1)/1.15 var(--mono);
+  letter-spacing: -.03em;
+  font-variant-numeric: tabular-nums;
+  margin-top: var(--s1);
+}
+.stat .v .unit { font: var(--w-mid) var(--t-sm)/1 var(--sans); color: var(--ink-3); margin-left: var(--s1); }
+/* A date or a source name gets the slot but not the display size. */
 .stat .v.compact { font-size: var(--t-lead); letter-spacing: -.01em; }
 
-/* ---- hypnogram -------------------------------------------------------
+.chart-wrap { position: relative; width: 100%; height: 320px; }
+.chart-wrap.short { height: 220px; }
+.chart-wrap canvas { width: 100% !important; }
+
+/* ---- hypnogram --------------------------------------------------------
    One track per stage, segments positioned by percentage so the whole thing
-   reflows with the viewport. No canvas: every segment is a real element, which
-   is what gives it hover text and screen-reader output for free. */
+   reflows with the viewport. No canvas: every segment is a real element,
+   which is what gives it hover text and screen-reader output for free. */
 
 .hypno-row { margin-bottom: var(--s4); }
 .hypno-row:last-of-type { margin-bottom: var(--s1); }
 
 .hypno-label {
   font-size: var(--t-sm);
-  color: var(--text);
   margin-bottom: var(--s2);
   display: flex;
   align-items: center;
   gap: var(--s2);
 }
-.hypno-label strong { font-weight: var(--w-semi); font-variant-numeric: tabular-nums; }
+.hypno-label strong { font-family: var(--mono); font-weight: var(--w-semi); font-variant-numeric: tabular-nums; }
 .hypno-nested {
   font-size: var(--t-micro);
   text-transform: uppercase;
-  letter-spacing: .06em;
-  color: var(--muted);
-  border: 1px solid var(--line);
-  border-radius: var(--r-pill);
+  letter-spacing: .08em;
+  color: var(--ink-3);
+  border: 1px solid var(--rule);
+  border-radius: var(--r-1);
   padding: 1px var(--s2);
   cursor: help;
 }
 
 .hypno-track {
   position: relative;
-  height: 22px;
-  border-radius: var(--r-pill);
-  background: var(--panel-2);
+  height: 20px;
+  border-radius: var(--r-1);
+  background: var(--surface-2);
   overflow: hidden;
 }
-
 .hypno-seg {
   position: absolute;
   top: 0;
   bottom: 0;
-  border-radius: var(--r-0);
+  border-radius: 2px;
   /* A 30-second segment is a fraction of a percent wide; without a floor it
      would round away to nothing. */
   min-width: 2px;
 }
 
-/* Stage colours, lifted from the reference and lightened where the original
-   would disappear against a dark panel. This is a data ramp, not UI colour:
-   nothing outside the hypnogram spends these. */
-.seg-awake { background: #ff4f87; }
-.seg-restless { background: #23c26b; }
-.seg-rem { background: #71d5f5; }
-.seg-light { background: #3d7ff5; }
-.seg-deep { background: #7a5cd8; }
+/* Stage colours stay literal hex and stay here rather than in the token
+   block: they are a data ramp lifted from the reference design, not part of
+   the interface palette. Day needs its own set - the night values are tuned
+   to hold up against a dark track and several of them disappear on a light
+   one. */
+.seg-awake { background: #e0225f; }
+.seg-restless { background: #0f9a4e; }
+.seg-rem { background: #1e9fd0; }
+.seg-light { background: #2560d8; }
+.seg-deep { background: #5c3fbe; }
+
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) .seg-awake { background: #ff4f87; }
+  :root:not([data-theme="light"]) .seg-restless { background: #23c26b; }
+  :root:not([data-theme="light"]) .seg-rem { background: #71d5f5; }
+  :root:not([data-theme="light"]) .seg-light { background: #3d7ff5; }
+  :root:not([data-theme="light"]) .seg-deep { background: #7a5cd8; }
+}
+:root[data-theme="dark"] .seg-awake { background: #ff4f87; }
+:root[data-theme="dark"] .seg-restless { background: #23c26b; }
+:root[data-theme="dark"] .seg-rem { background: #71d5f5; }
+:root[data-theme="dark"] .seg-light { background: #3d7ff5; }
+:root[data-theme="dark"] .seg-deep { background: #7a5cd8; }
 
 .hypno-axis {
   display: grid;
   grid-template-columns: 1fr auto 1fr;
   align-items: start;
   margin-top: var(--s4);
-  padding-top: var(--s2);
-  border-top: 1px solid var(--line);
-  font-variant-numeric: tabular-nums;
+  padding-top: var(--s3);
+  border-top: 1px solid var(--rule);
 }
 .hypno-axis .mid { text-align: center; }
 .hypno-axis .end { text-align: right; }
-.hypno-axis .time { display: block; font-size: var(--t-sm); }
-.hypno-axis .cap { display: block; font-size: var(--t-micro); color: var(--muted); margin-top: var(--s1); }
+.hypno-axis .time { display: block; font: var(--t-sm)/1.4 var(--mono); font-variant-numeric: tabular-nums; }
+.hypno-axis .cap { display: block; font-size: var(--t-micro); color: var(--ink-3); margin-top: var(--s1); }
 
 .stage-dot {
   display: inline-block;
   width: 9px;
   height: 9px;
-  border-radius: var(--r-0);
+  border-radius: 2px;
   margin-right: var(--s2);
   vertical-align: baseline;
 }
 
-.chart-wrap { position: relative; width: 100%; height: 320px; }
-.chart-wrap.short { height: 220px; }
-.chart-wrap canvas { width: 100% !important; }
-
-/* ---- tables ---- */
+/* ---- tables ----------------------------------------------------------- */
 
 .table-scroll { overflow-x: auto; }
 table { width: 100%; border-collapse: collapse; font-size: var(--t-sm); }
-th, td { text-align: left; padding: var(--s2) var(--s3); border-bottom: 1px solid var(--line); white-space: nowrap; }
-tbody tr:hover { background: var(--panel-2); }
-td.num, th.num { text-align: right; font-variant-numeric: tabular-nums; }
+th, td { text-align: left; padding: var(--s2) var(--s3); border-bottom: 1px solid var(--rule); white-space: nowrap; }
+th { padding-bottom: var(--s1); }
+tbody tr:last-child td { border-bottom: 0; }
+tbody tr:hover { background: var(--surface-2); }
+td.num, th.num { text-align: right; }
+td.num { font-family: var(--mono); font-variant-numeric: tabular-nums; }
 
-/* ---- notices ---- */
+/* ---- notices and code -------------------------------------------------- */
 
 .notice {
   border-left: 3px solid var(--warn);
   padding: var(--s3) var(--s4);
   background: var(--notice-bg);
-  border-radius: var(--r-3);
+  border-radius: var(--r-2);
   margin: var(--s4) 0;
 }
 .notice.error { border-left-color: var(--neg); background: var(--notice-error-bg); }
 
 pre {
   background: var(--code-bg);
-  border: 1px solid var(--line);
+  border: 1px solid var(--rule);
   border-radius: var(--r-2);
   padding: var(--s4);
   overflow-x: auto;
   font-size: var(--t-label);
   line-height: 1.5;
 }
-code { font-family: ui-monospace, Consolas, monospace; }
+code { font-family: var(--mono); font-size: .95em; }
 
 dl.meta { display: grid; grid-template-columns: max-content 1fr; gap: var(--s1) var(--s4); margin: 0; }
-dl.meta dt { color: var(--muted); }
+dl.meta dt { color: var(--ink-3); font-size: var(--t-sm); }
 dl.meta dd { margin: 0; overflow-wrap: anywhere; }
 
-.messages { list-style: none; padding: 0; margin: 0 0 var(--s4); }
+/* ---- narrow viewports --------------------------------------------------- */
 
-select {
-  background: var(--panel-2);
-  color: var(--text);
-  border: 1px solid var(--line);
-  border-radius: var(--r-2);
-  padding: var(--s2) var(--s3);
-  font-size: var(--t-sm);
+@media (max-width: 720px) {
+  header.topbar { padding: var(--s3) var(--s4); gap: var(--s3); }
+  .tabs { order: 3; width: 100%; gap: var(--s5); }
+  .tab.is-current::after { bottom: -13px; }
+  main { padding: var(--s5) var(--s4) var(--s6); }
+  .who { display: none; }
 }
 
 @media (max-width: 560px) {
-  main { padding: var(--s4) var(--s4) var(--s6); }
   .cards { grid-template-columns: 1fr; }
   .chart-wrap { height: 260px; }
-  .stats { gap: var(--s4); }
 }
 
-/* --- arousal card ------------------------------------------------------- */
-/* The card that runs the WESAD-trained model against the day's heart rate.
-   Deliberately styled like an insight rather than like a metric card: it is
-   an interpretation, not a reading, and should not look as authoritative as
-   a measured number. */
-
-.arousal { margin: var(--s5) 0; }
-.arousal .insight { margin-bottom: var(--s1); }
-
-/* Neutral accent: this card must not imply good or bad news the way the
-   up/down insight colours do. */
-.insight.dir-neutral { border-left-color: var(--accent); }
-
-.arousal form { margin-top: var(--s3); }
-
-.arousal-detail { margin-top: var(--s3); }
-.arousal-detail > summary {
-  cursor: pointer;
-  color: var(--muted);
-  font-size: var(--t-sm);
-}
-.arousal-detail > summary:hover { color: var(--accent); }
-.arousal-detail table { margin-top: var(--s2); }
-
-/* The limitations list on the methodology page. Long prose, so these cells
-   wrap rather than inheriting the table default of nowrap. */
-.limitations { padding-left: var(--s5); max-width: var(--measure); }
-.limitations li { margin-bottom: var(--s2); color: var(--text); }
-.ood td, .ood th { white-space: normal; }
-
-/* Motion is minimal here by design, but the transitions and the 1px card lift
-   still honour a reduced-motion preference. */
+/* Motion here is small by design, but it still answers to the setting. */
 @media (prefers-reduced-motion: reduce) {
   *, *::before, *::after {
     animation-duration: .01ms !important;

@@ -5,33 +5,81 @@
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>{% block title %}Health Dashboard{% endblock %}</title>
 <meta name="description" content="{% block description %}A personal dashboard for one person&#39;s own Google Health API data.{% endblock %}">
-{# Renders scrollbars and form controls dark, without waiting for the CSS. #}
-<meta name="color-scheme" content="dark">
-<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect width='32' height='32' rx='7' fill='%230e1016'/%3E%3Cpath d='M4 17h5l3-7 4 14 3-9 2 2h7' fill='none' stroke='%236ea8fe' stroke-width='2.6' stroke-linecap='round' stroke-linejoin='round'/%3E%3C/svg%3E">
+{# Both themes are real, so let the browser paint native controls either way. #}
+<meta name="color-scheme" content="light dark">
+<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect width='32' height='32' rx='7' fill='%231a1917'/%3E%3Cpath d='M4 17h5l3-7 4 14 3-9 2 2h7' fill='none' stroke='%23f5f4f1' stroke-width='2.6' stroke-linecap='round' stroke-linejoin='round'/%3E%3C/svg%3E">
 <link rel="stylesheet" href="{% static 'app.css' %}">
+{% comment %}
+  Inline and before the body on purpose. A stored theme has to be on the html
+  element before the first paint, or the page renders in the system theme and
+  then flips, which is worse than not offering the choice at all.
+{% endcomment %}
+<script>
+  (function () {
+    try {
+      var saved = localStorage.getItem("theme");
+      if (saved === "light" || saved === "dark") {
+        document.documentElement.setAttribute("data-theme", saved);
+      }
+    } catch (err) {
+      /* Private mode, or storage disabled. The system theme is a fine answer. */
+    }
+  })();
+</script>
 </head>
 <body>
 
 <a class="skip-link" href="#content">Skip to content</a>
 
 <header class="topbar">
-  <a class="brand" href="/">Health Dashboard</a>
+  <a class="brand" href="/">
+    <span class="brand-mark" aria-hidden="true"></span>
+    Health Dashboard
+  </a>
+
   {% if user.is_authenticated %}
     {% comment %}
-      aria-current marks the page you are on for a screen reader, and .active
-      is the styling hook app.css already carried but nothing ever set.
+      A metric, a single day and a night all belong under Overview, so the tab
+      stays lit while you are reading down into one of them.
     {% endcomment %}
-    <nav>
-      {% with here=request.resolver_match.url_name %}
-        <a href="{% url 'health:index' %}"{% if here == "index" %} class="active" aria-current="page"{% endif %}>Overview</a>
-        <a href="{% url 'health:raw_index' %}"{% if here == "raw_index" %} class="active" aria-current="page"{% endif %}>Raw data</a>
-      {% endwith %}
-    </nav>
-    <form method="post" action="{% url 'accounts:sign_out' %}">
-      {% csrf_token %}
-      <span class="muted small">{{ user.email|default:user.username }}</span>
-      <button class="btn secondary" type="submit">Sign out</button>
-    </form>
+    {% with here=request.resolver_match.url_name %}
+      <nav class="tabs" aria-label="Sections">
+        {% if here == "index" or here == "metric" or here == "metric_day" or here == "sleep_night" %}
+          <a class="tab is-current" href="{% url 'health:index' %}" aria-current="page">Overview</a>
+        {% else %}
+          <a class="tab" href="{% url 'health:index' %}">Overview</a>
+        {% endif %}
+
+        {% if here == "insights" or here == "arousal_methodology" %}
+          <a class="tab is-current" href="{% url 'health:insights' %}" aria-current="page">Insights</a>
+        {% else %}
+          <a class="tab" href="{% url 'health:insights' %}">Insights</a>
+        {% endif %}
+
+        {% if here == "raw_index" or here == "raw" %}
+          <a class="tab is-current" href="{% url 'health:raw_index' %}" aria-current="page">Raw data</a>
+        {% else %}
+          <a class="tab" href="{% url 'health:raw_index' %}">Raw data</a>
+        {% endif %}
+      </nav>
+    {% endwith %}
+
+    <div class="topbar-end">
+      {% comment %}
+        Three states, not a two-way switch: following the system is a real
+        answer and the only one that can be right at both ends of a day.
+      {% endcomment %}
+      <div class="theme" role="group" aria-label="Theme">
+        <button class="theme-option" type="button" data-theme-set="light">Day</button>
+        <button class="theme-option" type="button" data-theme-set="dark">Night</button>
+        <button class="theme-option" type="button" data-theme-set="auto">Auto</button>
+      </div>
+      <form method="post" action="{% url 'accounts:sign_out' %}">
+        {% csrf_token %}
+        <span class="who">{{ user.email|default:user.username }}</span>
+        <button class="btn secondary" type="submit">Sign out</button>
+      </form>
+    </div>
   {% endif %}
 </header>
 
@@ -44,6 +92,7 @@
   {% block content %}{% endblock %}
 </main>
 
+<script src="{% static 'theme.js' %}"></script>
 {% block scripts %}{% endblock %}
 
 </body>
