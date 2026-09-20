@@ -1044,3 +1044,73 @@ tbody tr.is-yours td { font-weight: var(--w-semi); }
 @media (prefers-reduced-motion: reduce) {
   .loader span { opacity: .9; transform: none; }
 }
+
+/* ---- the dials ---------------------------------------------------------
+   Today against the reader's own median. The arc length is the whole message,
+   so there is no colour in here: a second encoding of a number the ring has
+   already drawn would be decoration, and the accent this app does not have.
+
+   The exception is the legacy dial, dashed and in warn, which is the same
+   provenance signal the legacy cards carry. */
+
+.rings {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(128px, 1fr));
+  gap: var(--s4);
+  margin: var(--s5) 0;
+  padding: var(--s5) var(--s4);
+  border: 1px solid var(--rule);
+  border-radius: var(--r-3);
+  background: var(--surface);
+}
+
+.ring { display: flex; flex-direction: column; align-items: center; gap: var(--s1); text-align: center; }
+
+.ring-dial { position: relative; width: 92px; height: 92px; }
+.ring-dial svg { display: block; width: 100%; height: 100%; }
+
+.ring-track, .ring-arc {
+  fill: none;
+  stroke-width: 3;
+  /* Rounded ends and a start at twelve o'clock rather than three. */
+  stroke-linecap: round;
+  transform: rotate(-90deg);
+  transform-origin: 50% 50%;
+}
+.ring-track { stroke: var(--rule); }
+.ring-arc { stroke: var(--ink); }
+
+.ring-value {
+  position: absolute;
+  inset: 0;
+  display: grid;
+  place-content: center;
+  font: var(--w-semi) var(--t-lead)/1 var(--mono);
+  font-variant-numeric: tabular-nums;
+  letter-spacing: -.02em;
+}
+
+.ring-label {
+  font-size: var(--t-micro);
+  font-weight: var(--w-semi);
+  text-transform: uppercase;
+  letter-spacing: .08em;
+  color: var(--ink-3);
+  margin-top: var(--s2);
+}
+.ring-note { font-size: var(--t-label); color: var(--ink-3); max-width: 18ch; line-height: 1.4; }
+
+/* Imported once, never updating. Dashed everywhere else in the app too. */
+.ring.is-legacy .ring-track { stroke-dasharray: 3 4; }
+.ring.is-legacy .ring-arc { stroke: var(--warn); }
+.ring.is-legacy .ring-value { color: var(--warn); }
+
+/* Nothing to draw. The dial stays as an empty track rather than a zero, which
+   would read as a measured nought. */
+.ring.is-empty .ring-value { color: var(--ink-3); font-size: var(--t-h2); }
+
+.rings-footnote { margin: calc(var(--s3) * -1) 0 var(--s5); max-width: var(--measure); }
+
+@media (max-width: 560px) {
+  .rings { grid-template-columns: repeat(2, 1fr); }
+}

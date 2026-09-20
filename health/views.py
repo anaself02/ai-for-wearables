@@ -22,6 +22,7 @@ from . import arousal as arousal_module
 from . import cache as health_cache
 from . import datatypes, insights as insights_module, metrics
 from . import fitness as fitness_module
+from . import rings as rings_module
 from . import sleep_cycles
 from .client import GoogleHealthClient, GoogleHealthError, GoogleReconnectRequired
 from .models import HistoricalMetric
@@ -210,6 +211,13 @@ def index(request):
             # how somebody's name is spelled.
             "greeting": greeting_for(timezone.localtime()),
             "name": display_name(request.user),
+            # Built from the points already fetched above, so the row of dials
+            # costs no extra round trip.
+            "rings": rings_module.build(
+                {slug: points for slug, (points, _) in loaded.items()},
+                historical,
+                timezone.localdate(),
+            ),
             "cards": cards,
             "days": days,
             "start": data["start"],

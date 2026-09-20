@@ -1,0 +1,52 @@
+{% comment %}
+  Today against the reader's own median. The arc carries the value and nothing
+  else does: there is no colour here, because the length of the arc has already
+  said the whole thing and a second encoding would only be decoration.
+
+  The one exception is the legacy dial, which is dashed and in warn. That is
+  not decoration either - it is the same provenance signal the legacy cards
+  use, and it is the difference between a reading and a souvenir.
+{% endcomment %}
+
+<div class="rings">
+  {% for ring in rings %}
+    <div class="ring{% if ring.legacy %} is-legacy{% endif %}{% if not ring.available %} is-empty{% endif %}">
+      <div class="ring-dial">
+        <svg viewBox="0 0 44 44" role="img"
+             aria-label="{{ ring.label }}{% if ring.available %}: {{ ring.display }}{% if ring.legacy %}, a sleep score out of 100 imported on {{ ring.legacy_date }} and no longer updating{% else %}{% if ring.when %} on {{ ring.when }}{% endif %}, {{ ring.percent }}% of your usual {{ ring.baseline_display }}{% endif %}{% else %}: {{ ring.note }}{% endif %}">
+          <circle class="ring-track" cx="22" cy="22" r="19"></circle>
+          {% if ring.available %}
+            <circle class="ring-arc" cx="22" cy="22" r="19"
+                    stroke-dasharray="{{ ring.dash }} {{ ring.circumference }}"></circle>
+          {% endif %}
+        </svg>
+        <span class="ring-value">{{ ring.display }}</span>
+      </div>
+
+      <span class="ring-label">{{ ring.label }}</span>
+
+      {% if ring.legacy %}
+        <span class="ring-note">
+          {% if ring.available %}
+            <span class="tag legacy-tag">legacy</span> {{ ring.legacy_date }}
+          {% else %}
+            {{ ring.note }}
+          {% endif %}
+        </span>
+      {% elif ring.available %}
+        <span class="ring-note">{% if ring.when %}{{ ring.when }} &middot; {% endif %}{{ ring.percent }}% of your usual {{ ring.baseline_display }}</span>
+      {% else %}
+        <span class="ring-note">{{ ring.note }}</span>
+      {% endif %}
+    </div>
+  {% endfor %}
+</div>
+
+<p class="rings-footnote muted small">
+  Each dial is your most recent day against your own median for the last
+  {{ days }} days, not against a target: a full ring is a typical day for you.
+  A rollup arrives some hours after the day it describes, so a dial often lands
+  on yesterday; each one says which day it is showing, and says when that day
+  is still running. The day on show is left out of its own median. The sleep score is Fitbit's, out of 100, imported once and never
+  updated since.
+</p>
