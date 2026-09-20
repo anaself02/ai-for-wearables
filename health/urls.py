@@ -21,6 +21,9 @@ app_name = "health"
 
 urlpatterns = [
     path("dashboard/", views.index, name="index"),
+    # Everything the dashboard derives rather than measures, including
+    # the arousal card, which is an interpretation and not a reading.
+    path("insights/", views.insights, name="insights"),
     # The arousal card: a POST computes today's assessment, and the
     # methodology page explains what it can and cannot mean.
     path("arousal/compute/", views.arousal_compute, name="arousal_compute"),

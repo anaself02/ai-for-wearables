@@ -601,7 +601,13 @@ class InsightSeriesTests(TestCase):
         self.assertEqual(sliced["datasets"][1]["data"], [7, 8])
 
 
-class InsightsOnDashboardTests(TestCase):
+class InsightsPageTests(TestCase):
+    """The insights page, which is where these live now.
+
+    They used to render at the bottom of the overview. They moved so that a
+    derived claim is never read as one of the measurements above it.
+    """
+
     def setUp(self):
         cache.clear()
         self.addCleanup(cache.clear)
@@ -611,17 +617,35 @@ class InsightsOnDashboardTests(TestCase):
         )
         self.client.force_login(self.user)
 
-    def _dashboard(self, rhr_points=None):
+    def _get(self, url, rhr_points=None):
         fake = mock.MagicMock()
         fake.list_data_points.side_effect = lambda dt, **kw: (
             rhr_points or [] if dt.slug == "daily-resting-heart-rate" else []
         )
         fake.daily_roll_up.return_value = []
         with mock.patch("health.views.GoogleHealthClient", return_value=fake):
-            return self.client.get("/dashboard/")
+            return self.client.get(url)
+
+    def _insights(self, rhr_points=None):
+        return self._get("/insights/", rhr_points)
+
+    def _dashboard(self, rhr_points=None):
+        return self._get("/dashboard/", rhr_points)
+
+    def test_requires_login(self):
+        self.client.logout()
+        response = self.client.get("/insights/")
+        self.assertEqual(response.status_code, 302)
+        self.assertTrue(response["Location"].startswith("/?next="))
+
+    def test_the_overview_no_longer_derives_anything(self):
+        """The split is the point: the overview carries measurements only."""
+        response = self._dashboard()
+        for derived in ("insights", "insights_pending", "methodology", "arousal"):
+            self.assertNotIn(derived, response.context)
 
     def test_section_renders_with_no_data_without_erroring(self):
-        response = self._dashboard()
+        response = self._insights()
         self.assertEqual(response.status_code, 200)
         self.assertEqual(response.context["insights"], [])
         self.assertTrue(response.context["insights_pending"])
@@ -637,7 +661,7 @@ class InsightsOnDashboardTests(TestCase):
             }
             for i in range(20)
         ]
-        response = self._dashboard(rhr_points=points)
+        response = self._insights(rhr_points=points)
         self.assertContains(response, "Methodology notes")
         self.assertContains(response, "no control group")
         self.assertContains(response, "autocorrelated")
@@ -652,7 +676,7 @@ class InsightsOnDashboardTests(TestCase):
             }
             for i in range(20)
         ]
-        response = self._dashboard(rhr_points=points)
+        response = self._insights(rhr_points=points)
         trend_insight = next(
             i for i in response.context["insights"] if i.key == "rhr-trend"
         )
@@ -670,7 +694,7 @@ class InsightsOnDashboardTests(TestCase):
             }
             for i in range(20)
         ]
-        response = self._dashboard(rhr_points=points)
+        response = self._insights(rhr_points=points)
         keys = {i.key for i in response.context["insights"]}
         self.assertIn("rhr-trend", keys)
         self.assertContains(response, "Resting heart rate trend")

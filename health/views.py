@@ -87,22 +87,30 @@ def _historical_series(readings, label, unit):
 # ---------------------------------------------------------------------------
 
 
-@login_required
-def index(request):
+def _load_window(request, window_days):
+    """Fetch every metric for one window, honouring the cache.
+
+    The overview and the insights page want the same month of points and share
+    a cache key, so whichever of the two is opened second costs no API calls.
+
+    Returns (data, response). Exactly one of them is not None: a rendered
+    reconnect page when the stored credential cannot be used, otherwise the
+    loaded points.
+    """
     credential = _credential_or_none(request)
     if credential is None or not credential.is_usable:
-        return render(
+        return None, render(
             request,
             "health/reconnect.html",
             {"detail": "No usable Google token is stored for this account."},
         )
 
-    days, start, end = _window(request, OVERVIEW_WINDOW_DAYS)
+    days, start, end = _window(request, window_days)
 
     try:
         client = GoogleHealthClient(credential)
     except GoogleReconnectRequired as exc:
-        return render(request, "health/reconnect.html", {"detail": str(exc)})
+        return None, render(request, "health/reconnect.html", {"detail": str(exc)})
 
     force = health_cache.wants_refresh(request)
 
@@ -123,14 +131,36 @@ def index(request):
         with ThreadPoolExecutor(max_workers=MAX_PARALLEL_FETCHES) as pool:
             results = list(pool.map(load, targets))
     except GoogleReconnectRequired as exc:
-        return render(request, "health/reconnect.html", {"detail": str(exc)})
+        return None, render(request, "health/reconnect.html", {"detail": str(exc)})
 
-    loaded = {
-        metric.slug: (fetched.points if fetched else [], error)
-        for metric, fetched, error in results
-    }
-    # The page is only as fresh as its least fresh card.
-    freshness = health_cache.oldest([fetched for _, fetched, _ in results])
+    return {
+        "credential": credential,
+        "days": days,
+        "start": start,
+        "end": end,
+        "loaded": {
+            metric.slug: (fetched.points if fetched else [], error)
+            for metric, fetched, error in results
+        },
+        # The page is only as fresh as its least fresh card.
+        "freshness": health_cache.oldest([fetched for _, fetched, _ in results]),
+    }, None
+
+
+@login_required
+def index(request):
+    """The overview: one card per metric, and nothing that was inferred.
+
+    Everything on this page was measured by the watch and returned by the API.
+    What the dashboard derives from those measurements lives on the insights
+    page, where it cannot be mistaken for a reading.
+    """
+    data, response = _load_window(request, OVERVIEW_WINDOW_DAYS)
+    if response is not None:
+        return response
+
+    loaded = data["loaded"]
+    days = data["days"]
     historical = _latest_historical(request.user)
 
     cards = []
@@ -167,29 +197,54 @@ def index(request):
 
         cards.append(card)
 
-    # Derived observations over the whole fetched window. Each insight decides
-    # for itself whether it has enough data, so one thin metric never blanks
-    # the section.
-    points_by_slug = {slug: points for slug, (points, _) in loaded.items()}
-    computed = insights_module.build(metrics.insight_series(points_by_slug))
-
     return render(
         request,
         "health/dashboard.html",
         {
             "cards": cards,
             "days": days,
-            "start": start,
-            "end": end,
-            "credential": credential,
-            "freshness": freshness,
+            "start": data["start"],
+            "end": data["end"],
+            "credential": data["credential"],
+            "freshness": data["freshness"],
+        },
+    )
+
+
+@login_required
+def insights(request):
+    """Everything the dashboard infers rather than measures.
+
+    Deliberately not on the overview. A reading and an interpretation of a
+    reading are different kinds of claim, and putting them in one grid invites
+    the second to borrow the authority of the first. The arousal signal lives
+    here for the same reason.
+    """
+    data, response = _load_window(request, OVERVIEW_WINDOW_DAYS)
+    if response is not None:
+        return response
+
+    # Derived observations over the whole fetched window. Each insight decides
+    # for itself whether it has enough data, so one thin metric never blanks
+    # the page.
+    points_by_slug = {slug: points for slug, (points, _) in data["loaded"].items()}
+    computed = insights_module.build(metrics.insight_series(points_by_slug))
+
+    return render(
+        request,
+        "health/insights.html",
+        {
+            "days": data["days"],
+            "start": data["start"],
+            "end": data["end"],
+            "freshness": data["freshness"],
             "insights": insights_module.available(computed),
             "insights_pending": insights_module.pending(computed),
             "methodology": insights_module.methodology(computed),
             # Read from the cache only - never computed here. Running the
             # model costs several pages of samples plus a few thousand
             # windows of feature extraction, which is not something to do
-            # behind every dashboard load. The card offers a button instead.
+            # behind every page load. The card offers a button instead.
             "arousal": arousal_module.cached_assessment(
                 request.user, timezone.localdate()),
             "arousal_day": timezone.localdate(),
@@ -210,7 +265,7 @@ def arousal_compute(request):
     be triggered by a link preview or a refresh of a GET.
     """
     if request.method != "POST":
-        return redirect("health:index")
+        return redirect("health:insights")
 
     credential = _credential_or_none(request)
     if credential is None or not credential.is_usable:
@@ -237,7 +292,7 @@ def arousal_compute(request):
             request.user, timezone.localdate(),
             "Heart-rate data could not be fetched: {}".format(exc))
 
-    return redirect("health:index")
+    return redirect("health:insights")
 
 
 @login_required

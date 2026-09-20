@@ -59,9 +59,16 @@
     {% endfor %}
   </div>
 
-  {% include "health/_arousal_card.html" %}
-
-  {% include "health/_insights.html" %}
+  {% comment %}
+    The derived layer used to sit here, under the cards. It has its own page
+    now: an interpretation should not be read as one more measurement.
+  {% endcomment %}
+  <p class="page-end">
+    <a class="next-link" href="{% url 'health:insights' %}">
+      Insights and the arousal signal
+      <span aria-hidden="true">&rarr;</span>
+    </a>
+  </p>
 {% endblock %}
 
 {% block scripts %}{% include "health/_chart_scripts.html" %}{% endblock %}
