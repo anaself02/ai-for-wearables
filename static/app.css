@@ -1125,57 +1125,39 @@ tbody tr.is-yours td { font-weight: var(--w-semi); }
    claim. The rule runs the full width of the panel, so the negative margins
    cancel the panel's own padding before the block re-adds its own. */
 
-/* A grid rather than a wrapping flex row, and for a reason worth recording:
-   the note carries a max-width so it stays inside a readable measure, and a
-   flex item whose hypothetical size is already clamped below the line width
-   never wraps - it sits beside the link instead of under it. A grid puts it on
-   its own row by declaration rather than by hoping. */
-.rings-age {
-  grid-column: 1 / -1;
-  display: grid;
-  grid-template-columns: auto 1fr;
-  align-items: center;
-  gap: var(--s3) var(--s5);
-  margin: var(--s3) calc(var(--s4) * -1) calc(var(--s5) * -1);
-  padding: var(--s4);
-  border-top: 1px solid var(--rule);
-}
+/* A circle, not a dial. There is no track and no arc because there is no
+   fraction: the number inside is the whole of it.
 
-.rings-age-pair { display: flex; align-items: center; gap: var(--s4); }
-.rings-age-figure { display: flex; flex-direction: column; gap: var(--s1); }
-.rings-age-figure .k {
-  font-size: var(--t-micro);
-  font-weight: var(--w-semi);
-  text-transform: uppercase;
-  letter-spacing: .08em;
-  color: var(--ink-3);
-}
-.rings-age-figure .n {
-  font: var(--w-semi) var(--t-num)/1 var(--mono);
-  letter-spacing: -.03em;
-  font-variant-numeric: tabular-nums;
-  color: var(--ink-3);
-}
-/* The fitness age is the answer; the calendar age is the reference it is read
-   against, so only one of them is at full contrast. Same rule as /fitness/. */
-.rings-age-figure.is-headline .n { color: var(--ink); }
-.rings-age-arrow { font-size: var(--t-h2); color: var(--ink-3); }
+   Standing in the row, two things have to keep it from being read as a dial
+   whose arc has run all the way round - because in this row's grammar a
+   complete circle means a complete arc, and a circle with no arc at all is
+   already how an empty dial is drawn.
 
-.rings-age-link { justify-self: end; font-size: var(--t-sm); white-space: nowrap; }
+   The stroke weight is the first. A 3px stroke is data everywhere else in this
+   app and a 1px stroke is structure, so a hairline circle is a frame around a
+   value rather than a track. But stroke weight only reads by comparison with
+   its neighbours, so the second signal is the rule down its left edge: the
+   divider this used to sit under, turned ninety degrees, in the same hairline
+   vocabulary the card grid is built from. */
+.ring-frame { fill: none; stroke: var(--rule-strong); stroke-width: 1; }
 
-.rings-age-note {
-  grid-column: 1 / -1;
-  margin: 0;
-  font-size: var(--t-sm);
-  color: var(--ink-2);
-  max-width: var(--measure);
+.ring.is-frame { border-left: 1px solid var(--rule); padding-left: var(--s4); }
+
+/* Below this the frame is no longer the item to the right of the dials, so the
+   rule down its left edge separates nothing and hangs in space at the start of
+   a row of its own.
+
+   785 is not a round number and is not meant to be: it is the width at which
+   five 128px tracks and their four 16px gaps stop fitting inside the panel,
+   working back through the panel's own padding and border and main's 24px
+   gutters. Tying a separator to a grid threshold is only as accurate as the
+   arithmetic, so it is written down rather than guessed at - and the reason
+   the number looks arbitrary is that auto-fit reflows on the container, which
+   a media query cannot ask about. */
+@media (max-width: 785px) {
+  .ring.is-frame { border-left: 0; padding-left: 0; }
 }
-
-.rings-footnote { margin: calc(var(--s3) * -1) 0 var(--s5); max-width: var(--measure); }
 
 @media (max-width: 560px) {
   .rings { grid-template-columns: repeat(2, 1fr); }
-  .rings-age { grid-template-columns: 1fr; }
-  .rings-age-arrow { display: none; }
-  .rings-age-link { justify-self: start; }
 }

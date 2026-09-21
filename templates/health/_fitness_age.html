@@ -1,93 +1,38 @@
 {% comment %}
-  Fitness age, on the overview, deliberately not as a dial.
+  Fitness age, in the row, in a circle that is deliberately not a dial.
 
-  A dial is a fraction of something. A fitness age is not a fraction of
-  anything, and forcing it into a ring would invent a scale on top of a number
-  that is already partly circular. So it sits below the dials, behind a
-  hairline, in the same panel: near them, and visibly not one of them.
+  The objection to a ring was that a ring is a fraction of something and a
+  fitness age is not - drawing an arc would invent a denominator. That is an
+  objection to the arc rather than to the shape, so there is no arc here: one
+  circle, drawn at a hairline, with the number inside it.
 
-  The calculation is shared with /fitness/ - one call to health.fitness.assess
-  in the view feeds both this and the arc on the VO2 max dial - but the
-  presentation is not. This is one line; the full three-card explanation stays
-  on the page that has room for it.
+  Standing in the row rather than below a rule, two things keep it from being
+  read as a dial sitting at a hundred per cent. The stroke: everywhere else in
+  this app 3px is data and 1px is structure, so a hairline circle is a frame
+  rather than a track. And the rule down its left edge, which is the divider it
+  used to sit under, turned ninety degrees - the same hairline the card grid is
+  built from, saying the same thing in the same vocabulary.
+
+  No caveat here, and no calendar age. The number carries a bound when the
+  published table cannot place it, which is legible on its own; why it is
+  bounded, and why it is partly circular, live on /fitness/, linked from the
+  footnote under the row. The aria-label still says it, because a caveat that
+  has been moved for visual quiet should not go missing for a reader who cannot
+  see the quiet.
 {% endcomment %}
 
-<div class="rings-age">
-  {% if assessment.available %}
-
-    <div class="rings-age-pair">
-      <span class="rings-age-figure">
-        <span class="k">Your age</span>
-        <span class="n">{{ assessment.age }}</span>
-      </span>
-      <span class="rings-age-arrow" aria-hidden="true">&rarr;</span>
-      <span class="rings-age-figure is-headline">
-        <span class="k">Fitness age</span>
-        <span class="n">{% if assessment.fitness_age_position == "below" %}&lt;{% elif assessment.fitness_age_position == "above" %}&gt;{% endif %}{{ assessment.fitness_age }}</span>
-      </span>
-    </div>
-
-    <a class="rings-age-link" href="{% url 'health:fitness' %}">Full method &rarr;</a>
-
-    <p class="rings-age-note">
+<div class="ring is-frame{% if not assessment.available %} is-empty{% endif %}">
+  <div class="ring-dial">
+    <svg viewBox="0 0 44 44" role="img"
+         aria-label="Fitness age{% if assessment.available %}: {% if assessment.fitness_age_position == "below" %}under {% elif assessment.fitness_age_position == "above" %}over {% endif %}{{ assessment.fitness_age }}. An estimate of aerobic capacity in years, not a biological age{% if assessment.circular %}, and partly circular: your own age is one of the inputs behind it{% endif %}{% else %}: {{ assessment.reason }}{% endif %}">
       {% comment %}
-        The bounds are tested before the difference, and not only for
-        readability: off the ends of the table the difference is None, and a
-        None comparison inside an {% templatetag openblock %} if {% templatetag closeblock %}
-        quietly evaluates false, which would print "median for your age" for a
-        reading the table cannot place at all.
+        One circle. No track and no arc, because there is no fraction being
+        drawn - the number inside is the whole of the message.
       {% endcomment %}
-      {% if assessment.fitness_age_position == "below" %}
-        Above the median for every age band this table covers, so the honest
-        answer is a bound rather than a number.
-      {% elif assessment.fitness_age_position == "above" %}
-        Below the median for every age band this table covers, so the honest
-        answer is a bound rather than a number.
-      {% elif assessment.difference > 0 %}
-        The median for someone <strong>{{ assessment.difference }} year{{ assessment.difference|pluralize }} younger</strong> than you.
-      {% elif assessment.difference < 0 %}
-        The median for someone <strong>{{ assessment.difference|cut:"-" }} year{{ assessment.difference|cut:"-"|pluralize }} older</strong> than you.
-      {% else %}
-        <strong>Median for your age.</strong>
-      {% endif %}
-      {% if assessment.circular %}
-        {% if assessment.difference is not None %}
-          Read the gap, not the number: your age is an input to the VO2 max
-          behind it, so the absolute figure partly restates your birthday.
-        {% else %}
-          There is no gap to read here - the answer came out as a bound, so
-          there is nothing to subtract. The percentile on the dial is the
-          figure carrying information.
-        {% endif %}
-      {% endif %}
-      Fitness, not biology.
-    </p>
+      <circle class="ring-frame" cx="22" cy="22" r="19"></circle>
+    </svg>
+    <span class="ring-value">{% if assessment.available %}{% if assessment.fitness_age_position == "below" %}&lt;{% elif assessment.fitness_age_position == "above" %}&gt;{% endif %}{{ assessment.fitness_age }}{% else %}&mdash;{% endif %}</span>
+  </div>
 
-  {% else %}
-
-    {% comment %}
-      An absent block would read as a page that never had the feature. It says
-      what is missing instead, and where to fix it when that is possible.
-    {% endcomment %}
-    <div class="rings-age-pair">
-      <span class="rings-age-figure">
-        <span class="k">Fitness age</span>
-        <span class="n">&mdash;</span>
-      </span>
-    </div>
-
-    {% comment %}
-      A user with no Profile row at all is the same case as one with a blank
-      profile, and it is the case a brand new account is in - so the test is
-      "is there a usable profile", not "is there a row". Getting this wrong
-      sends the one reader who can fix the problem to the page that explains
-      it rather than the page with the form.
-    {% endcomment %}
-    <a class="rings-age-link" href="{% if not profile.is_complete %}{% url 'accounts:settings' %}{% else %}{% url 'health:fitness' %}{% endif %}">
-      {% if not profile.is_complete %}Add your date of birth and sex &rarr;{% else %}Full method &rarr;{% endif %}
-    </a>
-
-    <p class="rings-age-note">{{ assessment.reason }}</p>
-
-  {% endif %}
+  <span class="ring-label">Fitness age</span>
 </div>
