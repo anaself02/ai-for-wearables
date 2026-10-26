@@ -1,0 +1,5 @@
+sleep_log_entry_id,timestamp,overall_score,composition_score,revitalization_score,duration_score,deep_sleep_in_minutes,resting_heart_rate,restlessness
+53548224804,2026-09-11T11:56:30Z,78,,79,,109,53,0.15758896151053015
+53538975788,2026-09-10T10:25:00Z,83,,84,,145,53,0.13825275657336725
+53529111222,2026-09-09T12:02:00,71,60,72,80,88,55,0.2011
+53519000111,2026-09-08T11:40:00Z,,,,,,54,0.19

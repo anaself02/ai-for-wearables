@@ -1,0 +1,114 @@
+{% load static %}<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>{% block title %}Health Dashboard{% endblock %}</title>
+<meta name="description" content="{% block description %}A personal dashboard for one person&#39;s own Google Health API data.{% endblock %}">
+{# Both themes are real, so let the browser paint native controls either way. #}
+<meta name="color-scheme" content="light dark">
+<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24'%3E%3Crect width='24' height='24' rx='5' fill='%231b1a18'/%3E%3Crect x='5' y='5.5' width='10' height='3' rx='1.5' fill='%23f4f3f0'/%3E%3Crect x='9' y='10.5' width='10' height='3' rx='1.5' fill='%23f4f3f0'/%3E%3Crect x='5' y='15.5' width='7' height='3' rx='1.5' fill='%23f4f3f0'/%3E%3C/svg%3E">
+<link rel="stylesheet" href="{% static 'app.css' %}">
+{% comment %}
+  Inline and before the body on purpose. A stored theme has to be on the html
+  element before the first paint, or the page renders in the system theme and
+  then flips, which is worse than not offering the choice at all.
+{% endcomment %}
+<script>
+  (function () {
+    try {
+      var saved = localStorage.getItem("theme");
+      if (saved === "light" || saved === "dark") {
+        document.documentElement.setAttribute("data-theme", saved);
+      }
+    } catch (err) {
+      /* Private mode, or storage disabled. The system theme is a fine answer. */
+    }
+  })();
+</script>
+{% block head %}{% endblock %}
+</head>
+<body>
+
+<a class="skip-link" href="#content">Skip to content</a>
+
+{% block chrome %}
+<header class="topbar">
+  <a class="brand" href="/">
+    {% include "_mark.html" with class="brand-mark" %}
+    Health Dashboard
+  </a>
+
+  {% if user.is_authenticated %}
+    {% comment %}
+      A metric, a single day and a night all belong under Overview, so the tab
+      stays lit while you are reading down into one of them.
+    {% endcomment %}
+    {% with here=request.resolver_match.url_name %}
+      <nav class="tabs" aria-label="Sections">
+        {% if here == "index" or here == "metric" or here == "metric_day" or here == "sleep_night" %}
+          <a class="tab is-current" href="{% url 'health:index' %}" aria-current="page">Overview</a>
+        {% else %}
+          <a class="tab" href="{% url 'health:index' %}">Overview</a>
+        {% endif %}
+
+        {% if here == "insights" or here == "arousal_methodology" %}
+          <a class="tab is-current" href="{% url 'health:insights' %}" aria-current="page">Insights</a>
+        {% else %}
+          <a class="tab" href="{% url 'health:insights' %}">Insights</a>
+        {% endif %}
+
+        {% if here == "fitness" or here == "settings" %}
+          <a class="tab is-current" href="{% url 'health:fitness' %}" aria-current="page">Fitness</a>
+        {% else %}
+          <a class="tab" href="{% url 'health:fitness' %}">Fitness</a>
+        {% endif %}
+
+        {% if here == "sleep_calculator" %}
+          <a class="tab is-current" href="{% url 'health:sleep_calculator' %}" aria-current="page">Sleep</a>
+        {% else %}
+          <a class="tab" href="{% url 'health:sleep_calculator' %}">Sleep</a>
+        {% endif %}
+
+        {% if here == "raw_index" or here == "raw" %}
+          <a class="tab is-current" href="{% url 'health:raw_index' %}" aria-current="page">Raw data</a>
+        {% else %}
+          <a class="tab" href="{% url 'health:raw_index' %}">Raw data</a>
+        {% endif %}
+      </nav>
+    {% endwith %}
+
+    <div class="topbar-end">
+      {% comment %}
+        Three states, not a two-way switch: following the system is a real
+        answer and the only one that can be right at both ends of a day.
+      {% endcomment %}
+      <div class="theme" role="group" aria-label="Theme">
+        <button class="theme-option" type="button" data-theme-set="light">Day</button>
+        <button class="theme-option" type="button" data-theme-set="dark">Night</button>
+        <button class="theme-option" type="button" data-theme-set="auto">Auto</button>
+      </div>
+      <form method="post" action="{% url 'accounts:sign_out' %}">
+        {% csrf_token %}
+        <span class="who">{{ user.email|default:user.username }}</span>
+        <button class="btn secondary" type="submit">Sign out</button>
+      </form>
+    </div>
+  {% endif %}
+</header>
+{% endblock %}
+
+<main id="content">
+  {% if messages %}
+    <ul class="messages">
+      {% for message in messages %}<li class="muted">{{ message }}</li>{% endfor %}
+    </ul>
+  {% endif %}
+  {% block content %}{% endblock %}
+</main>
+
+<script src="{% static 'theme.js' %}"></script>
+{% block scripts %}{% endblock %}
+
+</body>
+</html>

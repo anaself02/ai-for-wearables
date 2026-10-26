@@ -1,0 +1,86 @@
+{% extends "base.html" %}
+{% block title %}Insights - Health Dashboard{% endblock %}
+{% block description %}Patterns computed from one person&#39;s own readings, each reported with the test behind it.{% endblock %}
+
+{% comment %}
+  Everything on this page was derived. Nothing here was measured, which is the
+  whole reason it is not on the overview: the page says so once, at the top,
+  and then every block on it is free to be as specific as it likes.
+{% endcomment %}
+
+{% block content %}
+  <div class="page-head">
+    <h1>Insights</h1>
+    <p class="lede">
+      Computed from the last {{ days }} days of your own readings, {{ start }} to
+      {{ end }}. Observed patterns in one person&#39;s data, each reported with the
+      test behind it. Not clinical findings.
+    </p>
+    {% include "health/_freshness.html" %}
+  </div>
+
+  {% include "health/_arousal_card.html" %}
+
+  {% if insights %}
+    <h2 class="section-title">Patterns over {{ days }} days</h2>
+    <div class="insights">
+      {% for insight in insights %}
+        <article class="insight {% if insight.direction %}dir-{{ insight.direction }}{% endif %}{% if not insight.is_significant %} inconclusive{% endif %}">
+          <div class="insight-head">
+            <h3 class="insight-title">{{ insight.title }}</h3>
+            {% if insight.value is not None %}
+              <span class="insight-value">{{ insight.value }}{% if insight.unit %} <span class="unit">{{ insight.unit }}</span>{% endif %}</span>
+            {% endif %}
+          </div>
+          <p class="insight-detail">{{ insight.detail }}</p>
+          <p class="insight-meta">
+            {% comment %}
+              Three states, not two: an arithmetic summary is not a failed test.
+            {% endcomment %}
+            <span class="sig sig-{% if insight.is_significant %}yes{% elif insight.significance == "descriptive" %}neutral{% else %}no{% endif %}">{{ insight.significance }}</span>
+            <span class="muted">n = {{ insight.sample_size }}</span>
+          </p>
+          {% if insight.footnote %}
+            <p class="insight-footnote">{{ insight.footnote }}</p>
+          {% endif %}
+        </article>
+      {% endfor %}
+    </div>
+  {% endif %}
+
+  {% if not insights and not insights_pending %}
+    <div class="notice">
+      There is nothing to compute yet. These patterns need a few weeks of
+      readings before any of them can say anything worth reading.
+    </div>
+  {% endif %}
+
+  {% if insights_pending %}
+    <details class="pending">
+      <summary>{{ insights_pending|length }} insight{{ insights_pending|pluralize }} waiting for more data</summary>
+      <ul>
+        {% for insight in insights_pending %}
+          <li><strong>{{ insight.title }}</strong> &mdash; {{ insight.note }}</li>
+        {% endfor %}
+      </ul>
+    </details>
+  {% endif %}
+
+  {% if methodology %}
+    <details class="methodology" open>
+      <summary>Methodology notes</summary>
+      <div class="methodology-body">
+        {% for note in methodology %}
+          <div class="method-note">
+            <h3>{{ note.heading }}</h3>
+            <p>{{ note.body }}</p>
+          </div>
+        {% endfor %}
+      </div>
+    </details>
+  {% endif %}
+
+  <p class="small muted page-end">
+    <a href="{% url 'health:index' %}">&larr; Back to the measurements</a>
+  </p>
+{% endblock %}

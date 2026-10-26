@@ -1,0 +1,116 @@
+{% comment %}
+  The arousal card: the dashboard's action/feedback layer, showing what the
+  WESAD-trained heart-rate model makes of today's readings.
+
+  Structural rule for this template: the headline and its caveat are rendered
+  by the SAME branch. There is no path through this file that prints a state
+  label without the caveat line and the link to the methodology page beside
+  it. health/test_arousal.py asserts that, so it stays true.
+{% endcomment %}
+
+<section class="arousal" aria-labelledby="arousal-heading">
+  <h2 id="arousal-heading" class="section-title">Arousal signal</h2>
+
+  {% if not arousal %}
+
+    {# Nothing computed yet for today. Not an error - the model is expensive #}
+    {# enough that it is run on request rather than on every page load.      #}
+    <div class="insight">
+      <div class="insight-head">
+        <span class="insight-title">Not computed yet</span>
+      </div>
+      <p class="insight-detail">
+        Runs a model trained on the WESAD research dataset against today's
+        wrist heart rate. It reads several thousand samples and scores about
+        2,800 sixty-second windows, so it runs when you ask rather than on
+        every page load.
+      </p>
+      <form method="post" action="{% url 'health:arousal_compute' %}">
+        {% csrf_token %}
+        <button type="submit" class="button">Run for {{ arousal_day }}</button>
+      </form>
+      <p class="insight-footnote">
+        <a href="{% url 'health:arousal_methodology' %}">How this works, and what it cannot tell you</a>
+      </p>
+    </div>
+
+  {% elif not arousal.available %}
+
+    {# Something was missing. Say exactly what, rather than showing nothing. #}
+    <div class="insight inconclusive">
+      <div class="insight-head">
+        <span class="insight-title">No assessment available</span>
+      </div>
+      <p class="insight-detail">{{ arousal.reason }}</p>
+      <form method="post" action="{% url 'health:arousal_compute' %}">
+        {% csrf_token %}
+        <button type="submit" class="button">Try again</button>
+      </form>
+      <p class="insight-footnote">
+        <a href="{% url 'health:arousal_methodology' %}">How this works, and what it cannot tell you</a>
+      </p>
+    </div>
+
+  {% else %}
+
+    <div class="insight dir-neutral">
+      <div class="insight-head">
+        {# Plain-language label. The raw class names - "stress", "amusement" #}
+        {# - would claim far more than wrist heart rate can support.         #}
+        <span class="insight-title">{{ arousal.headline }}</span>
+        <span class="insight-value sig sig-no">{{ arousal.confidence }}</span>
+      </div>
+
+      <p class="insight-detail">{{ arousal.explanation }}</p>
+
+      {# The caveat is not optional decoration: it is rendered here, in the  #}
+      {# same block as the headline, precisely so the two cannot come apart. #}
+      <p class="insight-detail muted">{{ arousal.caveat }}</p>
+
+      <p class="insight-meta">
+        <span class="muted">{{ arousal.n_windows }} windows on {{ arousal.day }}</span>
+        <span class="muted">mean {{ arousal.mean_bpm|floatformat:0 }} bpm</span>
+      </p>
+
+      <details class="arousal-detail">
+        <summary>How far outside the training data today's readings sit</summary>
+        <p class="muted small">
+          The model is an RBF-kernel SVM, which judges by distance in feature
+          space. Readings outside the range it was fitted on do not degrade
+          gracefully - they land wherever happens to be nearest. Each row is
+          one feature: how many of today's windows fall outside the range seen
+          in training, and how far today's middle sits from the training
+          average, counted in training standard deviations.
+        </p>
+        <table class="ood">
+          <thead>
+            <tr>
+              <th>Feature</th>
+              <th>Outside training range</th>
+              <th>Median shift</th>
+            </tr>
+          </thead>
+          <tbody>
+            {% for row in arousal.ood_rows %}
+              <tr>
+                <td><code>{{ row.feature }}</code></td>
+                <td>{{ row.share_outside|floatformat:3 }}</td>
+                <td>{{ row.median_shift|floatformat:2 }} sd</td>
+              </tr>
+            {% endfor %}
+          </tbody>
+        </table>
+      </details>
+
+      <p class="insight-footnote">
+        <a href="{% url 'health:arousal_methodology' %}">How this works, and what it cannot tell you</a>
+      </p>
+
+      <form method="post" action="{% url 'health:arousal_compute' %}">
+        {% csrf_token %}
+        <button type="submit" class="button subtle">Recompute</button>
+      </form>
+    </div>
+
+  {% endif %}
+</section>

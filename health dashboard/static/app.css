@@ -1,0 +1,1163 @@
+/* Health dashboard - visual system.
+ *
+ * The direction, in one line: an instrument panel, not a set of cards.
+ *
+ * Three rules hold the rest of this file together.
+ *
+ *   1. Colour means data. The interface itself is monochrome - text, rules,
+ *      fills and the pressed state are all ink on ground. Nothing is tinted
+ *      to look designed. When something on this page is coloured, the colour
+ *      is carrying information: a sleep stage, a direction of travel, a
+ *      failed request. That is also why there is no brand accent to collide
+ *      with the data colours, which is what the old blue chrome did.
+ *
+ *   2. Numbers are set in mono, prose is not. Every figure lines up with the
+ *      figure above it, and a reader can compare a column without reading it.
+ *
+ *   3. Structure is drawn with hairlines, not with boxes. Twelve floating
+ *      rounded rectangles is the look of a template; one ruled grid is the
+ *      look of an instrument.
+ *
+ * Both themes are first-class. Day and Night are the same design with the
+ * ground and the ink exchanged, and every colour below is defined for both.
+ */
+
+/* ---- tokens: day ------------------------------------------------------ */
+
+:root {
+  color-scheme: light;
+
+  /* space: one 4px scale */
+  --s1: 4px;
+  --s2: 8px;
+  --s3: 12px;
+  --s4: 16px;
+  --s5: 24px;
+  --s6: 32px;
+  --s7: 48px;
+
+  /* radius: tighter than before, because less is rounded now */
+  --r-1: 4px;
+  --r-2: 8px;
+  --r-3: 12px;
+  --r-pill: 999px;
+
+  /* type */
+  --sans: ui-sans-serif, system-ui, "Segoe UI", Roboto, sans-serif;
+  --mono: ui-monospace, "SF Mono", "Cascadia Mono", "Segoe UI Mono", Menlo, Consolas, monospace;
+
+  --t-micro: 11px;
+  --t-label: 12px;
+  --t-sm: 13px;
+  --t-body: 15px;
+  --t-lead: 17px;
+  --t-h2: 20px;
+  --t-h1: 30px;
+  --t-num: 32px;
+
+  --w-mid: 500;
+  --w-semi: 600;
+
+  /* surfaces: warm neutral, one grey family */
+  --ground: #f4f3f0;
+  --surface: #fbfaf8;
+  --surface-2: #eeece7;
+  --rule: #e2dfd9;
+  --rule-strong: #cdc9c1;
+
+  /* ink */
+  --ink: #1b1a18;
+  --ink-2: #55514a;
+  --ink-3: #6e6a62;
+
+  /* data colours. These are the only colours in the system, and every one of
+     them means something. */
+  --pos: #0d8a7c;
+  --warn: #a97a12;
+  --neg: #c0413f;
+  --data-4: #4550c2;
+  --data-5: #7d45b0;
+  --chart-grid: rgba(0, 0, 0, .09);
+
+  /* tinted grounds for the two states that need one */
+  --notice-bg: #f8f1dc;
+  --notice-error-bg: #fbeceb;
+  --code-bg: #f1efeb;
+
+  --measure: 68ch;
+  --speed: .15s;
+}
+
+/* ---- tokens: night ---------------------------------------------------- */
+
+/* Defined twice on purpose: once for a system that asks for dark and has not
+   been overridden, once for an explicit choice of Night. Without the second
+   block the toggle could turn dark on but never back off. */
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) {
+    color-scheme: dark;
+
+    --ground: #121110;
+    --surface: #1a1917;
+    --surface-2: #232120;
+    --rule: #2e2b28;
+    --rule-strong: #454039;
+
+    --ink: #eceae6;
+    --ink-2: #a9a49c;
+    --ink-3: #8d887f;
+
+    --pos: #45d9c0;
+    --warn: #f0b849;
+    --neg: #f2777a;
+    --data-4: #9aa7ff;
+    --data-5: #c58cf0;
+    --chart-grid: rgba(255, 255, 255, .07);
+
+    --notice-bg: #211d13;
+    --notice-error-bg: #241618;
+    --code-bg: #0d0c0b;
+  }
+}
+
+:root[data-theme="dark"] {
+  color-scheme: dark;
+
+  --ground: #121110;
+  --surface: #1a1917;
+  --surface-2: #232120;
+  --rule: #2e2b28;
+  --rule-strong: #454039;
+
+  --ink: #eceae6;
+  --ink-2: #a9a49c;
+  --ink-3: #8d887f;
+
+  --pos: #45d9c0;
+  --warn: #f0b849;
+  --neg: #f2777a;
+  --data-4: #9aa7ff;
+  --data-5: #c58cf0;
+  --chart-grid: rgba(255, 255, 255, .07);
+
+  --notice-bg: #211d13;
+  --notice-error-bg: #241618;
+  --code-bg: #0d0c0b;
+}
+
+/* ---- base ------------------------------------------------------------- */
+
+* { box-sizing: border-box; }
+
+body {
+  margin: 0;
+  background: var(--ground);
+  color: var(--ink);
+  font: var(--t-body)/1.55 var(--sans);
+  -webkit-font-smoothing: antialiased;
+}
+
+/* Monochrome chrome means links cannot be identified by colour, so they are
+   identified the way print does it: an underline that is quieter than the
+   text until you are on it. */
+a {
+  color: inherit;
+  text-decoration: underline;
+  text-decoration-color: var(--rule-strong);
+  text-underline-offset: 3px;
+  transition: text-decoration-color var(--speed) ease;
+}
+a:hover { text-decoration-color: currentColor; }
+
+:focus-visible {
+  outline: 2px solid var(--ink);
+  outline-offset: 2px;
+}
+
+.skip-link {
+  position: absolute;
+  left: var(--s3);
+  top: calc(var(--s7) * -1);
+  z-index: 10;
+  padding: var(--s2) var(--s3);
+  background: var(--ink);
+  color: var(--ground);
+  border-radius: var(--r-2);
+  font-weight: var(--w-semi);
+  text-decoration: none;
+  transition: top var(--speed) ease;
+}
+.skip-link:focus { top: var(--s3); }
+
+/* ---- top bar ---------------------------------------------------------- */
+
+header.topbar {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--s4);
+  align-items: center;
+  justify-content: space-between;
+  padding: var(--s3) var(--s5);
+  border-bottom: 1px solid var(--rule);
+  background: var(--ground);
+  position: sticky;
+  top: 0;
+  z-index: 5;
+}
+
+.brand {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--s2);
+  font-weight: var(--w-semi);
+  letter-spacing: -.01em;
+  text-decoration: none;
+}
+/* The mark is an SVG in templates/_mark.html, drawn in currentColor, so these
+   rules only have to say how big it is. */
+.brand-mark { width: 18px; height: 18px; display: block; }
+
+/* Segmented buttons, built from the same parts as the Day/Night/Auto control
+   on the other end of the bar: one pill, hairline border, the current choice
+   filled in ink. Two controls that do the same kind of job should not look
+   like two different ideas. */
+.tabs {
+  display: inline-flex;
+  gap: 2px;
+  padding: 2px;
+  align-items: center;
+  border: 1px solid var(--rule);
+  border-radius: var(--r-pill);
+  background: var(--surface);
+}
+.tab {
+  padding: var(--s1) var(--s4);
+  border-radius: var(--r-pill);
+  color: var(--ink-3);
+  font-size: var(--t-sm);
+  font-weight: var(--w-semi);
+  text-decoration: none;
+  white-space: nowrap;
+  transition: background var(--speed) ease, color var(--speed) ease;
+}
+.tab:hover { color: var(--ink); background: var(--surface-2); }
+.tab.is-current { background: var(--ink); color: var(--ground); }
+
+.topbar-end { display: flex; align-items: center; gap: var(--s4); }
+.topbar-end form { display: flex; align-items: center; gap: var(--s3); }
+.who { color: var(--ink-3); font-size: var(--t-sm); }
+
+/* Day / Night / Auto. A segmented control rather than a sun-and-moon switch,
+   because there are three states and two of them are not opposites. */
+.theme {
+  display: inline-flex;
+  padding: 2px;
+  gap: 2px;
+  border: 1px solid var(--rule);
+  border-radius: var(--r-pill);
+  background: var(--surface);
+}
+.theme-option {
+  border: 0;
+  border-radius: var(--r-pill);
+  padding: var(--s1) var(--s3);
+  background: transparent;
+  color: var(--ink-3);
+  font: var(--w-semi) var(--t-micro)/1.4 var(--sans);
+  letter-spacing: .04em;
+  cursor: pointer;
+  transition: background var(--speed) ease, color var(--speed) ease;
+}
+.theme-option:hover { color: var(--ink); }
+.theme-option[aria-pressed="true"] { background: var(--ink); color: var(--ground); }
+
+/* ---- page furniture --------------------------------------------------- */
+
+main { max-width: 1180px; margin: 0 auto; padding: var(--s6) var(--s5) var(--s7); }
+
+.page-head { margin-bottom: var(--s5); }
+
+h1 {
+  font-size: var(--t-h1);
+  line-height: 1.15;
+  margin: 0 0 var(--s2);
+  letter-spacing: -.025em;
+  font-weight: var(--w-semi);
+}
+h2, .section-title {
+  font-size: var(--t-h2);
+  margin: var(--s6) 0 var(--s3);
+  letter-spacing: -.015em;
+  font-weight: var(--w-semi);
+}
+h3 { font-size: var(--t-body); margin: 0 0 var(--s1); font-weight: var(--w-semi); }
+
+p.lede { color: var(--ink-2); margin: 0 0 var(--s3); max-width: var(--measure); }
+.muted { color: var(--ink-3); }
+.small { font-size: var(--t-sm); }
+.freshness { color: var(--ink-3); }
+
+main p, main li, main dd { max-width: var(--measure); }
+
+/* Every label in the app: the name over a number, a stat key, a table head. */
+.card .name,
+.stat .k,
+.insight-title,
+details.methodology summary,
+th {
+  font-size: var(--t-micro);
+  font-weight: var(--w-semi);
+  text-transform: uppercase;
+  letter-spacing: .08em;
+  color: var(--ink-3);
+}
+
+/* Utilities, so no template carries an inline style. */
+.section-note { margin: calc(var(--s2) * -1) 0 var(--s4); }
+.footnote { margin-top: var(--s3); }
+.stack-top { margin-top: var(--s5); }
+.page-end { margin-top: var(--s6); }
+.panel > :first-child { margin-top: 0; }
+.panel > :last-child { margin-bottom: 0; }
+
+.next-link {
+  font-weight: var(--w-semi);
+  text-decoration-color: var(--rule-strong);
+}
+
+.messages { list-style: none; padding: 0; margin: 0 0 var(--s4); }
+
+/* ---- controls --------------------------------------------------------- */
+
+.btn, .button {
+  display: inline-block;
+  padding: var(--s2) var(--s4);
+  border: 1px solid transparent;
+  border-radius: var(--r-2);
+  font: var(--w-semi) var(--t-sm)/1.3 var(--sans);
+  text-decoration: none;
+  cursor: pointer;
+  transition: background var(--speed) ease, border-color var(--speed) ease,
+              color var(--speed) ease, transform var(--speed) ease;
+}
+.btn { background: var(--ink); color: var(--ground); }
+.btn:hover { background: var(--ink-2); }
+
+.btn.secondary, .button {
+  background: var(--surface);
+  color: var(--ink);
+  border-color: var(--rule);
+}
+.btn.secondary:hover, .button:hover { border-color: var(--ink); background: var(--surface-2); }
+
+.button.subtle { background: transparent; border-color: transparent; font-weight: var(--w-mid); color: var(--ink-3); }
+.button.subtle:hover { color: var(--ink); border-color: var(--rule); background: transparent; }
+
+.btn:active, .button:active, .chip:active { transform: translateY(1px); }
+
+.chips { display: flex; flex-wrap: wrap; gap: var(--s2); margin: 0 0 var(--s5); padding: 0; list-style: none; }
+.chip {
+  display: inline-block;
+  padding: var(--s1) var(--s3);
+  border: 1px solid var(--rule);
+  border-radius: var(--r-pill);
+  background: var(--surface);
+  color: var(--ink-2);
+  text-decoration: none;
+  font-size: var(--t-sm);
+  font-variant-numeric: tabular-nums;
+  transition: background var(--speed) ease, border-color var(--speed) ease,
+              color var(--speed) ease, transform var(--speed) ease;
+}
+.chip:hover { border-color: var(--ink); color: var(--ink); }
+.chip.active { background: var(--ink); border-color: var(--ink); color: var(--ground); font-weight: var(--w-semi); }
+
+.tag {
+  display: inline-block;
+  font: var(--w-semi) var(--t-micro)/1.5 var(--sans);
+  text-transform: uppercase;
+  letter-spacing: .08em;
+  color: var(--ink-3);
+  border: 1px solid var(--rule);
+  border-radius: var(--r-1);
+  padding: 1px var(--s2);
+}
+
+select {
+  background: var(--surface);
+  color: var(--ink);
+  border: 1px solid var(--rule);
+  border-radius: var(--r-2);
+  padding: var(--s2) var(--s3);
+  font-size: var(--t-sm);
+}
+
+/* ---- the instrument grid ---------------------------------------------
+ *
+ * The readings. One hairline grid rather than a dozen separate boxes: the
+ * 1px gap over a ruled background draws every divider, which means no cell
+ * has to know whether it sits on an edge.
+ */
+
+.cards {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(232px, 1fr));
+  gap: 1px;
+  /* Surface, not rule. The dividers are drawn by each cell rather than by the
+     container showing through the gaps, because the last row is rarely full
+     and a container in rule colour paints the leftover space as a slab. */
+  background: var(--surface);
+  border: 1px solid var(--rule);
+  border-radius: var(--r-3);
+  overflow: hidden;
+}
+
+.card {
+  display: flex;
+  flex-direction: column;
+  min-height: 178px;
+  padding: var(--s4);
+  background: var(--surface);
+  /* The ring paints into the 1px gap from both sides, so neighbours share one
+     hairline and no cell needs to know whether it sits on an edge. */
+  box-shadow: 0 0 0 1px var(--rule);
+  color: inherit;
+  text-decoration: none;
+  transition: background var(--speed) ease;
+}
+a.card:hover { background: var(--surface-2); }
+
+.card .value {
+  font: var(--w-semi) var(--t-num)/1.1 var(--mono);
+  letter-spacing: -.03em;
+  margin-top: var(--s2);
+  font-variant-numeric: tabular-nums;
+}
+.card .value .unit {
+  font: var(--w-mid) var(--t-sm)/1 var(--sans);
+  color: var(--ink-3);
+  margin-left: var(--s1);
+  letter-spacing: 0;
+}
+/* No reading is not a number, so it does not get a number's size. */
+.card .value.muted { font-size: var(--t-lead); color: var(--ink-3); }
+
+.card .when { font-size: var(--t-label); color: var(--ink-3); margin-top: var(--s1); }
+.card .spark { margin-top: auto; height: 52px; }
+.card .empty-msg { margin-top: var(--s2); font-size: var(--t-sm); color: var(--ink-3); line-height: 1.5; }
+
+/* A cell with nothing in it recedes to the page ground rather than sitting
+   at surface level pretending to hold something. */
+.card.empty { background: var(--ground); }
+
+/* Imported from a Takeout export. Dashed means one thing across the whole
+   app: not live measured data. */
+.card.legacy { background: var(--ground); }
+.card.legacy .value { color: var(--warn); }
+.tag.legacy-tag { color: var(--warn); border-color: var(--warn); }
+
+.card-tags { margin: var(--s2) 0 var(--s1); display: flex; flex-wrap: wrap; gap: var(--s1); }
+.card.compact { min-height: 0; }
+
+/* ---- derived blocks --------------------------------------------------- */
+
+.insights {
+  display: grid;
+  gap: 1px;
+  grid-template-columns: repeat(auto-fill, minmax(330px, 1fr));
+  background: var(--surface);
+  border: 1px solid var(--rule);
+  border-radius: var(--r-3);
+  overflow: hidden;
+}
+
+/* Carried by a rail rather than a box. The rail is the only place an insight
+   is allowed to use colour, and it is saying which way the number moved. */
+.insight {
+  padding: var(--s4);
+  background: var(--surface);
+  box-shadow: 0 0 0 1px var(--rule);
+  border-left: 3px solid var(--rule-strong);
+}
+.insight.dir-up { border-left-color: var(--warn); }
+.insight.dir-down { border-left-color: var(--pos); }
+.insight.dir-neutral { border-left-color: var(--rule-strong); }
+
+.arousal { margin: var(--s5) 0 0; }
+.arousal .insight {
+  border: 1px solid var(--rule);
+  border-left: 3px solid var(--rule-strong);
+  border-radius: var(--r-3);
+  box-shadow: none;
+}
+.arousal form { margin-top: var(--s3); }
+
+.insight-head {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: var(--s3);
+}
+.insight-title { margin: 0; }
+.insight-value {
+  font: var(--w-semi) var(--t-lead)/1.2 var(--mono);
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+  letter-spacing: -.01em;
+}
+.insight-value .unit { font-size: var(--t-sm); color: var(--ink-3); }
+.insight-detail { margin: var(--s2) 0 0; line-height: 1.5; }
+.insight-footnote { margin: var(--s2) 0 0; font-size: var(--t-label); line-height: 1.55; color: var(--ink-3); }
+
+/* Tested and weak is worth showing, but it must not read as a finding: the
+   number goes quiet rather than the whole block being dimmed. */
+.insight.inconclusive .insight-value { color: var(--ink-3); font-weight: var(--w-mid); }
+
+.insight-meta {
+  margin: var(--s3) 0 0;
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--s2);
+  align-items: center;
+  font: var(--t-micro)/1.4 var(--mono);
+  color: var(--ink-3);
+}
+.sig {
+  display: inline-block;
+  text-transform: uppercase;
+  letter-spacing: .08em;
+  border-radius: var(--r-1);
+  padding: 2px var(--s2);
+  border: 1px solid var(--rule);
+}
+.sig-yes { color: var(--pos); border-color: var(--pos); }
+.sig-no { color: var(--ink-3); }
+/* Arithmetic on the sample - no test applies, so it is neither pass nor fail. */
+.sig-neutral { color: var(--ink-2); border-color: var(--rule-strong); }
+
+details.pending { margin-top: var(--s5); font-size: var(--t-sm); color: var(--ink-2); }
+details.pending summary { cursor: pointer; }
+details.pending ul { margin: var(--s2) 0 0; padding-left: var(--s5); }
+details.pending li { margin-bottom: var(--s1); }
+
+details.methodology {
+  margin-top: var(--s5);
+  border-top: 1px solid var(--rule);
+  padding-top: var(--s4);
+}
+details.methodology summary { cursor: pointer; }
+.methodology-body {
+  display: grid;
+  gap: var(--s4) var(--s5);
+  grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
+  margin-top: var(--s4);
+}
+.method-note h3 { font-size: var(--t-sm); }
+.method-note p { margin: 0; font-size: var(--t-sm); line-height: 1.6; color: var(--ink-2); }
+
+.arousal-detail { margin-top: var(--s3); }
+.arousal-detail > summary { cursor: pointer; color: var(--ink-3); font-size: var(--t-sm); }
+.arousal-detail > summary:hover { color: var(--ink); }
+.arousal-detail table { margin-top: var(--s2); }
+
+.limitations { padding-left: var(--s5); }
+.limitations li { margin-bottom: var(--s2); }
+.ood td, .ood th { white-space: normal; }
+
+/* ---- panels, stats, charts -------------------------------------------- */
+
+.panel {
+  background: var(--surface);
+  border: 1px solid var(--rule);
+  border-radius: var(--r-3);
+  padding: var(--s4);
+}
+
+.stats {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 1px;
+  margin: 0 0 var(--s5);
+  background: var(--rule);
+  border: 1px solid var(--rule);
+  border-radius: var(--r-3);
+  overflow: hidden;
+}
+.stat { flex: 1 1 150px; padding: var(--s3) var(--s4); background: var(--surface); }
+.stat .v {
+  font: var(--w-semi) var(--t-h1)/1.15 var(--mono);
+  letter-spacing: -.03em;
+  font-variant-numeric: tabular-nums;
+  margin-top: var(--s1);
+}
+.stat .v .unit { font: var(--w-mid) var(--t-sm)/1 var(--sans); color: var(--ink-3); margin-left: var(--s1); }
+/* A date or a source name gets the slot but not the display size. */
+.stat .v.compact { font-size: var(--t-lead); letter-spacing: -.01em; }
+
+.chart-wrap { position: relative; width: 100%; height: 320px; }
+.chart-wrap.short { height: 220px; }
+.chart-wrap canvas { width: 100% !important; }
+
+/* ---- hypnogram --------------------------------------------------------
+   One track per stage, segments positioned by percentage so the whole thing
+   reflows with the viewport. No canvas: every segment is a real element,
+   which is what gives it hover text and screen-reader output for free. */
+
+.hypno-row { margin-bottom: var(--s4); }
+.hypno-row:last-of-type { margin-bottom: var(--s1); }
+
+.hypno-label {
+  font-size: var(--t-sm);
+  margin-bottom: var(--s2);
+  display: flex;
+  align-items: center;
+  gap: var(--s2);
+}
+.hypno-label strong { font-family: var(--mono); font-weight: var(--w-semi); font-variant-numeric: tabular-nums; }
+.hypno-nested {
+  font-size: var(--t-micro);
+  text-transform: uppercase;
+  letter-spacing: .08em;
+  color: var(--ink-3);
+  border: 1px solid var(--rule);
+  border-radius: var(--r-1);
+  padding: 1px var(--s2);
+  cursor: help;
+}
+
+.hypno-track {
+  position: relative;
+  height: 20px;
+  border-radius: var(--r-1);
+  background: var(--surface-2);
+  overflow: hidden;
+}
+.hypno-seg {
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  border-radius: 2px;
+  /* A 30-second segment is a fraction of a percent wide; without a floor it
+     would round away to nothing. */
+  min-width: 2px;
+}
+
+/* Stage colours stay literal hex and stay here rather than in the token
+   block: they are a data ramp lifted from the reference design, not part of
+   the interface palette. Day needs its own set - the night values are tuned
+   to hold up against a dark track and several of them disappear on a light
+   one. */
+.seg-awake { background: #e0225f; }
+.seg-restless { background: #0f9a4e; }
+.seg-rem { background: #1e9fd0; }
+.seg-light { background: #2560d8; }
+.seg-deep { background: #5c3fbe; }
+
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) .seg-awake { background: #ff4f87; }
+  :root:not([data-theme="light"]) .seg-restless { background: #23c26b; }
+  :root:not([data-theme="light"]) .seg-rem { background: #71d5f5; }
+  :root:not([data-theme="light"]) .seg-light { background: #3d7ff5; }
+  :root:not([data-theme="light"]) .seg-deep { background: #7a5cd8; }
+}
+:root[data-theme="dark"] .seg-awake { background: #ff4f87; }
+:root[data-theme="dark"] .seg-restless { background: #23c26b; }
+:root[data-theme="dark"] .seg-rem { background: #71d5f5; }
+:root[data-theme="dark"] .seg-light { background: #3d7ff5; }
+:root[data-theme="dark"] .seg-deep { background: #7a5cd8; }
+
+.hypno-axis {
+  display: grid;
+  grid-template-columns: 1fr auto 1fr;
+  align-items: start;
+  margin-top: var(--s4);
+  padding-top: var(--s3);
+  border-top: 1px solid var(--rule);
+}
+.hypno-axis .mid { text-align: center; }
+.hypno-axis .end { text-align: right; }
+.hypno-axis .time { display: block; font: var(--t-sm)/1.4 var(--mono); font-variant-numeric: tabular-nums; }
+.hypno-axis .cap { display: block; font-size: var(--t-micro); color: var(--ink-3); margin-top: var(--s1); }
+
+.stage-dot {
+  display: inline-block;
+  width: 9px;
+  height: 9px;
+  border-radius: 2px;
+  margin-right: var(--s2);
+  vertical-align: baseline;
+}
+
+/* ---- tables ----------------------------------------------------------- */
+
+.table-scroll { overflow-x: auto; }
+table { width: 100%; border-collapse: collapse; font-size: var(--t-sm); }
+th, td { text-align: left; padding: var(--s2) var(--s3); border-bottom: 1px solid var(--rule); white-space: nowrap; }
+th { padding-bottom: var(--s1); }
+tbody tr:last-child td { border-bottom: 0; }
+tbody tr:hover { background: var(--surface-2); }
+td.num, th.num { text-align: right; }
+td.num { font-family: var(--mono); font-variant-numeric: tabular-nums; }
+
+/* ---- notices and code -------------------------------------------------- */
+
+.notice {
+  border-left: 3px solid var(--warn);
+  padding: var(--s3) var(--s4);
+  background: var(--notice-bg);
+  border-radius: var(--r-2);
+  margin: var(--s4) 0;
+}
+.notice.error { border-left-color: var(--neg); background: var(--notice-error-bg); }
+
+pre {
+  background: var(--code-bg);
+  border: 1px solid var(--rule);
+  border-radius: var(--r-2);
+  padding: var(--s4);
+  overflow-x: auto;
+  font-size: var(--t-label);
+  line-height: 1.5;
+}
+code { font-family: var(--mono); font-size: .95em; }
+
+dl.meta { display: grid; grid-template-columns: max-content 1fr; gap: var(--s1) var(--s4); margin: 0; }
+dl.meta dt { color: var(--ink-3); font-size: var(--t-sm); }
+dl.meta dd { margin: 0; overflow-wrap: anywhere; }
+
+/* ---- narrow viewports --------------------------------------------------- */
+
+@media (max-width: 720px) {
+  header.topbar { padding: var(--s3) var(--s4); gap: var(--s3); }
+  .tabs { order: 3; width: 100%; justify-content: space-between; }
+  .tab { padding: var(--s1) var(--s3); }
+  main { padding: var(--s5) var(--s4) var(--s6); }
+  .who { display: none; }
+}
+
+@media (max-width: 560px) {
+  .cards { grid-template-columns: 1fr; }
+  .chart-wrap { height: 260px; }
+}
+
+/* Motion here is small by design, but it still answers to the setting. */
+@media (prefers-reduced-motion: reduce) {
+  *, *::before, *::after {
+    animation-duration: .01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: .01ms !important;
+  }
+}
+
+/* ---- forms ------------------------------------------------------------- */
+
+.field { margin-bottom: var(--s4); max-width: 34ch; }
+.field label {
+  display: block;
+  font-size: var(--t-micro);
+  font-weight: var(--w-semi);
+  text-transform: uppercase;
+  letter-spacing: .08em;
+  color: var(--ink-3);
+  margin-bottom: var(--s1);
+}
+.field input, .field select {
+  width: 100%;
+  background: var(--ground);
+  color: var(--ink);
+  border: 1px solid var(--rule);
+  border-radius: var(--r-2);
+  padding: var(--s2) var(--s3);
+  font: var(--t-body)/1.4 var(--sans);
+}
+.field input:focus-visible, .field select:focus-visible { border-color: var(--ink); }
+/* Label above, help under the control, error under that: one order everywhere. */
+.field-help { margin: var(--s1) 0 0; font-size: var(--t-label); color: var(--ink-3); }
+.field-error { margin: var(--s1) 0 0; font-size: var(--t-label); color: var(--neg); }
+
+.settings-form { max-width: 46ch; }
+
+/* ---- the sleep calculator ---------------------------------------------- */
+
+.wake-form {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--s3);
+  padding: var(--s3) var(--s4);
+  border: 1px solid var(--rule);
+  border-radius: var(--r-3);
+  background: var(--surface);
+}
+.wake-form label {
+  font-size: var(--t-micro);
+  font-weight: var(--w-semi);
+  text-transform: uppercase;
+  letter-spacing: .08em;
+  color: var(--ink-3);
+}
+.wake-form input {
+  background: var(--ground);
+  color: var(--ink);
+  border: 1px solid var(--rule);
+  border-radius: var(--r-2);
+  padding: var(--s2) var(--s3);
+  font: var(--w-semi) var(--t-lead)/1.2 var(--mono);
+}
+
+.cycle-columns {
+  display: grid;
+  gap: var(--s5) var(--s6);
+  grid-template-columns: repeat(auto-fit, minmax(300px, 1fr));
+  align-items: start;
+}
+
+.bedtimes {
+  border: 1px solid var(--rule);
+  border-radius: var(--r-3);
+  overflow: hidden;
+  background: var(--surface);
+}
+/* One row per option, hairline between. The clock is the thing being read, so
+   it gets the display size and everything else stays out of its way. */
+.bedtime {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: var(--s3);
+  padding: var(--s3) var(--s4);
+  border-top: 1px solid var(--rule);
+}
+.bedtime:first-child { border-top: 0; }
+.bedtime-cycles {
+  font-size: var(--t-micro);
+  font-weight: var(--w-semi);
+  text-transform: uppercase;
+  letter-spacing: .08em;
+  color: var(--ink-3);
+  flex: 0 0 auto;
+}
+.bedtime-clock {
+  font: var(--w-semi) var(--t-num)/1.1 var(--mono);
+  letter-spacing: -.03em;
+  font-variant-numeric: tabular-nums;
+  margin-left: auto;
+}
+.bedtime-length { font-size: var(--t-label); color: var(--ink-3); flex: 0 0 auto; }
+
+/* The reader's own row in a table of population norms. */
+tbody tr.is-yours { background: var(--surface-2); }
+tbody tr.is-yours td { font-weight: var(--w-semi); }
+
+/* ---- the two-age comparison -------------------------------------------
+   Calendar age beside fitness age, which is the comparison people actually
+   come here for. The verdict sentence sits under both so the numbers are
+   never read without it. */
+
+.age-compare {
+  display: grid;
+  grid-template-columns: auto auto auto 1fr;
+  align-items: center;
+  gap: var(--s4) var(--s5);
+  padding: var(--s5);
+  border: 1px solid var(--rule);
+  border-radius: var(--r-3);
+  background: var(--surface);
+}
+.age-figure { display: flex; flex-direction: column; gap: var(--s1); }
+.age-figure .k {
+  font-size: var(--t-micro);
+  font-weight: var(--w-semi);
+  text-transform: uppercase;
+  letter-spacing: .08em;
+  color: var(--ink-3);
+}
+.age-number {
+  font: var(--w-semi) 56px/1 var(--mono);
+  letter-spacing: -.04em;
+  font-variant-numeric: tabular-nums;
+  color: var(--ink-3);
+}
+/* The fitness age is the answer; the calendar age is the reference it is read
+   against, so only one of them is at full contrast. */
+.age-figure.is-headline .age-number { color: var(--ink); }
+.age-gap { font-size: var(--t-h2); color: var(--ink-3); }
+.age-verdict {
+  grid-column: 1 / -1;
+  margin: 0;
+  padding-top: var(--s4);
+  border-top: 1px solid var(--rule);
+  max-width: var(--measure);
+}
+
+@media (max-width: 560px) {
+  .age-compare { grid-template-columns: auto auto; }
+  .age-gap { display: none; }
+  .age-number { font-size: 44px; }
+}
+
+/* ---- the front door ----------------------------------------------------
+   No top bar, no navigation, nothing to sell. One mark, one sentence about
+   what this is, and the way in. */
+
+.landing {
+  max-width: 44ch;
+  margin: 0 auto;
+  padding: var(--s7) 0;
+  text-align: center;
+}
+.landing-mark {
+  width: 56px;
+  height: 56px;
+  margin: 0 auto var(--s5);
+  color: var(--ink);
+}
+.landing h1 { font-size: var(--t-h1); margin: 0 0 var(--s3); }
+.landing-line {
+  color: var(--ink-2);
+  font-size: var(--t-lead);
+  line-height: 1.45;
+  margin: 0 auto var(--s6);
+  max-width: 38ch;
+}
+.landing-note {
+  color: var(--ink-3);
+  font-size: var(--t-sm);
+  line-height: 1.55;
+  margin: var(--s6) auto 0;
+  max-width: 42ch;
+}
+
+/* ---- Sign in with Google -----------------------------------------------
+ *
+ * Built to Google's identity branding guidelines rather than to this app's
+ * button style, because the guidelines are a condition of using the mark:
+ *
+ *   text     "Sign in with Google", one of the three permitted strings
+ *   light    #FFFFFF ground, #747775 1px inside border, #1F1F1F text
+ *   dark     #131314 ground, #8E918F 1px inside border, #E3E3E3 text
+ *   padding  12px before the logo, 10px after it, 12px after the text
+ *   logo     the colour "G", unmodified, never monochrome and never recoloured
+ *
+ * This is the one place in the app where colour is not data and where a
+ * hardcoded hex is correct: the palette belongs to Google, so it does not
+ * move with the theme tokens. The light and dark variants are switched on the
+ * app's own theme so the button always sits on a ground it is approved for.
+ *
+ * The mark is the published asset, pasted unmodified into the template and
+ * pinned by accounts/test_landing.py.
+ *
+ * Two deviations from Google's reference CSS, recorded rather than hidden:
+ *
+ *   font-family    theirs is 'Roboto', arial, sans-serif. This project ships
+ *                  no webfonts by decision, so it uses the system sans at the
+ *                  same 14px/20px, weight 500, letter-spacing .25px.
+ *   border-radius  theirs is 4px. This app has one radius scale and controls
+ *                  sit at --r-2, so the button matches its neighbours rather
+ *                  than importing a second shape language.
+ *
+ * Everything else - the colours, the 40px height, the 12/10/12 padding, the
+ * 20px icon box, the string - follows the published button.
+ */
+
+.gsi-button {
+  display: inline-flex;
+  align-items: center;
+  gap: 10px;
+  height: 40px;
+  padding: 0 12px;
+  border: 1px solid #747775;
+  border-radius: var(--r-2);
+  background: #ffffff;
+  color: #1f1f1f;
+  font: var(--w-mid) 14px/20px var(--sans);
+  letter-spacing: .25px;
+  text-decoration: none;
+  transition: box-shadow var(--speed) ease, background var(--speed) ease;
+}
+.gsi-button:hover { background: #f7f8f8; box-shadow: 0 1px 2px rgba(0, 0, 0, .18); }
+.gsi-button:active { transform: translateY(1px); }
+/* 20px, which is the size Google's own button CSS gives the icon box. The
+   guidelines forbid resizing the mark, so this follows their number rather
+   than one of ours. */
+.gsi-icon { display: block; width: 20px; height: 20px; min-width: 20px; }
+.gsi-icon svg { display: block; width: 20px; height: 20px; }
+
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) .gsi-button {
+    background: #131314;
+    border-color: #8e918f;
+    color: #e3e3e3;
+  }
+  :root:not([data-theme="light"]) .gsi-button:hover { background: #1c1c1d; }
+}
+:root[data-theme="dark"] .gsi-button {
+  background: #131314;
+  border-color: #8e918f;
+  color: #e3e3e3;
+}
+:root[data-theme="dark"] .gsi-button:hover { background: #1c1c1d; }
+
+/* ---- the moment after signing in ---------------------------------------
+   Covers the cold-cache fetch the dashboard is about to need. Everything here
+   is ink on ground: a greeting has no data in it, so it gets no colour. */
+
+.welcome {
+  min-height: 62vh;
+  display: grid;
+  place-content: center;
+  justify-items: center;
+  gap: var(--s5);
+  text-align: center;
+}
+.welcome-greeting {
+  font-size: var(--t-h1);
+  font-weight: var(--w-semi);
+  letter-spacing: -.025em;
+  margin: 0;
+  text-wrap: balance;
+}
+.welcome-sub { margin: 0; color: var(--ink-3); font-size: var(--t-sm); }
+
+/* The mark's three bars, at 24 -> 64 scale, with the same offsets and widths.
+   They ease from the left as a readout settling rather than spinning: nothing
+   here is pretending to measure progress, because nothing can. */
+.loader { width: 64px; display: flex; flex-direction: column; gap: 6px; }
+.loader span {
+  height: 5px;
+  border-radius: 2.5px;
+  background: var(--ink);
+  transform-origin: left center;
+  animation: settle 1.5s ease-in-out infinite;
+}
+.loader span:nth-child(1) { margin-left: 13px; width: 27px; animation-delay: 0s; }
+.loader span:nth-child(2) { margin-left: 24px; width: 27px; animation-delay: .18s; }
+.loader span:nth-child(3) { margin-left: 13px; width: 19px; animation-delay: .36s; }
+
+@keyframes settle {
+  0%, 100% { opacity: .22; transform: scaleX(.7); }
+  50%      { opacity: 1;   transform: scaleX(1); }
+}
+
+/* The global reduced-motion rule stops the animation but would leave the bars
+   frozen at their faintest keyframe. Hold them at the mark instead. */
+@media (prefers-reduced-motion: reduce) {
+  .loader span { opacity: .9; transform: none; }
+}
+
+/* ---- the dials ---------------------------------------------------------
+   Today against the reader's own median. The arc length is the whole message,
+   so there is no colour in here: a second encoding of a number the ring has
+   already drawn would be decoration, and the accent this app does not have.
+
+   The exception is the legacy dial, dashed and in warn, which is the same
+   provenance signal the legacy cards carry. */
+
+.rings {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(128px, 1fr));
+  gap: var(--s4);
+  margin: var(--s5) 0;
+  padding: var(--s5) var(--s4);
+  border: 1px solid var(--rule);
+  border-radius: var(--r-3);
+  background: var(--surface);
+}
+
+.ring { display: flex; flex-direction: column; align-items: center; gap: var(--s1); text-align: center; }
+
+.ring-dial { position: relative; width: 92px; height: 92px; }
+.ring-dial svg { display: block; width: 100%; height: 100%; }
+
+.ring-track, .ring-arc {
+  fill: none;
+  stroke-width: 3;
+  /* Rounded ends and a start at twelve o'clock rather than three. */
+  stroke-linecap: round;
+  transform: rotate(-90deg);
+  transform-origin: 50% 50%;
+}
+.ring-track { stroke: var(--rule); }
+.ring-arc { stroke: var(--ink); }
+
+.ring-value {
+  position: absolute;
+  inset: 0;
+  display: grid;
+  place-content: center;
+  font: var(--w-semi) var(--t-lead)/1 var(--mono);
+  font-variant-numeric: tabular-nums;
+  letter-spacing: -.02em;
+}
+
+.ring-label {
+  font-size: var(--t-micro);
+  font-weight: var(--w-semi);
+  text-transform: uppercase;
+  letter-spacing: .08em;
+  color: var(--ink-3);
+  margin-top: var(--s2);
+}
+.ring-note { font-size: var(--t-label); color: var(--ink-3); max-width: 18ch; line-height: 1.4; }
+
+/* Imported once, never updating. Dashed everywhere else in the app too. */
+.ring.is-legacy .ring-track { stroke-dasharray: 3 4; }
+.ring.is-legacy .ring-arc { stroke: var(--warn); }
+.ring.is-legacy .ring-value { color: var(--warn); }
+
+/* Nothing to draw. The dial stays as an empty track rather than a zero, which
+   would read as a measured nought. */
+.ring.is-empty .ring-value { color: var(--ink-3); font-size: var(--t-h2); }
+
+/* A legacy dial carries two notes - when it froze, and what it is a fraction
+   of - so they need a gap between them rather than running together. */
+.ring .ring-note + .ring-note { margin-top: calc(var(--s1) * -1); }
+
+/* The provenance line is a tag and a date, and an ISO date broken across two
+   lines after the month reads as two different numbers. It is allowed past the
+   note's measure rather than past its own meaning. */
+.ring-provenance { max-width: none; white-space: nowrap; }
+
+/* ---- fitness age, in the same panel and visibly not a dial --------------
+   A ring is a fraction of something and a fitness age is not a fraction of
+   anything, so it does not get one. It sits behind a hairline at the foot of
+   the panel: adjacent to the dials, and unmistakably a different kind of
+   claim. The rule runs the full width of the panel, so the negative margins
+   cancel the panel's own padding before the block re-adds its own. */
+
+/* A circle, not a dial. There is no track and no arc because there is no
+   fraction: the number inside is the whole of it.
+
+   Standing in the row, two things have to keep it from being read as a dial
+   whose arc has run all the way round - because in this row's grammar a
+   complete circle means a complete arc, and a circle with no arc at all is
+   already how an empty dial is drawn.
+
+   The stroke weight is the first. A 3px stroke is data everywhere else in this
+   app and a 1px stroke is structure, so a hairline circle is a frame around a
+   value rather than a track. But stroke weight only reads by comparison with
+   its neighbours, so the second signal is the rule down its left edge: the
+   divider this used to sit under, turned ninety degrees, in the same hairline
+   vocabulary the card grid is built from. */
+.ring-frame { fill: none; stroke: var(--rule-strong); stroke-width: 1; }
+
+.ring.is-frame { border-left: 1px solid var(--rule); padding-left: var(--s4); }
+
+/* Below this the frame is no longer the item to the right of the dials, so the
+   rule down its left edge separates nothing and hangs in space at the start of
+   a row of its own.
+
+   785 is not a round number and is not meant to be: it is the width at which
+   five 128px tracks and their four 16px gaps stop fitting inside the panel,
+   working back through the panel's own padding and border and main's 24px
+   gutters. Tying a separator to a grid threshold is only as accurate as the
+   arithmetic, so it is written down rather than guessed at - and the reason
+   the number looks arbitrary is that auto-fit reflows on the container, which
+   a media query cannot ask about. */
+@media (max-width: 785px) {
+  .ring.is-frame { border-left: 0; padding-left: 0; }
+}
+
+@media (max-width: 560px) {
+  .rings { grid-template-columns: repeat(2, 1fr); }
+}

@@ -1,0 +1,59 @@
+{% comment %}
+  The arc carries the value and nothing else does: there is no colour here,
+  because the length of the arc has already said the whole thing and a second
+  encoding would only be decoration.
+
+  The one exception is a legacy dial, which is dashed and in warn. That is not
+  decoration either - it is the same provenance signal the legacy cards use,
+  and it is the difference between a reading and a souvenir.
+
+  Each dial names its own denominator, because they are not all the same one.
+  Steps and Active divide by the reader's own median; VO2 max by a published
+  norm table; the sleep score by the hundred Fitbit chose.
+{% endcomment %}
+
+<div class="rings">
+  {% for ring in rings %}
+    <div class="ring{% if ring.legacy %} is-legacy{% endif %}{% if not ring.available %} is-empty{% endif %}">
+      <div class="ring-dial">
+        <svg viewBox="0 0 44 44" role="img"
+             aria-label="{{ ring.label }}{% if ring.available %}: {{ ring.display }}{% if ring.legacy %}, imported {{ ring.legacy_date }} and no longer updating{% elif ring.when %}, {{ ring.when }}{% endif %}{% if ring.comparison %}, {{ ring.comparison }}{% endif %}{% else %}: {{ ring.note }}{% endif %}">
+          <circle class="ring-track" cx="22" cy="22" r="19"></circle>
+          {% if ring.available %}
+            <circle class="ring-arc" cx="22" cy="22" r="19"
+                    stroke-dasharray="{{ ring.dash }} {{ ring.circumference }}"></circle>
+          {% endif %}
+        </svg>
+        <span class="ring-value">{{ ring.display }}</span>
+      </div>
+
+      <span class="ring-label">{{ ring.label }}</span>
+
+      {% if ring.legacy %}
+        {% comment %}
+          Two lines, not one. The provenance and the comparison are different
+          claims - when a reading was frozen, and what it is a fraction of -
+          and collapsing them would drop whichever mattered more.
+        {% endcomment %}
+        <span class="ring-note{% if ring.legacy_date %} ring-provenance{% endif %}">
+          {% if ring.legacy_date %}
+            <span class="tag legacy-tag">legacy</span> {{ ring.legacy_date }}
+          {% else %}
+            {{ ring.note }}
+          {% endif %}
+        </span>
+        {% if ring.comparison %}
+          <span class="ring-note">{{ ring.comparison }}</span>
+        {% elif ring.legacy_date and ring.note %}
+          <span class="ring-note">{{ ring.note }}</span>
+        {% endif %}
+      {% elif ring.available %}
+        <span class="ring-note">{% if ring.when %}{{ ring.when }} &middot; {% endif %}{{ ring.comparison }}</span>
+      {% else %}
+        <span class="ring-note">{{ ring.note }}</span>
+      {% endif %}
+    </div>
+  {% endfor %}
+
+  {% include "health/_fitness_age.html" %}
+</div>

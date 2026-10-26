@@ -1,0 +1,35 @@
+{% extends "base.html" %}
+{% block title %}{{ metric.label }} - {{ day }}{% endblock %}
+
+{% block content %}
+  <p class="small"><a href="{% url 'health:metric' metric.slug %}?days=30">&larr; {{ metric.label }}</a></p>
+  <h1>{{ metric.label }} &middot; {{ day }}</h1>
+  <p class="lede">
+    Full-resolution samples from <code>{{ data_type.slug }}</code>
+    {% if count is not None %}&middot; {{ count }} point{{ count|pluralize }}{% endif %}
+  </p>
+
+  {% include "health/_freshness.html" %}
+
+  <ul class="chips">
+    <li><a class="chip" href="{% url 'health:metric_day' metric.slug prev_day|date:'Y-m-d' %}">&larr; {{ prev_day }}</a></li>
+    <li><a class="chip" href="{% url 'health:metric_day' metric.slug next_day|date:'Y-m-d' %}">{{ next_day }} &rarr;</a></li>
+  </ul>
+
+  {% if error %}
+    <div class="notice error"><strong>{{ error }}</strong></div>
+  {% elif series_json %}
+    {% with cid="day-"|add:metric.slug %}
+      {{ series|json_script:cid }}
+      <div class="panel">
+        <div class="chart-wrap">
+          <canvas data-chart="{{ cid }}" data-kind="line" data-unit="{{ metric.unit }}"></canvas>
+        </div>
+      </div>
+    {% endwith %}
+  {% else %}
+    <div class="notice">No samples recorded on this day.</div>
+  {% endif %}
+{% endblock %}
+
+{% block scripts %}{% include "health/_chart_scripts.html" %}{% endblock %}

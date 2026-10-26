@@ -1,0 +1,19 @@
+{% comment %}
+  The app mark: three offset bars, which is the sleep timeline on the night
+  page reduced until it is still recognisable at sixteen pixels. Abstract, and
+  nothing is borrowed from anyone - deliberately not the pulse line that every
+  health product reaches for.
+
+  Monochrome, in currentColor, because the interface has no accent to spend:
+  colour in this app means data, and a logo is not data. It inherits ink, so
+  it works in Day and Night without a second copy.
+
+  Include with a class for sizing:
+    {% templatetag openblock %} include "_mark.html" with class="brand-mark" {% templatetag closeblock %}
+{% endcomment %}
+<svg class="{{ class|default:'mark' }}" viewBox="0 0 24 24" fill="none"
+     xmlns="http://www.w3.org/2000/svg" aria-hidden="true" focusable="false">
+  <rect x="5" y="5.5" width="10" height="3" rx="1.5" fill="currentColor"/>
+  <rect x="9" y="10.5" width="10" height="3" rx="1.5" fill="currentColor"/>
+  <rect x="5" y="15.5" width="7" height="3" rx="1.5" fill="currentColor"/>
+</svg>
