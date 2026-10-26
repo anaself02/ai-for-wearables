@@ -1,0 +1,57 @@
+{
+  "feature_set": "full",
+  "n_features": 40,
+  "feature_names": [
+    "EDA_mean",
+    "EDA_std",
+    "EDA_min",
+    "EDA_max",
+    "EDA_slope",
+    "TEMP_mean",
+    "TEMP_std",
+    "TEMP_min",
+    "TEMP_max",
+    "TEMP_slope",
+    "BVP_mean",
+    "BVP_std",
+    "BVP_min",
+    "BVP_max",
+    "BVP_slope",
+    "ACC_x_mean",
+    "ACC_x_std",
+    "ACC_x_min",
+    "ACC_x_max",
+    "ACC_x_slope",
+    "ACC_y_mean",
+    "ACC_y_std",
+    "ACC_y_min",
+    "ACC_y_max",
+    "ACC_y_slope",
+    "ACC_z_mean",
+    "ACC_z_std",
+    "ACC_z_min",
+    "ACC_z_max",
+    "ACC_z_slope",
+    "ACC_mag_mean",
+    "ACC_mag_std",
+    "ACC_mag_min",
+    "ACC_mag_max",
+    "ACC_mag_slope",
+    "HR_mean",
+    "HR_std",
+    "HR_min",
+    "HR_max",
+    "HR_slope"
+  ],
+  "saved_model": "svm",
+  "scores": {
+    "random_forest": {
+      "accuracy": 0.7822660098522167,
+      "f1_macro": 0.6397547075740965
+    },
+    "svm": {
+      "accuracy": 0.7596059113300493,
+      "f1_macro": 0.7083468808420917
+    }
+  }
+}

@@ -1,0 +1,45 @@
+{
+  "description": "Distribution of the heart-rate features across the WESAD training windows. Used to measure how far new data falls outside what the model was fitted on.",
+  "source": "WESAD wrist BVP, heart rate derived by features.py",
+  "n_windows": 1015,
+  "n_subjects": 15,
+  "window_seconds": 60,
+  "ibi_median_filter_beats": 5,
+  "features": {
+    "HR_mean": {
+      "mean": 76.67812423354314,
+      "std": 11.58587658077786,
+      "min": 52.3946564695241,
+      "median": 75.03614073223675,
+      "max": 131.42110889732166
+    },
+    "HR_std": {
+      "mean": 11.18025714225829,
+      "std": 5.267205805050215,
+      "min": 1.5181365560840687,
+      "median": 10.393331645448503,
+      "max": 31.898581552972864
+    },
+    "HR_min": {
+      "mean": 55.78848785923687,
+      "std": 8.961985881626191,
+      "min": 40.0,
+      "median": 55.65217391304348,
+      "max": 112.94117647058825
+    },
+    "HR_max": {
+      "mean": 106.19120547313153,
+      "std": 19.459953777690828,
+      "min": 57.3134328358209,
+      "median": 103.7837837837838,
+      "max": 147.69230769230768
+    },
+    "HR_slope": {
+      "mean": 0.007864553468716326,
+      "std": 0.24551622524456693,
+      "min": -2.0243282399126987,
+      "median": 0.006072368686647,
+      "max": 2.5709197435626607
+    }
+  }
+}

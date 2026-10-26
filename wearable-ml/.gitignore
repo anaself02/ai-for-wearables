@@ -1,0 +1,27 @@
+# --- The WESAD dataset ------------------------------------------------------
+# ~15 GB of third-party research data. Not ours to redistribute (WESAD is
+# released under its own licence and must be obtained from its authors), and
+# far too large for a git repository in any case.
+# Everything derived from it - results/features.csv and the model outputs - IS
+# tracked, so the pipeline's results are reproducible without shipping the raw
+# data.
+data/
+
+# --- Virtual environment ----------------------------------------------------
+# Rebuild with:  python -m venv .venv && .venv/Scripts/pip install -r requirements.txt
+.venv/
+
+# --- Personal health data ---------------------------------------------------
+# Real heart-rate readings pulled from my own Google Health account by
+# scripts/05_apply_to_personal_data.py. Personal health information: it stays
+# on this machine and is never committed, not even to a private repository
+# that might later be pushed somewhere.
+results/personal/
+
+# The archived copy of the same personal-data comparison, saved during the
+# pre-fix snapshot. Same data, same reason.
+results/before_ibi_median_filter/feature_distribution_comparison.csv
+
+# --- Python -----------------------------------------------------------------
+__pycache__/
+*.py[cod]

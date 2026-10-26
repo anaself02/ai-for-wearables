@@ -1,0 +1,22 @@
+{
+  "feature_set": "hr_only",
+  "n_features": 5,
+  "feature_names": [
+    "HR_mean",
+    "HR_std",
+    "HR_min",
+    "HR_max",
+    "HR_slope"
+  ],
+  "saved_model": "svm",
+  "scores": {
+    "random_forest": {
+      "accuracy": 0.6640394088669951,
+      "f1_macro": 0.5112575792922455
+    },
+    "svm": {
+      "accuracy": 0.5684729064039409,
+      "f1_macro": 0.5176876973462061
+    }
+  }
+}
