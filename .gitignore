@@ -16,3 +16,12 @@ prompt.md
 .idea/
 .vscode/
 screenshot/
+
+# Personal sample exports (Excel/CSV) for the course project. Never commit.
+data-samples/
+
+# Local assistant tooling and scratch files (kept on disk, never committed).
+.agents/
+.claude/
+design.md
+skills-lock.json
