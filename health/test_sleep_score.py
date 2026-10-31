@@ -18,7 +18,6 @@ from django.core.management import call_command
 from django.core.management.base import CommandError
 from django.test import TestCase, override_settings
 
-from accounts.models import GoogleCredential
 from health import metrics, takeout
 from health.models import HistoricalMetric
 

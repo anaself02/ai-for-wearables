@@ -13,7 +13,6 @@ from django.contrib.auth import get_user_model
 from django.core.cache import cache
 from django.test import TestCase
 
-from accounts.models import GoogleCredential
 from health import insights, metrics
 
 User = get_user_model()

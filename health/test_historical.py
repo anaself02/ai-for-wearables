@@ -15,7 +15,6 @@ from django.core.management.base import CommandError
 from django.contrib.auth import get_user_model
 from django.test import TestCase
 
-from accounts.models import GoogleCredential
 from health import metrics
 from health import takeout as importer
 from health.models import HistoricalMetric

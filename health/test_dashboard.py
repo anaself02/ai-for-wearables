@@ -13,7 +13,6 @@ from django.core.cache import cache
 from django.test import RequestFactory, TestCase, override_settings
 from django.utils import timezone as django_timezone
 
-from accounts.models import GoogleCredential
 from health import metrics
 
 User = get_user_model()
@@ -255,10 +254,3 @@ class MetricRoutingTests(TestCase):
         self.assertNotIn("vo2-max", {m.slug for m in metrics.fetchable()})
         for slug in slugs:
             self.assertIn("GPS", metrics.get(slug).empty_message)
-
-    def test_rollup_ranges_are_chunked_to_the_api_limit(self):
-        # heart-rate caps dailyRollUp at 14 days, so 90 days needs several calls.
-        chunks = list(metrics._chunk_ranges(date(2026, 6, 1), date(2026, 8, 30), 14))
-        self.assertEqual(chunks[0], (date(2026, 6, 1), date(2026, 6, 15)))
-        self.assertEqual(chunks[-1][1], date(2026, 8, 30))
-        self.assertTrue(all((end - start).days <= 14 for start, end in chunks))

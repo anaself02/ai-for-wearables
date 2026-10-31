@@ -31,7 +31,6 @@ INSTALLED_APPS = [
     "django.contrib.sessions",
     "django.contrib.messages",
     "django.contrib.staticfiles",
-    "accounts",
     "health",
     "people",
 ]
@@ -42,8 +41,6 @@ MIDDLEWARE = [
     "django.middleware.common.CommonMiddleware",
     "django.middleware.csrf.CsrfViewMiddleware",
     "django.contrib.auth.middleware.AuthenticationMiddleware",
-    # After authentication, because it asks whether the request is signed in.
-    "accounts.middleware.NoStoreForSignedInPages",
     "django.contrib.messages.middleware.MessageMiddleware",
     "django.middleware.clickjacking.XFrameOptionsMiddleware",
 ]
@@ -96,49 +93,6 @@ STATICFILES_DIRS = [BASE_DIR / "static"]
 
 DEFAULT_AUTO_FIELD = "django.db.models.BigAutoField"
 
-LOGIN_URL = "/"
-LOGIN_REDIRECT_URL = "/"
-LOGOUT_REDIRECT_URL = "/"
-
-# ---------------------------------------------------------------------------
-# Token encryption at rest
-# ---------------------------------------------------------------------------
-FERNET_KEY = env("FERNET_KEY", required=True)
-
-# ---------------------------------------------------------------------------
-# Google OAuth 2.0 / Google Health API
-# ---------------------------------------------------------------------------
-GOOGLE_OAUTH_CLIENT_ID = env("GOOGLE_OAUTH_CLIENT_ID", required=True)
-GOOGLE_OAUTH_CLIENT_SECRET = env("GOOGLE_OAUTH_CLIENT_SECRET", required=True)
-GOOGLE_OAUTH_REDIRECT_URI = env(
-    "GOOGLE_OAUTH_REDIRECT_URI", "http://localhost:8000/oauth/callback/"
-)
-
-# Sign-in identity scopes + the three Google Health read scopes.
-# Every health data type this app reads is covered by these three health scopes.
-GOOGLE_OAUTH_SCOPES = [
-    "openid",
-    "https://www.googleapis.com/auth/userinfo.email",
-    "https://www.googleapis.com/auth/userinfo.profile",
-    "https://www.googleapis.com/auth/googlehealth.activity_and_fitness.readonly",
-    "https://www.googleapis.com/auth/googlehealth.health_metrics_and_measurements.readonly",
-    "https://www.googleapis.com/auth/googlehealth.sleep.readonly",
-]
-
-GOOGLE_HEALTH_API_BASE = "https://health.googleapis.com/v4"
-
-# ---------------------------------------------------------------------------
-# API response cache
-# ---------------------------------------------------------------------------
-# The overview page needs one API call per metric, so an uncached browser
-# refresh costs ten calls. Health readings do not change second to second.
-# Set HEALTH_CACHE_SECONDS=0 to disable caching entirely.
-HEALTH_CACHE_SECONDS = int(env("HEALTH_CACHE_SECONDS", "600"))
-
-# A civil day that has already ended cannot gain new samples, so the intraday
-# drill-down for a past day is held much longer.
-HEALTH_CACHE_SECONDS_PAST_DAY = int(env("HEALTH_CACHE_SECONDS_PAST_DAY", "86400"))
-
 # ---------------------------------------------------------------------------
 # The WESAD-trained arousal model
 # ---------------------------------------------------------------------------
@@ -160,44 +114,13 @@ HEALTH_CACHE_SECONDS_PAST_DAY = int(env("HEALTH_CACHE_SECONDS_PAST_DAY", "86400"
 # Nothing else in the dashboard depends on it.
 WEARABLE_ML_DIR = env("WEARABLE_ML_DIR", str(BASE_DIR.parent / "wearable-ml"))
 
-# In-process cache: no extra service to run, and fast. It is per-process and
-# does not survive a restart - move to the database or Redis backend if this is
-# ever served by more than one worker.
-CACHES = {
-    "default": {
-        "BACKEND": "django.core.cache.backends.locmem.LocMemCache",
-        "LOCATION": "health-dashboard",
-        "TIMEOUT": HEALTH_CACHE_SECONDS,
-        "OPTIONS": {"MAX_ENTRIES": 2000},
-    }
-}
-
-# Google returns the granted scope set in a different order than requested, and
-# silently adds "openid" alongside the userinfo scopes. oauthlib treats that as a
-# scope change and raises; relaxing the check is the documented workaround.
-os.environ.setdefault("OAUTHLIB_RELAX_TOKEN_SCOPE", "1")
-
-if DEBUG:
-    # oauthlib refuses to complete a token exchange over plain HTTP. The callback
-    # runs on http://localhost during development, which Google explicitly allows.
-    os.environ.setdefault("OAUTHLIB_INSECURE_TRANSPORT", "1")
-
-# On a host with broken IPv6, every googleapis.com call stalls ~21s per dead
-# AAAA record before falling back to IPv4. See config/net.py for the full story.
-FORCE_IPV4 = env("FORCE_IPV4", "False").lower() in {"1", "true", "yes"}
-
-if FORCE_IPV4:
-    from .net import force_ipv4
-
-    force_ipv4()
-
 LOGGING = {
     "version": 1,
     "disable_existing_loggers": False,
     "handlers": {"console": {"class": "logging.StreamHandler"}},
     "root": {"handlers": ["console"], "level": "INFO"},
     "loggers": {
-        "accounts": {"level": "DEBUG" if DEBUG else "INFO"},
+        "people": {"level": "DEBUG" if DEBUG else "INFO"},
         "health": {"level": "DEBUG" if DEBUG else "INFO"},
     },
 }

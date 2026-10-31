@@ -699,51 +699,6 @@ def fetchable() -> list[Metric]:
 
 
 # ---------------------------------------------------------------------------
-# fetching
-# ---------------------------------------------------------------------------
-
-
-def _chunk_ranges(start: date, end: date, max_days: int):
-    """Split [start, end) into windows no longer than the API allows.
-
-    dailyRollUp caps `heart-rate` and `active-minutes` at 14 days per request,
-    so a 90-day chart needs several calls stitched together.
-    """
-    cursor = start
-    while cursor < end:
-        stop = min(cursor + timedelta(days=max_days), end)
-        yield cursor, stop
-        cursor = stop
-
-
-def fetch_points(client, metric: Metric, start: date, end: date) -> list[dict]:
-    data_type = metric.data_type
-
-    if metric.source == SOURCE_ROLLUP:
-        chunks = list(_chunk_ranges(start, end, data_type.rollup_max_days))
-
-        if len(chunks) == 1:
-            return client.daily_roll_up(data_type, start=chunks[0][0], end=chunks[0][1])
-
-        # 90 days of heart-rate is seven 14-day requests; run them together or
-        # the page takes ~20s instead of ~3s. Only reached from the detail page,
-        # where this is the single metric being loaded.
-        def one(window):
-            return client.daily_roll_up(data_type, start=window[0], end=window[1])
-
-        points: list[dict] = []
-        with ThreadPoolExecutor(max_workers=min(len(chunks), 8)) as pool:
-            for chunk_points in pool.map(one, chunks):
-                points.extend(chunk_points)
-        return points
-
-    # Sessions cap out at 25 per page, so a 90-day sleep or exercise history
-    # needs to follow the page tokens.
-    max_pages = 6 if data_type.max_page_size <= 25 else 1
-    return client.list_data_points(data_type, start=start, end=end, max_pages=max_pages)
-
-
-# ---------------------------------------------------------------------------
 # bridge to the insight layer
 # ---------------------------------------------------------------------------
 

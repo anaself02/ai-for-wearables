@@ -5,7 +5,6 @@ from django.contrib.auth import get_user_model
 from django.test import TestCase
 
 from . import datatypes
-from .client import _civil
 
 User = get_user_model()
 
@@ -54,11 +53,6 @@ class DataTypeRegistryTests(TestCase):
             self.assertNotIn("_", dt.slug, f"{dt.slug} should be kebab-case")
             self.assertNotIn("-", dt.filter_field, f"{dt.filter_field} should be snake_case")
             self.assertEqual(dt.filter_field, dt.slug.replace("-", "_"))
-
-    def test_every_type_uses_a_scope_the_app_requests(self):
-        for dt in datatypes.all_types():
-            self.assertIn(dt.scope, settings.GOOGLE_OAUTH_SCOPES, dt.slug)
-
     def test_requested_metrics_are_all_registered(self):
         for slug in [
             "steps",
@@ -75,40 +69,3 @@ class DataTypeRegistryTests(TestCase):
             "run-vo2-max",
         ]:
             self.assertIsNotNone(datatypes.get(slug), slug)
-
-
-class RollUpRequestTests(TestCase):
-    def test_civil_datetime_wraps_the_date_in_a_date_object(self):
-        # range.start is a CivilDateTime, not a bare Date.
-        self.assertEqual(
-            _civil(date(2026, 9, 19)),
-            {"date": {"year": 2026, "month": 9, "day": 19}},
-        )
-
-
-class OutboundNetworkTests(TestCase):
-    """Cover for the ~169s-per-request stall caused by dead IPv6 routes."""
-
-    def test_force_ipv4_restricts_urllib3_to_af_inet(self):
-        import socket
-
-        import urllib3.util.connection as u3
-
-        from config.net import force_ipv4
-
-        original = u3.HAS_IPV6
-        try:
-            force_ipv4()
-            self.assertFalse(u3.HAS_IPV6)
-            self.assertEqual(u3.allowed_gai_family(), socket.AF_INET)
-        finally:
-            u3.HAS_IPV6 = original
-
-    def test_connect_and_read_timeouts_are_separate(self):
-        from .client import REQUEST_TIMEOUT
-
-        # A scalar timeout is spent per candidate address on connect, so the
-        # connect budget must be kept small and distinct from the read budget.
-        connect, read = REQUEST_TIMEOUT
-        self.assertLess(connect, read)
-        self.assertLessEqual(connect, 10)

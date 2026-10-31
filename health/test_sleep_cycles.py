@@ -8,7 +8,6 @@ from django.core.cache import cache
 from django.test import TestCase
 from django.urls import reverse
 
-from accounts.models import GoogleCredential
 from health import sleep_cycles
 
 User = get_user_model()
