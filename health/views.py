@@ -420,7 +420,7 @@ def metric_detail(request, slug):
 
     credential = _credential_or_none(request)
     if credential is None:
-        return redirect("accounts:landing")
+        return redirect("people:home")
 
     try:
         client = GoogleHealthClient(credential)
@@ -483,7 +483,7 @@ def metric_day(request, slug, day):
 
     credential = _credential_or_none(request)
     if credential is None:
-        return redirect("accounts:landing")
+        return redirect("people:home")
 
     data_type = metric.intraday_type
     extract = metrics.INTRADAY_EXTRACTORS.get(metric.intraday_slug)
@@ -541,7 +541,7 @@ def sleep_night(request, day):
 
     credential = _credential_or_none(request)
     if credential is None:
-        return redirect("accounts:landing")
+        return redirect("people:home")
 
     metric = metrics.get("sleep")
     context = {
@@ -628,7 +628,7 @@ def raw_data_points(request, slug):
 
     credential = _credential_or_none(request)
     if credential is None:
-        return redirect("accounts:landing")
+        return redirect("people:home")
 
     context = {
         "data_type": data_type,

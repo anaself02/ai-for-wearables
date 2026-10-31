@@ -24,13 +24,6 @@ SESSION_STATE_KEY = "google_oauth_state"
 SESSION_VERIFIER_KEY = "google_oauth_code_verifier"
 
 
-def landing(request):
-    """Signed-out home page: nothing but a Sign in with Google button."""
-    if request.user.is_authenticated:
-        return redirect("health:index")
-    return render(request, "accounts/landing.html")
-
-
 @require_http_methods(["GET", "POST"])
 def google_login(request):
     """Send the user to Google's consent screen."""
@@ -162,7 +155,7 @@ def _get_or_create_user(claims: dict) -> User:
 @require_http_methods(["POST"])
 def sign_out(request):
     logout(request)
-    return redirect(reverse("accounts:landing"))
+    return redirect("people:home")
 
 
 @login_required

@@ -1,0 +1,57 @@
+{% extends "base.html" %}
+{% block title %}{{ person.display_name }} ({{ person.device_label }}) - Health Dashboard{% endblock %}
+
+{% comment %}
+  One person's page. Everything on it is read through the repository with this
+  person named, so it cannot contain anyone else's readings.
+
+  Values computed by the app from the uploaded rows (daily average, minimum,
+  maximum) carry the "derived" class and a dashed underline, so they are never
+  mistaken for a number exactly as the device wrote it.
+{% endcomment %}
+
+{% block content %}
+  <h1>{{ person.display_name }}</h1>
+  <p class="lede">
+    Device: <strong>{{ person.device_label }}</strong>. Local days are cut in
+    {{ person.timezone }}; the files themselves are in UTC.
+  </p>
+
+  {% if empty_message %}
+    <p class="empty-msg">{{ empty_message }}</p>
+  {% else %}
+    <dl class="person-facts">
+      <div><dt class="label">Local date range</dt>
+        <dd class="num">{{ range.0|date:"Y-m-d" }} to {{ range.1|date:"Y-m-d" }}</dd></div>
+      <div><dt class="label">Readings</dt>
+        <dd class="num">{{ readings|floatformat:"0g" }}</dd></div>
+      <div><dt class="label">Device name(s) in the files</dt>
+        <dd>{% for name, count in devices.items %}{{ name }}{% if not forloop.last %}, {% endif %}{% endfor %}</dd></div>
+    </dl>
+
+    <h2>Most recent days</h2>
+    <p class="muted small">
+      Solid numbers are exactly as in the uploaded file. <span class="derived">Dashed</span>
+      numbers are computed by this app from the uploaded rows.
+    </p>
+    <table>
+      <thead>
+        <tr><th>Local day</th><th class="num">Readings</th>
+            <th class="num">Median gap (s)</th>
+            <th class="num">Average bpm</th><th class="num">Min bpm</th><th class="num">Max bpm</th></tr>
+      </thead>
+      <tbody>
+        {% for day in recent %}
+          <tr>
+            <td>{{ day.day|date:"Y-m-d" }}</td>
+            <td class="num">{{ day.n|floatformat:"0g" }}</td>
+            <td class="num derived">{{ day.spacing.median|floatformat:1 }}</td>
+            <td class="num derived">{{ day.mean|floatformat:1 }}</td>
+            <td class="num">{{ day.min|floatformat:0 }}</td>
+            <td class="num">{{ day.max|floatformat:0 }}</td>
+          </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  {% endif %}
+{% endblock %}

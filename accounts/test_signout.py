@@ -30,9 +30,3 @@ class SignOutTests(TestCase):
             response = self.client.get(reverse(name))
             self.assertEqual(response.headers.get("Cache-Control"), NO_STORE, name)
             self.assertIn("no-store", response.headers["Cache-Control"], name)
-
-    def test_the_front_door_is_not_needlessly_uncacheable(self):
-        """Nothing private is on it, so it is left alone."""
-        self.client.logout()
-        response = self.client.get(reverse("accounts:landing"))
-        self.assertNotIn("no-store", response.headers.get("Cache-Control", ""))

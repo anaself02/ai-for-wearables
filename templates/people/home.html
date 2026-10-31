@@ -1,0 +1,61 @@
+{% extends "base.html" %}
+{% block title %}Choose whose data to view - Health Dashboard{% endblock %}
+{% block description %}A local viewer for each participant's own wearable data.{% endblock %}
+
+{% comment %}
+  The home page. No sign-in: the app runs only on this machine and each person
+  is a label for a dataset, not an account.
+
+  People are listed side by side but never combined. They use different
+  devices, and that difference is a confound this project keeps visible, so
+  nothing here adds, averages or compares one person's numbers with another's.
+{% endcomment %}
+
+{% block content %}
+  <h1>Whose data?</h1>
+  <p class="lede">
+    Each person collects data only on themselves, with their own device.
+    Choose one to view. Their data is never shown with, or under, anyone else's
+    name.
+  </p>
+
+  <div class="people">
+    {% for row in rows %}
+      <section class="person-card" aria-labelledby="p-{{ row.person.slug }}">
+        <div class="person-card-head">
+          <h2 id="p-{{ row.person.slug }}">{{ row.person.display_name }}</h2>
+          <span class="device-chip">{{ row.person.device_label }}</span>
+        </div>
+
+        <dl class="person-facts">
+          <div>
+            <dt class="label">Status</dt>
+            <dd>{{ row.person.status|capfirst }}</dd>
+          </div>
+          <div>
+            <dt class="label">Local date range</dt>
+            <dd class="num">
+              {% if row.range %}{{ row.range.0|date:"Y-m-d" }} to {{ row.range.1|date:"Y-m-d" }}
+              {% else %}&mdash;{% endif %}
+            </dd>
+          </div>
+          <div>
+            <dt class="label">Readings</dt>
+            <dd class="num">{% if row.readings %}{{ row.readings|floatformat:"0g" }}{% else %}&mdash;{% endif %}</dd>
+          </div>
+        </dl>
+
+        {% if row.empty_message %}
+          <p class="empty-msg">{{ row.empty_message }}</p>
+        {% endif %}
+
+        <a class="btn" href="{% url 'people:person' row.person.slug %}">Open {{ row.person.display_name }}</a>
+      </section>
+    {% endfor %}
+  </div>
+
+  <p class="muted small">
+    Models are trained on the public WESAD dataset only. Uploaded data is only
+    scored, never used to train, tune or fine-tune anything.
+  </p>
+{% endblock %}

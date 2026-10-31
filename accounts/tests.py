@@ -112,11 +112,6 @@ class CredentialConversionTests(TestCase):
 
 
 class SignInFlowTests(TestCase):
-    def test_signed_out_landing_offers_google_sign_in(self):
-        response = self.client.get("/")
-        self.assertEqual(response.status_code, 200)
-        self.assertContains(response, "Sign in with Google")
-
     def test_login_start_redirects_to_google(self):
         response = self.client.get("/oauth/login/")
         self.assertEqual(response.status_code, 302)

@@ -39,7 +39,34 @@
     Health Dashboard
   </a>
 
-  {% if user.is_authenticated %}
+  {% if person %}
+    {% comment %}
+      A page about one person's data. The name and the device are in the bar
+      on every such page, with a way to switch, so a number can never be read
+      without knowing whose it is and what measured it.
+    {% endcomment %}
+    {% with here=request.resolver_match.url_name %}
+      <nav class="tabs" aria-label="Sections">
+        {% if here == "person" or here == "metric" or here == "metric_day" or here == "raw" or here == "raw_index" %}
+          <a class="tab is-current" href="{% url 'people:person' person.slug %}" aria-current="page">Overview</a>
+        {% else %}
+          <a class="tab" href="{% url 'people:person' person.slug %}">Overview</a>
+        {% endif %}
+      </nav>
+    {% endwith %}
+    <div class="topbar-end">
+      <span class="person-badge" aria-label="Viewing">
+        <strong>{{ person.display_name }}</strong>
+        <span class="device-chip">{{ person.device_label }}</span>
+      </span>
+      <a class="btn secondary" href="{% url 'people:home' %}">Switch</a>
+      <div class="theme" role="group" aria-label="Theme">
+        <button class="theme-option" type="button" data-theme-set="light">Day</button>
+        <button class="theme-option" type="button" data-theme-set="dark">Night</button>
+        <button class="theme-option" type="button" data-theme-set="auto">Auto</button>
+      </div>
+    </div>
+  {% elif user.is_authenticated %}
     {% comment %}
       A metric, a single day and a night all belong under Overview, so the tab
       stays lit while you are reading down into one of them.
@@ -93,6 +120,14 @@
         <span class="who">{{ user.email|default:user.username }}</span>
         <button class="btn secondary" type="submit">Sign out</button>
       </form>
+    </div>
+  {% else %}
+    <div class="topbar-end">
+      <div class="theme" role="group" aria-label="Theme">
+        <button class="theme-option" type="button" data-theme-set="light">Day</button>
+        <button class="theme-option" type="button" data-theme-set="dark">Night</button>
+        <button class="theme-option" type="button" data-theme-set="auto">Auto</button>
+      </div>
     </div>
   {% endif %}
 </header>
