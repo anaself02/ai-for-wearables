@@ -11,8 +11,9 @@ dataset, not an account.
 """
 
 import numpy as np
+from django.conf import settings
 from django.db import models
-from django.db.models import Max, Min
+from django.db.models import Max, Min, Q
 
 #: Readings are stored one UTC day at a time, the way the source files are cut.
 #: Re-importing a day is then a plain replace-or-merge, never a duplicate, and a
@@ -45,6 +46,11 @@ class Person(models.Model):
     )
     notes = models.TextField(blank=True)
     created_at = models.DateTimeField(auto_now_add=True)
+    owner = models.OneToOneField(
+        settings.AUTH_USER_MODEL, null=True, blank=True,
+        on_delete=models.SET_NULL, related_name="person",
+        help_text="The account linked to this profile. One account per profile "
+                  "and one profile per account; set only by an administrator.")
 
     class Meta:
         ordering = ["display_name"]
@@ -172,3 +178,38 @@ class HeartRateDay(models.Model):
         offsets = np.frombuffer(bytes(self.offsets), dtype="<u4").astype("int64")
         bpm = np.frombuffer(bytes(self.bpm_x10), dtype="<u2").astype(float) / BPM_SCALE
         return midnight + offsets, bpm
+
+
+class ProfileClaim(models.Model):
+    """An account's request to be linked to a profile.
+
+    Signing up only ever creates a pending claim. It becomes a link
+    (`Person.owner`) when an administrator approves it, and until then the
+    account sees no data. Nothing links itself.
+    """
+
+    class Status(models.TextChoices):
+        PENDING = "pending", "Pending"
+        APPROVED = "approved", "Approved"
+        REJECTED = "rejected", "Rejected"
+
+    user = models.ForeignKey(settings.AUTH_USER_MODEL, on_delete=models.CASCADE,
+                             related_name="claims")
+    person = models.ForeignKey(Person, on_delete=models.CASCADE,
+                               related_name="claims")
+    status = models.CharField(max_length=10, choices=Status.choices,
+                              default=Status.PENDING)
+    created_at = models.DateTimeField(auto_now_add=True)
+    decided_at = models.DateTimeField(null=True, blank=True)
+
+    class Meta:
+        ordering = ["-created_at"]
+        constraints = [
+            # An account asks for one profile at a time.
+            models.UniqueConstraint(
+                fields=["user"], condition=Q(status="pending"),
+                name="one_pending_claim_per_account"),
+        ]
+
+    def __str__(self):
+        return "claim for {} ({})".format(self.person.display_name, self.status)

@@ -33,3 +33,23 @@ def utc_day_file(day, **kwargs):
     start = datetime(day.year, day.month, day.day, tzinfo=timezone.utc)
     return ("heart_rate_{}.csv".format(day),
             hr_csv_bytes(start, start + timedelta(days=1), **kwargs))
+
+
+def make_user(email, staff=False, linked_to=None):
+    """A synthetic account for tests. Returns (user, password).
+
+    The password is random per run and never written anywhere: tests that need to
+    log in through the form use it, others use `client.force_login`.
+    """
+    import secrets
+
+    from django.contrib.auth import get_user_model
+
+    password = secrets.token_urlsafe(18)
+    user = get_user_model().objects.create_user(
+        username=email.lower(), email=email.lower(), password=password,
+        is_staff=staff)
+    if linked_to is not None:
+        linked_to.owner = user
+        linked_to.save(update_fields=["owner"])
+    return user, password
