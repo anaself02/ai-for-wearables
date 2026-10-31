@@ -110,8 +110,12 @@ def summarise_local_day(person, day):
         "mean": float(np.mean(bpm)),
         "min": float(np.min(bpm)),
         "max": float(np.max(bpm)),
-        "first_local": datetime.fromtimestamp(int(epochs[0]), timezone.utc).astimezone(tz),
-        "last_local": datetime.fromtimestamp(int(epochs[-1]), timezone.utc).astimezone(tz),
+        # Formatted here, in the person's timezone. A template's date filter would
+        # quietly convert an aware datetime to the server's timezone instead.
+        "first_local": datetime.fromtimestamp(int(epochs[0]), timezone.utc)
+                       .astimezone(tz).strftime("%H:%M"),
+        "last_local": datetime.fromtimestamp(int(epochs[-1]), timezone.utc)
+                      .astimezone(tz).strftime("%H:%M"),
         "spacing": spacing(epochs),
     }
 
@@ -137,3 +141,90 @@ def totals(person):
     return {"utc_days": person.heart_rate_days.count(),
             "readings": agg["readings"] or 0,
             "devices": devices}
+
+
+# ---------------------------------------------------------------------------
+# series for charts and tables (all computed from a person's stored readings)
+# ---------------------------------------------------------------------------
+
+def latest_local_date(person):
+    """The newest local date with data, or None."""
+    dates = local_dates_with_data(person)
+    return dates[-1] if dates else None
+
+
+def daily_summaries(person, days=None):
+    """Summaries of local days with data, oldest first.
+
+    `days` limits to the newest N calendar days ending at the person's latest
+    local date (a window anchored to their data, not to today: the data is
+    historical). None means every day.
+    """
+    require_person(person)
+    available = local_dates_with_data(person)
+    if not available:
+        return []
+    if days is not None:
+        cutoff = available[-1] - timedelta(days=days - 1)
+        available = [d for d in available if d >= cutoff]
+    return [s for s in (summarise_local_day(person, d) for d in available) if s]
+
+
+def minute_means(person, day):
+    """One local day as per-minute mean bpm: (labels 'HH:MM', values, n readings).
+
+    A minute with no readings is None, so a gap in wear shows as a gap in the
+    chart instead of being bridged. The means are computed here, not stored.
+    """
+    epochs, bpm = local_day_readings(person, day)
+    if len(epochs) == 0:
+        return [], [], 0
+    tz = ZoneInfo(person.timezone)
+    start, end = local_day_bounds(day, person.timezone)
+    n_bins = (end - start + 59) // 60
+    index = ((epochs - start) // 60).astype(int)
+    sums = np.bincount(index, weights=bpm, minlength=n_bins)
+    counts = np.bincount(index, minlength=n_bins)
+
+    labels, values = [], []
+    for i in range(n_bins):
+        stamp = datetime.fromtimestamp(start + i * 60, timezone.utc).astimezone(tz)
+        labels.append(stamp.strftime("%H:%M"))
+        values.append(round(float(sums[i] / counts[i]), 1) if counts[i] else None)
+    return labels, values, int(len(epochs))
+
+
+def raw_rows(person, day, limit=100):
+    """The first `limit` stored rows of a local day, total n.
+
+    Rows are (UTC timestamp as the file writes it, local clock time, bpm), already
+    formatted as text so no template can re-zone them.
+    """
+    epochs, bpm = local_day_readings(person, day)
+    tz = ZoneInfo(person.timezone)
+    rows = []
+    for e, b in zip(epochs[:limit], bpm[:limit]):
+        utc = datetime.fromtimestamp(int(e), timezone.utc)
+        rows.append((utc.strftime("%Y-%m-%dT%H:%M:%SZ"),
+                     utc.astimezone(tz).strftime("%H:%M:%S"), float(b)))
+    return rows, int(len(epochs))
+
+
+def device_names_for_day(person, day):
+    """{source name: reading count} over the stored UTC days a local day touches."""
+    require_person(person)
+    names = {}
+    rows = HeartRateDay.objects.filter(
+        person=person, utc_date__in=utc_dates_for(day, person.timezone))
+    for sources in rows.values_list("sources", flat=True):
+        for name, count in sources.items():
+            names[name] = names.get(name, 0) + count
+    return names
+
+
+def neighbours(person, day):
+    """(previous, next) local dates that have data, around `day`."""
+    dates = local_dates_with_data(person)
+    before = [d for d in dates if d < day]
+    after = [d for d in dates if d > day]
+    return (before[-1] if before else None), (after[0] if after else None)

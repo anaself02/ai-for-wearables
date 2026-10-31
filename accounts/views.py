@@ -6,14 +6,11 @@ from django.conf import settings
 from django.contrib import messages
 from django.contrib.auth import get_user_model, login, logout
 from django.contrib.auth.decorators import login_required
-from django.http import HttpResponse
-from django.utils import timezone
 from django.shortcuts import redirect, render
 from django.urls import reverse
 from django.views.decorators.http import require_http_methods
 
 from .forms import ProfileForm
-from .greeting import display_name, greeting_for
 from .models import GoogleCredential, Profile
 from .oauth import authorization_url, build_flow, verify_id_token
 
@@ -123,7 +120,7 @@ def oauth_callback(request):
 
     login(request, user)
     messages.success(request, "Google account connected.")
-    return redirect("accounts:welcome")
+    return redirect("people:home")
 
 
 def _get_or_create_user(claims: dict) -> User:
@@ -174,66 +171,8 @@ def profile_settings(request):
         if form.is_valid():
             form.save()
             messages.success(request, "Saved.")
-            return redirect("health:fitness")
+            return redirect("people:home")
     else:
         form = ProfileForm(instance=profile)
 
     return render(request, "accounts/settings.html", {"form": form, "profile": profile})
-
-
-#: How long the greeting stays up at minimum, in milliseconds.
-#:
-#: This is a legibility floor, not a loading time. When the cache is already
-#: warm the fetch behind this screen finishes in a few hundred milliseconds,
-#: and at that speed the greeting is a flicker on the way to somewhere else -
-#: which is worse than not greeting anybody. Two seconds is a full cycle of
-#: the loader plus enough to read a short line.
-#:
-#: It is worth being straight about the trade: on a warm cache this is time
-#: the visitor waits for the sake of reading the screen rather than for work.
-#: That is a different thing from a timer dressed up as loading, which is what
-#: the ceiling below and the fetch itself exist to avoid.
-WELCOME_FLOOR_MS = 2000
-
-#: The longest this screen may hold somebody when the fetch is slow or failing.
-WELCOME_CEILING_MS = 8000
-
-
-@login_required
-def welcome(request):
-    """The moment between signing in and the dashboard being ready.
-
-    Straight after the OAuth round trip the cache is cold, and the overview is
-    one API call per metric. This screen covers work that is genuinely
-    happening rather than a timer pretending something is: the page renders
-    immediately, then asks for the fetch to be done, then leaves.
-    """
-    return render(
-        request,
-        "accounts/welcome.html",
-        {
-            "greeting": greeting_for(timezone.localtime()),
-            "name": display_name(request.user),
-            "floor_ms": WELCOME_FLOOR_MS,
-            "ceiling_ms": WELCOME_CEILING_MS,
-        },
-    )
-
-
-@login_required
-def welcome_warm(request):
-    """Fill the cache the dashboard is about to read. Always answers 204.
-
-    Failure here is not worth reporting to the visitor: every error this can
-    raise is one the dashboard already handles per card, and the only thing a
-    failure changes is that the next page is slow rather than fast. What it
-    must never do is strand somebody on an interstitial.
-    """
-    from health.views import OVERVIEW_WINDOW_DAYS, _load_window
-
-    try:
-        _load_window(request, OVERVIEW_WINDOW_DAYS)
-    except Exception as exc:  # noqa: BLE001 - see docstring
-        logger.warning("Warming the dashboard cache failed: %s", exc)
-
-    return HttpResponse(status=204)

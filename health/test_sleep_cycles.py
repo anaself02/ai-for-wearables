@@ -9,7 +9,7 @@ from django.test import TestCase
 from django.urls import reverse
 
 from accounts.models import GoogleCredential
-from health import sleep_cycles, views
+from health import sleep_cycles
 
 User = get_user_model()
 
@@ -202,58 +202,3 @@ class BedtimeTests(TestCase):
         standard = sleep_cycles.bedtimes(time(7, 0), 90, counts=(5,))[0]
         measured = sleep_cycles.bedtimes(time(7, 0), 100, counts=(5,))[0]
         self.assertNotEqual(standard["bedtime"], measured["bedtime"])
-
-
-class CalculatorPageTests(TestCase):
-    def setUp(self):
-        cache.clear()
-        self.addCleanup(cache.clear)
-        self.user = User.objects.create(username="tester@example.com")
-        GoogleCredential.objects.create(
-            user=self.user, google_sub="sub-1", refresh_token="1//refresh"
-        )
-        self.client.force_login(self.user)
-
-    def _get(self, query="", points=None):
-        fake = mock.MagicMock()
-        fake.list_data_points.return_value = points if points is not None else []
-        fake.daily_roll_up.return_value = []
-        with mock.patch("health.views.GoogleHealthClient", return_value=fake):
-            return self.client.get(reverse("health:sleep_calculator") + query)
-
-    def test_requires_login(self):
-        self.client.logout()
-        response = self.client.get(reverse("health:sleep_calculator"))
-        self.assertEqual(response.status_code, 302)
-
-    def test_renders_with_the_standard_cycle_when_no_nights_are_readable(self):
-        response = self._get()
-        self.assertEqual(response.status_code, 200)
-        self.assertFalse(response.context["personal"].reliable)
-        self.assertTrue(response.context["standard"])
-        self.assertContains(response, "Not enough to go on")
-
-    def test_a_target_wake_time_is_honoured(self):
-        response = self._get("?wake=06:30")
-        self.assertEqual(response.context["wake"], "06:30")
-
-    def test_an_unparseable_wake_time_falls_back_rather_than_erroring(self):
-        response = self._get("?wake=not-a-time")
-        self.assertEqual(response.status_code, 200)
-        self.assertEqual(response.context["wake"], views.DEFAULT_WAKE_TIME)
-
-    def test_enough_recorded_nights_produce_a_second_column(self):
-        response = self._get(points=[THREE_CYCLES] * 6)
-        self.assertTrue(response.context["personal"].reliable)
-        self.assertTrue(response.context["measured"])
-        self.assertContains(response, "Measured from your nights")
-
-    def test_a_missed_rem_period_puts_the_upward_bias_warning_on_the_page(self):
-        response = self._get(points=[THREE_CYCLES] * 6 + [MISSED_REM])
-        self.assertEqual(response.context["personal"].dropped_long, 1)
-        self.assertContains(response, "probably a little high")
-
-    def test_no_overlong_intervals_means_no_bias_warning(self):
-        response = self._get(points=[THREE_CYCLES] * 6)
-        self.assertEqual(response.context["personal"].dropped_long, 0)
-        self.assertNotContains(response, "probably a little high")
