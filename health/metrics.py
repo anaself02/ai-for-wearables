@@ -699,7 +699,7 @@ def fetchable() -> list[Metric]:
 
 
 # ---------------------------------------------------------------------------
-# bridge to the insight layer
+# series helpers
 # ---------------------------------------------------------------------------
 
 
@@ -739,67 +739,6 @@ def as_daily_pairs(series: dict | None, dataset_index: int = 0) -> list:
             continue
         pairs.append((day, float(value)))
     return pairs
-
-
-def sleep_pairs(points) -> tuple[list, list]:
-    """(minutes asleep, deep sleep minutes) per night, keyed by the night's date.
-
-    Naps are excluded: a 90-minute afternoon nap counted as a "night" drags the
-    sleep-debt total and the night-to-night spread badly off.
-
-    A date can carry more than one session (a nap plus the night, or a split
-    night). Only the longest surviving session per date is kept, so downstream
-    pairing cannot silently pick whichever happened to come last.
-    """
-    best: dict = {}
-    for row in sleep_rows(points):
-        if row.get("is_nap"):
-            continue
-        try:
-            day = date.fromisoformat(row["date"])
-        except (TypeError, ValueError):
-            continue
-        if not row["asleep"]:
-            continue
-        current = best.get(day)
-        if current is None or row["asleep"] > current["asleep"]:
-            best[day] = row
-
-    asleep = [(day, float(row["asleep"])) for day, row in sorted(best.items())]
-    deep = [
-        (day, float(row["deep"])) for day, row in sorted(best.items()) if row["deep"]
-    ]
-    return asleep, deep
-
-
-#: metric slug -> insight series name, for the metrics that are a plain daily value.
-INSIGHT_SERIES_FROM_METRIC = {
-    "daily-resting-heart-rate": "resting_hr",
-    "daily-heart-rate-variability": "hrv",
-    "daily-oxygen-saturation": "spo2",
-    "daily-respiratory-rate": "respiratory_rate",
-    "steps": "steps",
-}
-
-
-def insight_series(points_by_slug: dict) -> dict:
-    """Assemble the named daily series the insight layer expects."""
-    series_map: dict[str, list] = {}
-
-    for slug, name in INSIGHT_SERIES_FROM_METRIC.items():
-        metric = BY_SLUG.get(slug)
-        points = points_by_slug.get(slug)
-        if not metric or not metric.series or not points:
-            continue
-        series_map[name] = as_daily_pairs(metric.series(points))
-
-    sleep_points = points_by_slug.get("sleep")
-    if sleep_points:
-        asleep, deep = sleep_pairs(sleep_points)
-        series_map["sleep_minutes"] = asleep
-        series_map["deep_sleep_minutes"] = deep
-
-    return series_map
 
 
 def latest_value(series: dict):
