@@ -1,8 +1,8 @@
 {% extends "base.html" %}
-{% block title %}How the arousal signal works - Health Dashboard{% endblock %}
+{% block title %}How the arousal signal works - {{ person.display_name }} ({{ person.device_label }}){% endblock %}
 
 {% comment %}
-  The honesty layer for the arousal card.
+  The honesty layer for the arousal page.
 
   Everything factual on this page is rendered from models/model_card.json,
   which the training project writes at the moment it trains the model. Nothing
@@ -11,10 +11,12 @@
 {% endcomment %}
 
 {% block content %}
+  <p class="small"><a href="{% url 'people:arousal' person.slug %}">&larr; Arousal signal</a></p>
   <h1>How the arousal signal works</h1>
   <p class="lede">
     What the model is, how it was tested, and the things it cannot tell you.
   </p>
+  <p class="notice"><strong>{{ scored_only }}</strong></p>
 
   {% if not card %}
 
@@ -52,9 +54,9 @@
     <p class="muted small">
       Every figure below comes from leave-one-subject-out cross-validation:
       each fold trains on all but one person and is tested on the person it
-      has never seen. That is a harder and more honest test than a random
-      split, which would let the model recognise the individual rather than
-      the state.
+      has never seen. These are single runs with default hyperparameters and no
+      confidence interval, so small differences between rows should not be read
+      as one model being better than another.
     </p>
     <table class="ood">
       <thead>
@@ -79,10 +81,10 @@
       </tbody>
     </table>
     <p class="muted small">
-      The card on the dashboard uses the <strong>heart rate only</strong> SVM,
-      because heart rate is the only one of these signals this watch reports.
-      The gap between that row and the 8-channel row is the cost of not having
-      electrodermal activity and skin temperature.
+      This page uses the <strong>heart rate only</strong> SVM, because heart rate
+      is the one of these signals a consumer wrist device reports. The gap between
+      that row and the 8-channel row is the cost of not having electrodermal
+      activity and skin temperature.
     </p>
 
     <h2>What it cannot tell you</h2>
@@ -92,64 +94,36 @@
       {% endfor %}
     </ul>
 
-    <h2>How today's number is produced</h2>
+    <h2>How a day's number is produced</h2>
     <ol>
-      <li>Today's wrist heart-rate samples are read from the Google Health
-        API (the same cached fetch the rest of the dashboard uses).</li>
+      <li>The readings stored for {{ person.display_name }} on one local day
+        ({{ person.timezone }}) are read. They came from uploaded files and
+        nothing is fetched from anywhere.</li>
       <li>They are cut into {{ window_seconds }}-second windows, stepping
         every {{ step_seconds }} seconds &mdash; the same geometry the model
         was trained on. A window holding fewer than {{ min_samples }} readings
         is dropped rather than described by statistics computed from almost
-        nothing.</li>
+        nothing. A day is only scored if at least {{ min_windows }} windows remain.</li>
       <li>Five features are computed per window: mean, standard deviation,
         minimum, maximum and slope of the heart rate.</li>
-      <li>The model labels each window, and the card reports the label that
+      <li>The model labels each window, and the page reports the label that
         won the most windows.</li>
       <li>Before that label is shown, each feature is compared against the
         range seen in training, and the comparison is displayed with it.</li>
+      <li>Nothing is learned from the day: the model was fitted on WESAD only
+        and the uploaded data is only scored.</li>
     </ol>
 
-    {% if assessment and assessment.available %}
-      <h2>Today's out-of-distribution check</h2>
-      <p class="muted small">
-        This is the measurement behind the caveat on the card. Large values
-        mean today's readings look unlike anything the model was fitted on,
-        and its output should be weighted accordingly.
-      </p>
-      <table class="ood">
-        <thead>
-          <tr>
-            <th>Feature</th>
-            <th>Training range</th>
-            <th>Today's median</th>
-            <th>Outside range</th>
-            <th>Median shift</th>
-          </tr>
-        </thead>
-        <tbody>
-          {% for row in assessment.ood_rows %}
-            <tr>
-              <td><code>{{ row.feature }}</code></td>
-              <td>{{ row.training_min|floatformat:2 }} to {{ row.training_max|floatformat:2 }}</td>
-              <td>{{ row.today_median|floatformat:2 }}</td>
-              <td>{{ row.share_outside|floatformat:3 }}</td>
-              <td>{{ row.median_shift|floatformat:2 }} sd</td>
-            </tr>
-          {% endfor %}
-        </tbody>
-      </table>
-    {% endif %}
-
-    <h2>Why there is no accuracy figure for your own data</h2>
+    <h2>Why there is no accuracy figure for uploaded data</h2>
     <p>
-      There is no ground truth. Nobody recorded which minutes of your days
+      There is no ground truth. Nobody recorded which minutes of these days
       were stressful, so there is nothing to score the predictions against.
       The cross-validated numbers above describe how the model performs on
       the laboratory dataset it was trained on &mdash; they are not a claim
-      about how it performs on you.
+      about how it performs on {{ person.display_name }}.
     </p>
 
   {% endif %}
 
-  <p><a href="{% url 'health:index' %}">&larr; Back to the dashboard</a></p>
+  <p><a href="{% url 'people:arousal' person.slug %}">&larr; Back to the arousal page</a></p>
 {% endblock %}

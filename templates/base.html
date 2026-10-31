@@ -53,6 +53,12 @@
           <a class="tab" href="{% url 'people:person' person.slug %}">Overview</a>
         {% endif %}
 
+        {% if here == "arousal" or here == "arousal_methodology" %}
+          <a class="tab is-current" href="{% url 'people:arousal' person.slug %}" aria-current="page">Arousal</a>
+        {% else %}
+          <a class="tab" href="{% url 'people:arousal' person.slug %}">Arousal</a>
+        {% endif %}
+
         {% if here == "raw_index" or here == "raw_day" %}
           <a class="tab is-current" href="{% url 'people:raw_index' person.slug %}" aria-current="page">Raw rows</a>
         {% else %}

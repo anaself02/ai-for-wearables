@@ -1,18 +1,18 @@
-"""Tests for the arousal card - the WESAD model applied to live data.
+"""Tests for the arousal assessment: the WESAD model applied to one person's day.
 
-Three properties matter here, and each is worth stating plainly because each
+Four properties matter here, and each is worth stating plainly because each
 protects something that would otherwise fail quietly:
 
   1. A prediction is never shown without its caveat. The model is trained on
-     laboratory stress and is measurably out of distribution on this device's
-     data, so a bare state label would overclaim. This is enforced twice: the
-     `Assessment.predicted` constructor refuses to build without the
+     laboratory stress and is measurably out of distribution on a consumer
+     device's data, so a bare state label would overclaim. This is enforced
+     twice: the `Assessment.predicted` constructor refuses to build without the
      out-of-distribution evidence, and the template renders the caveat in the
-     same branch as the headline.
+     same branch as the headline (people/test_arousal_page.py).
 
   2. Everything degrades to an explanation, never to a crash. A missing model
      file, an uninstalled ML stack, a scikit-learn that did not write the
-     pickle, or a day with too little heart-rate data must all produce a card
+     pickle, or a day with too little heart-rate data must all produce a result
      that says so.
 
   3. The feature computation matches the training project. `basic_features`
@@ -20,20 +20,29 @@ protects something that would otherwise fail quietly:
      a golden-value test pins the two together so a drift fails here rather
      than silently changing predictions.
 
-Nothing in this file loads the real model or calls the real API.
+  4. Nothing learns from the data being scored. The models were fitted on WESAD
+     only; the end-to-end test below runs the real model under a guard that
+     makes every fit and save raise.
+
+Except for the one end-to-end test, nothing here loads the real model. Every
+reading is synthetic.
 """
 
-from datetime import date
+import hashlib
+import os
+import unittest
+from datetime import date, datetime, timedelta, timezone
 from unittest import mock
 
-from django.contrib.auth import get_user_model
-from django.core.cache import cache
+from django.conf import settings
 from django.test import TestCase, override_settings
-from django.urls import reverse
 
 from health import arousal
-
-User = get_user_model()
+from people import ingest, repository
+from people.fitguard import fit_guard
+from people.models import Person
+from people.sources import SourceFile
+from people.testing import hr_csv_bytes, utc_day_file
 
 DAY = date(2026, 9, 18)
 
@@ -53,48 +62,38 @@ DISTRIBUTION = {
 }
 
 
-def hr_point(hour, minute, second, bpm):
-    """One data point in the shape the Google Health API really returns.
-
-    beatsPerMinute is a string, and zero-valued time fields are omitted
-    rather than sent as 0 - both confirmed against live responses.
-    """
-    time_part = {}
-    if hour:
-        time_part["hours"] = hour
-    if minute:
-        time_part["minutes"] = minute
-    if second:
-        time_part["seconds"] = second
-
-    return {
-        "heartRate": {
-            "beatsPerMinute": str(bpm),
-            "sampleTime": {
-                "civilTime": {
-                    "date": {"year": 2026, "month": 9, "day": 18},
-                    "time": time_part,
-                }
-            },
-        }
-    }
-
-
-def a_day_of_points(bpm=62, seconds_apart=3, count=1200):
-    """A run of readings from midnight, spaced like the real device."""
-    points = []
-    for index in range(count):
-        total = index * seconds_apart
-        points.append(hr_point(total // 3600, (total // 60) % 60, total % 60,
-                               bpm + (index % 5)))
-    return points
-
-
 def fake_model(predicted_class=2):
     """A stand-in for the scikit-learn pipeline: one class for every window."""
     model = mock.MagicMock()
     model.predict.side_effect = lambda frame: [predicted_class] * len(frame)
     return model
+
+
+def fake_artifacts(model=None):
+    return (model or fake_model(), FEATURE_NAMES, DISTRIBUTION)
+
+
+def make_person(slug="subject", days=(date(2026, 9, 17), date(2026, 9, 18)),
+                spacing=3, seed=1, base=62, spread=10, tz="America/Toronto"):
+    """A synthetic person with full UTC days of readings at the given spacing."""
+    person = Person.objects.create(slug=slug, display_name=slug.title(),
+                                   device_label="Fitbit Air",
+                                   adapter_key="fitbit-takeout", timezone=tz)
+    files = [SourceFile(*utc_day_file(d, spacing=spacing, seed=seed, base=base,
+                                      spread=spread)) for d in days]
+    ingest.commit_plan(ingest.build_plan(person, files))
+    return person
+
+
+def make_short_person(minutes, spacing=3, slug="short"):
+    person = Person.objects.create(slug=slug, display_name="Short",
+                                   device_label="Fitbit Air",
+                                   adapter_key="fitbit-takeout")
+    start = datetime(2026, 9, 18, 14, 0, tzinfo=timezone.utc)
+    data = hr_csv_bytes(start, start + timedelta(minutes=minutes), spacing=spacing)
+    ingest.commit_plan(ingest.build_plan(
+        person, [SourceFile("heart_rate_2026-09-18.csv", data)]))
+    return person
 
 
 class BasicFeaturesTests(TestCase):
@@ -109,7 +108,7 @@ class BasicFeaturesTests(TestCase):
         #
         # Regenerate them that way if the training code legitimately changes.
         # If they stop matching without that, the two implementations have
-        # drifted and predictions on live data no longer mean what the
+        # drifted and predictions on uploaded data no longer mean what the
         # training scores say they mean.
         #
         # Note std is the population standard deviation (numpy's default,
@@ -130,21 +129,6 @@ class BasicFeaturesTests(TestCase):
     def test_empty_input_is_rejected(self):
         with self.assertRaises(ValueError):
             arousal.basic_features([])
-
-
-class ParseSamplesTests(TestCase):
-    def test_parses_string_bpm_and_omitted_time_fields(self):
-        samples = arousal.parse_samples([hr_point(0, 0, 0, 58)])
-
-        self.assertEqual(len(samples), 1)
-        moment, bpm = samples[0]
-        self.assertEqual((moment.hour, moment.minute, moment.second), (0, 0, 0))
-        self.assertEqual(bpm, 58.0)
-
-    def test_skips_points_with_no_value(self):
-        broken = {"heartRate": {"sampleTime": {"civilTime": {
-            "date": {"year": 2026, "month": 9, "day": 18}, "time": {}}}}}
-        self.assertEqual(arousal.parse_samples([broken]), [])
 
 
 class AssessmentConstructionTests(TestCase):
@@ -181,38 +165,73 @@ class AssessmentConstructionTests(TestCase):
         self.assertEqual(assessment.caveat, "")
 
 
+class NotesTests(TestCase):
+    """The pre-declared 3-class display rules, printed with every label."""
+
+    def test_a_dominant_amusement_day_gets_the_plain_notes(self):
+        notes = " ".join(arousal.notes_for({1: 0.2, 2: 0.05, 3: 0.75}, 0.4))
+        self.assertIn("OUT OF DISTRIBUTION", notes)
+        self.assertIn("DEGENERATE", notes)
+        self.assertIn("cannot separate amusement from baseline", notes)
+        self.assertIn("NOT interpretable", notes)
+
+    def test_an_ordinary_in_range_day_gets_no_warning_notes(self):
+        self.assertEqual(arousal.notes_for({1: 0.5, 2: 0.3, 3: 0.2}, 0.05), [])
+
+    def test_the_thresholds_are_the_predeclared_ones(self):
+        self.assertEqual(arousal.OOD_FLAG_SHARE, 0.25)
+        self.assertEqual(arousal.DOMINANT_CLASS_SHARE, 0.60)
+        self.assertEqual(arousal.MIN_WINDOWS_TO_SCORE, 60)
+
+
 class AssessTests(TestCase):
     """Property 2: every failure becomes an explanation, not an exception."""
 
-    def _artifacts(self, model=None):
-        return (model or fake_model(), FEATURE_NAMES, DISTRIBUTION)
+    @classmethod
+    def setUpTestData(cls):
+        cls.person = make_person()
 
-    def test_predicts_from_a_full_day_of_readings(self):
+    def assess(self, person=None, day=DAY, artifacts=None):
         with mock.patch.object(arousal, "load_artifacts",
-                               return_value=self._artifacts()):
-            assessment = arousal.assess(a_day_of_points(), DAY)
+                               return_value=artifacts or fake_artifacts()):
+            return arousal.assess(person or self.person, day)
+
+    def test_predicts_from_a_full_local_day_of_readings(self):
+        assessment = self.assess(day=date(2026, 9, 17))
 
         self.assertTrue(assessment.available)
         self.assertEqual(assessment.headline, "Elevated arousal signal")
-        self.assertGreater(assessment.n_windows, 0)
+        self.assertEqual(assessment.n_windows, 2879)       # 24 h, 60 s / 30 s step
+        self.assertEqual(assessment.n_waking_windows, 1800)  # 08:00-23:00 local
         self.assertEqual(len(assessment.ood_rows), len(FEATURE_NAMES))
         self.assertTrue(assessment.caveat)
+        self.assertTrue(assessment.notes)
+
+    def test_the_result_carries_device_spacing_and_timezone(self):
+        assessment = self.assess(day=date(2026, 9, 17))
+        self.assertEqual(assessment.device_names, ["Fitbit Air"])
+        self.assertEqual(assessment.spacing["median"], 3.0)
+        self.assertEqual(assessment.n_readings, 28800)
+        self.assertEqual(assessment.timezone, "America/Toronto")
+        self.assertEqual(assessment.median_values_per_window, 20.0)
+        self.assertAlmostEqual(assessment.wesad_values_per_window, 76.7)
 
     def test_features_are_passed_in_the_fitted_column_order(self):
         # Feeding the right five numbers in the wrong order raises nothing -
         # it just returns a different answer - so the order is asserted.
         model = fake_model()
-        with mock.patch.object(arousal, "load_artifacts",
-                               return_value=self._artifacts(model)):
-            arousal.assess(a_day_of_points(), DAY)
-
+        self.assess(day=date(2026, 9, 17), artifacts=fake_artifacts(model))
         frame = model.predict.call_args[0][0]
         self.assertEqual(list(frame.columns), FEATURE_NAMES)
 
+    def test_a_person_is_required(self):
+        for bad in ("subject", None, 1):
+            with self.assertRaises(TypeError):
+                arousal.assess(bad, DAY)
+
     def test_missing_model_file_degrades_with_a_readable_reason(self):
         with override_settings(WEARABLE_ML_DIR="/nonexistent/wearable-ml"):
-            assessment = arousal.assess(a_day_of_points(), DAY)
-
+            assessment = arousal.assess(self.person, date(2026, 9, 17))
         self.assertFalse(assessment.available)
         self.assertIn("No trained model", assessment.reason)
 
@@ -221,8 +240,7 @@ class AssessTests(TestCase):
                 arousal, "load_artifacts",
                 side_effect=arousal.ArousalUnavailable(
                     "scikit-learn is not installed in this environment")):
-            assessment = arousal.assess(a_day_of_points(), DAY)
-
+            assessment = arousal.assess(self.person, date(2026, 9, 17))
         self.assertFalse(assessment.available)
         self.assertIn("scikit-learn is not installed", assessment.reason)
 
@@ -231,39 +249,69 @@ class AssessTests(TestCase):
                 "feature_names_in_order": FEATURE_NAMES}), \
              mock.patch("os.path.exists", return_value=True), \
              mock.patch("sklearn.__version__", "1.9.9"):
-            assessment = arousal.assess(a_day_of_points(), DAY)
-
+            assessment = arousal.assess(self.person, date(2026, 9, 17))
         self.assertFalse(assessment.available)
         self.assertIn("Refusing to load", assessment.reason)
 
-    def test_no_readings_degrades_with_a_readable_reason(self):
-        with mock.patch.object(arousal, "load_artifacts",
-                               return_value=self._artifacts()):
-            assessment = arousal.assess([], DAY)
-
+    def test_a_day_with_no_readings_degrades_with_a_readable_reason(self):
+        assessment = self.assess(day=date(2026, 1, 1))
         self.assertFalse(assessment.available)
         self.assertIn("No heart-rate readings", assessment.reason)
 
-    def test_too_few_readings_for_any_window_degrades(self):
-        # Nine readings three seconds apart: no 60 s window reaches the
-        # ten-reading minimum.
-        sparse = a_day_of_points(count=9)
-        with mock.patch.object(arousal, "load_artifacts",
-                               return_value=self._artifacts()):
-            assessment = arousal.assess(sparse, DAY)
+    def test_too_few_windows_degrades_and_says_how_many_are_needed(self):
+        short = make_short_person(minutes=10)           # ~19 windows
+        assessment = self.assess(short, date(2026, 9, 18))
+        self.assertFalse(assessment.available)
+        self.assertIn("Too few scorable windows", assessment.reason)
+        self.assertIn("at least 60", assessment.reason)
 
+    def test_readings_too_sparse_for_any_window_degrades(self):
+        sparse = make_short_person(minutes=30, spacing=10, slug="sparse")
+        assessment = self.assess(sparse, date(2026, 9, 18))   # 6 readings / minute
         self.assertFalse(assessment.available)
         self.assertIn("Not enough heart-rate data", assessment.reason)
 
     def test_an_unforeseen_error_degrades_instead_of_raising(self):
         exploding = mock.MagicMock()
         exploding.predict.side_effect = RuntimeError("kaboom")
-        with mock.patch.object(arousal, "load_artifacts",
-                               return_value=self._artifacts(exploding)):
-            assessment = arousal.assess(a_day_of_points(), DAY)
-
+        assessment = self.assess(day=date(2026, 9, 17),
+                                 artifacts=fake_artifacts(exploding))
         self.assertFalse(assessment.available)
         self.assertIn("kaboom", assessment.reason)
+
+    def test_a_daylight_saving_day_is_scored_over_its_real_25_hours(self):
+        person = make_person("dst", days=(date(2026, 11, 1), date(2026, 11, 2)))
+        assessment = self.assess(person, date(2026, 11, 1))
+        self.assertTrue(assessment.available)
+        self.assertEqual(assessment.n_windows, 2999)       # 25 h, not 24
+
+
+class ScorableDaysTests(TestCase):
+    def test_days_are_listed_newest_first_with_window_counts(self):
+        person = make_person()
+        days = arousal.scorable_days(person)
+        self.assertEqual([d["day"] for d in days],
+                         [date(2026, 9, 18), date(2026, 9, 17), date(2026, 9, 16)])
+        by_day = {d["day"]: d for d in days}
+        self.assertEqual(by_day[date(2026, 9, 17)]["windows"], 2879)
+        self.assertEqual(by_day[date(2026, 9, 17)]["readings"], 28800)
+        self.assertTrue(all(d["scorable"] for d in days))
+
+    def test_the_default_is_the_most_recent_scorable_day(self):
+        person = make_person()
+        self.assertEqual(arousal.default_day(arousal.scorable_days(person)),
+                         date(2026, 9, 18))
+
+    def test_a_day_with_too_few_windows_is_not_scorable_or_default(self):
+        short = make_short_person(minutes=10)
+        days = arousal.scorable_days(short)
+        self.assertEqual(len(days), 1)
+        self.assertFalse(days[0]["scorable"])
+        self.assertIsNone(arousal.default_day(days))
+
+    def test_a_person_is_required(self):
+        with self.assertRaises(TypeError):
+            arousal.scorable_days("subject")
 
 
 class OutOfDistributionTests(TestCase):
@@ -280,35 +328,34 @@ class OutOfDistributionTests(TestCase):
         self.assertLess(by_feature["HR_std"]["median_shift"], -2.0)
 
 
-class CachingTests(TestCase):
-    def setUp(self):
-        cache.clear()
-        self.addCleanup(cache.clear)
-        self.user = User.objects.create(username="tester@example.com")
-        self.other = User.objects.create(username="someone-else@example.com")
+MODELS_DIR = os.path.join(settings.WEARABLE_ML_DIR, "models")
 
-    def test_nothing_is_computed_when_only_reading_the_cache(self):
-        self.assertIsNone(arousal.cached_assessment(self.user, DAY))
 
-    def test_a_computed_assessment_is_reused(self):
-        client = mock.MagicMock()
-        with mock.patch.object(arousal, "load_artifacts",
-                               return_value=(fake_model(), FEATURE_NAMES,
-                                             DISTRIBUTION)), \
-             mock.patch("health.cache.fetch_intraday") as fetch:
-            fetch.return_value = mock.MagicMock(points=a_day_of_points())
+def fingerprint(directory):
+    result = {}
+    for name in sorted(os.listdir(directory)):
+        path = os.path.join(directory, name)
+        if os.path.isfile(path):
+            with open(path, "rb") as handle:
+                result[name] = (os.path.getsize(path), os.path.getmtime(path),
+                                hashlib.sha256(handle.read()).hexdigest())
+    return result
 
-            first = arousal.compute_assessment(client, self.user, DAY)
-            second = arousal.compute_assessment(client, self.user, DAY)
 
-        self.assertTrue(first.available)
-        self.assertEqual(first.headline, second.headline)
-        # One fetch, not two: the second call came from the cache.
-        self.assertEqual(fetch.call_count, 1)
+@unittest.skipUnless(os.path.exists(os.path.join(MODELS_DIR, "svm_hr_only.joblib")),
+                     "the wearable-ml model files are not present")
+class RealModelEndToEndTests(TestCase):
+    """Property 4: the real WESAD-trained model scores a day and learns nothing."""
 
-    def test_assessments_are_scoped_per_user(self):
-        stored = arousal.store_unavailable(self.user, DAY, "mine only")
+    def test_the_real_model_scores_a_day_under_the_no_fit_guard_and_is_untouched(self):
+        person = make_person("real")
+        before = fingerprint(MODELS_DIR)
+        with fit_guard():
+            assessment = arousal.assess(person, date(2026, 9, 17))
+        self.assertTrue(assessment.available, assessment.reason)
+        self.assertEqual(assessment.n_windows, 2879)
+        self.assertEqual(sum(assessment.shares.values()), 1.0)
+        self.assertTrue(assessment.caveat)
+        self.assertEqual(fingerprint(MODELS_DIR), before,
+                         "scoring must not modify any file in the model folder")
 
-        self.assertEqual(arousal.cached_assessment(self.user, DAY).reason,
-                         stored.reason)
-        self.assertIsNone(arousal.cached_assessment(self.other, DAY))

@@ -160,11 +160,6 @@ HEALTH_CACHE_SECONDS_PAST_DAY = int(env("HEALTH_CACHE_SECONDS_PAST_DAY", "86400"
 # Nothing else in the dashboard depends on it.
 WEARABLE_ML_DIR = env("WEARABLE_ML_DIR", str(BASE_DIR.parent / "wearable-ml"))
 
-# How long a computed arousal assessment is cached. It costs far more than a
-# plain API read - several pages of samples, then a few thousand windows of
-# feature extraction - so it is computed on demand rather than on page load.
-AROUSAL_CACHE_SECONDS = int(env("AROUSAL_CACHE_SECONDS", "3600"))
-
 # In-process cache: no extra service to run, and fast. It is per-process and
 # does not survive a restart - move to the database or Redis backend if this is
 # ever served by more than one worker.

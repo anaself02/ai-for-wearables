@@ -1,0 +1,176 @@
+{% extends "base.html" %}
+{% block title %}Arousal signal - {{ person.display_name }} ({{ person.device_label }}){% endblock %}
+
+{% comment %}
+  The WESAD-trained model applied to one person's chosen day.
+
+  Structural rule for this template: the headline, its caveat and the notes are
+  rendered by the SAME branch. There is no path through this file that prints a
+  state label without the caveat line and the link to the methodology page beside
+  it. people/test_arousal_page.py asserts that for every possible label, so it
+  stays true.
+
+  The person, the device and the spacing between that device's readings are
+  printed with the result. A Fitbit's smoothed readings and an EmotiBit's are
+  different measurements, and that difference must stay visible.
+{% endcomment %}
+
+{% block content %}
+  <p class="small"><a href="{% url 'people:person' person.slug %}">&larr; {{ person.display_name }}</a></p>
+  <h1>Arousal signal</h1>
+  <p class="lede">{{ person.display_name }} &middot; {{ person.device_label }}</p>
+
+  <p class="notice"><strong>{{ scored_only }}</strong></p>
+
+  {% if empty_message %}
+    <p class="empty-msg">{{ empty_message }}</p>
+  {% elif no_scorable_day %}
+    <div class="notice">
+      No day has enough data to score: a day needs at least {{ min_windows }}
+      windows of {{ window_seconds }} s holding at least {{ min_samples }} readings each.
+    </div>
+  {% else %}
+
+    <h2>Choose a day</h2>
+    <p class="muted small">
+      A day can be scored when it holds at least <strong>{{ min_windows }}</strong>
+      windows ({{ window_seconds }} s, stepping {{ step_seconds }} s) with at least
+      {{ min_samples }} readings each. Days are local days in {{ person.timezone }}.
+      The default is the most recent day that qualifies.
+    </p>
+    <form method="get" class="inline-form">
+      <label for="date" class="visually-hidden">Day</label>
+      <select id="date" name="date">
+        {% for entry in days %}
+          <option value="{{ entry.day|date:'Y-m-d' }}" {% if entry.day == chosen %}selected{% endif %}>
+            {{ entry.day|date:"Y-m-d" }}{% if not entry.scorable %} (too few windows){% endif %}
+          </option>
+        {% endfor %}
+      </select>
+      <button class="btn" type="submit">Score this day</button>
+    </form>
+
+    <section class="arousal" aria-labelledby="arousal-heading">
+      <h2 id="arousal-heading">{{ chosen|date:"Y-m-d" }}</h2>
+
+      {% if not assessment.available %}
+
+        <div class="insight inconclusive">
+          <div class="insight-head"><span class="insight-title">No assessment available</span></div>
+          <p class="insight-detail">{{ assessment.reason }}</p>
+          <p class="insight-footnote">
+            <a href="{% url 'people:arousal_methodology' person.slug %}">How this works, and what it cannot tell you</a>
+          </p>
+        </div>
+
+      {% else %}
+
+        <div class="insight dir-neutral">
+          <div class="insight-head">
+            {# Plain-language label. The raw class names would claim far more #}
+            {# than wrist heart rate can support.                            #}
+            <span class="insight-title">{{ assessment.headline }}</span>
+            <span class="insight-value sig sig-no">{{ assessment.confidence }}</span>
+          </div>
+
+          <p class="insight-detail">{{ assessment.explanation }}</p>
+
+          {# The caveat and the notes are rendered here, in the same block as #}
+          {# the headline, precisely so they cannot come apart from it.       #}
+          <p class="insight-detail muted">{{ assessment.caveat }}</p>
+          {% for note in assessment.notes %}
+            <p class="notice"><strong>{{ note }}</strong></p>
+          {% endfor %}
+
+          <p class="insight-meta">
+            <span class="muted">{{ assessment.n_windows }} windows on {{ assessment.day }}</span>
+            <span class="muted derived">mean {{ assessment.mean_bpm|floatformat:0 }} bpm</span>
+          </p>
+
+          <p class="insight-footnote">
+            <a href="{% url 'people:arousal_methodology' person.slug %}">How this works, and what it cannot tell you</a>
+          </p>
+        </div>
+
+        <h3>What measured this day</h3>
+        <dl class="person-facts">
+          <div><dt class="label">Person</dt><dd>{{ person.display_name }}</dd></div>
+          <div><dt class="label">Device</dt><dd>{{ person.device_label }}</dd></div>
+          <div><dt class="label">Device name(s) in the files</dt>
+            <dd>{% for name in assessment.device_names %}{{ name }}{% if not forloop.last %}, {% endif %}{% endfor %}</dd></div>
+          <div><dt class="label">Readings</dt><dd class="num">{{ assessment.n_readings|floatformat:"0g" }}</dd></div>
+          <div><dt class="label">Spacing between readings</dt>
+            <dd class="num derived">median {{ spacing.median|floatformat:1 }} s
+              (p05 {{ spacing.p05|floatformat:1 }}, p95 {{ spacing.p95|floatformat:1 }}),
+              gaps over 5 min: {{ spacing.gaps_over_5min }}</dd></div>
+          <div><dt class="label">Readings per {{ window_seconds }} s window</dt>
+            <dd class="num derived">{{ assessment.median_values_per_window|floatformat:0 }} (median)</dd></div>
+        </dl>
+        <p class="muted small">
+          Resolution mismatch: the training data (WESAD) has one heart-rate value per
+          heartbeat, about {{ assessment.wesad_values_per_window|floatformat:0 }} per
+          {{ window_seconds }} s window (implied by its mean heart rate, not measured here).
+          This device gives {{ assessment.median_values_per_window|floatformat:0 }} per window,
+          each already smoothed by the device. The same feature names describe different
+          measurements.
+        </p>
+
+        <h3>Windows by condition</h3>
+        <p class="muted small">
+          Share of this day's windows the model labelled like each laboratory condition.
+          Read with the notes above: where they say the shares are not interpretable,
+          they are not.
+        </p>
+        <table class="ood">
+          <thead><tr><th>Labelled like the</th><th class="num">All windows</th>
+              <th class="num">Waking hours (08-23)</th></tr></thead>
+          <tbody>
+            {% for name, all_share, waking_share in share_rows %}
+              <tr><td>{{ name }}</td>
+                  <td class="num derived">{{ all_share|floatformat:3 }}</td>
+                  <td class="num derived">{{ waking_share|floatformat:3 }}</td></tr>
+            {% endfor %}
+          </tbody>
+        </table>
+
+        <h3>How far outside the training data this day sits</h3>
+        <p class="muted small">
+          The model is an RBF-kernel SVM, which judges by distance in feature space.
+          Readings outside the range it was fitted on do not degrade gracefully; they
+          land wherever happens to be nearest. For each feature: the share of this day's
+          windows outside the range seen in training, and how far the day's middle sits
+          from the training average in training standard deviations.
+        </p>
+        <table class="ood">
+          <thead><tr><th>Feature</th><th class="num">Outside training range</th>
+              <th class="num">Median shift</th></tr></thead>
+          <tbody>
+            {% for row in assessment.ood_rows %}
+              <tr><td><code>{{ row.feature }}</code></td>
+                  <td class="num derived">{{ row.share_outside|floatformat:3 }}</td>
+                  <td class="num derived">{{ row.median_shift|floatformat:2 }} sd</td></tr>
+            {% endfor %}
+          </tbody>
+        </table>
+
+      {% endif %}
+    </section>
+
+    <h2>Days</h2>
+    <table>
+      <thead><tr><th>Local day</th><th class="num">Readings</th>
+          <th class="num">Scorable windows</th><th>Can be scored</th><th></th></tr></thead>
+      <tbody>
+        {% for entry in days %}
+          <tr>
+            <td>{{ entry.day|date:"Y-m-d" }}</td>
+            <td class="num">{{ entry.readings|floatformat:"0g" }}</td>
+            <td class="num derived">{{ entry.windows|floatformat:"0g" }}</td>
+            <td>{% if entry.scorable %}yes{% else %}no (fewer than {{ min_windows }}){% endif %}</td>
+            <td><a href="?date={{ entry.day|date:'Y-m-d' }}">Score</a></td>
+          </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  {% endif %}
+{% endblock %}

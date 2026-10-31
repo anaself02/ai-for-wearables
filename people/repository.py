@@ -211,15 +211,19 @@ def raw_rows(person, day, limit=100):
 
 
 def device_names_for_day(person, day):
-    """{source name: reading count} over the stored UTC days a local day touches."""
+    """Source names (as written in the files) on the UTC days a local day touches.
+
+    Names only, sorted. Counts are deliberately not returned: the source of each
+    individual reading is not stored, so a count here would be for the whole UTC
+    days and overstate the local day.
+    """
     require_person(person)
-    names = {}
+    names = set()
     rows = HeartRateDay.objects.filter(
         person=person, utc_date__in=utc_dates_for(day, person.timezone))
     for sources in rows.values_list("sources", flat=True):
-        for name, count in sources.items():
-            names[name] = names.get(name, 0) + count
-    return names
+        names.update(sources)
+    return sorted(names)
 
 
 def neighbours(person, day):

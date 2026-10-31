@@ -11,12 +11,14 @@ minimum and maximum bpm, raw rows) or computed by this app from those rows
 "derived" class, which the stylesheet draws dashed.
 """
 
-import json
+from datetime import date
 from functools import wraps
 
-from django.http import Http404
+from django.contrib import messages
 from django.shortcuts import get_object_or_404, render
 from django.views.decorators.cache import never_cache
+
+from health import arousal as arousal_module
 
 from . import repository
 from .models import Person
@@ -186,4 +188,72 @@ def raw_day(request, person, day):
     return render_person(request, "people/raw_day.html", person, {
         "day": day, "rows": rows, "total": total, "shown": len(rows),
         "prev_day": previous, "next_day": following,
+    })
+
+
+# ---------------------------------------------------------------------------
+# arousal: the WESAD-trained model, applied to one person's chosen day
+# ---------------------------------------------------------------------------
+
+CONDITION_NAMES = {1: "baseline condition", 2: "stress condition (TSST)",
+                   3: "amusement condition"}
+
+
+def share_rows(assessment):
+    """[(condition, share of all windows, share of waking windows)]."""
+    return [(CONDITION_NAMES[label], assessment.shares.get(label, 0.0),
+             assessment.waking_shares.get(label, 0.0))
+            for label in CONDITION_NAMES]
+
+
+@person_page
+def arousal_view(request, person):
+    """List the scorable days and score one: ?date=YYYY-MM-DD, default newest.
+
+    The model was trained on WESAD only. The chosen day is only scored; nothing
+    is fitted or saved. The person, device and reading spacing are shown with
+    the result so a Fitbit day and an EmotiBit day can never look alike.
+    """
+    context = {"min_windows": arousal_module.MIN_WINDOWS_TO_SCORE,
+               "scored_only": arousal_module.WESAD_ONLY_NOTICE,
+               "window_seconds": arousal_module.WINDOW_SECONDS,
+               "step_seconds": arousal_module.STEP_SECONDS,
+               "min_samples": arousal_module.MIN_SAMPLES_PER_WINDOW}
+    if not person.has_data:
+        return render_person(request, "people/arousal.html", person, context)
+
+    days = arousal_module.scorable_days(person)
+    default = arousal_module.default_day(days)
+    chosen = default
+
+    raw = request.GET.get("date")
+    if raw:
+        try:
+            chosen = date.fromisoformat(raw)
+        except ValueError:
+            messages.error(request, "That is not a valid date; showing the most "
+                                    "recent scorable day instead.")
+
+    context.update({"days": days, "default_day": default, "chosen": chosen})
+    if chosen is None:
+        context["no_scorable_day"] = True
+    else:
+        assessment = arousal_module.assess(person, chosen)
+        context["assessment"] = assessment
+        if assessment.available:
+            context["share_rows"] = share_rows(assessment)
+            context["spacing"] = assessment.spacing
+    return render_person(request, "people/arousal.html", person, context)
+
+
+@person_page
+def arousal_methodology(request, person):
+    """What the model is, how it was tested, and what it cannot tell you."""
+    return render_person(request, "people/arousal_methodology.html", person, {
+        "card": arousal_module.load_model_card(),
+        "window_seconds": arousal_module.WINDOW_SECONDS,
+        "step_seconds": arousal_module.STEP_SECONDS,
+        "min_samples": arousal_module.MIN_SAMPLES_PER_WINDOW,
+        "min_windows": arousal_module.MIN_WINDOWS_TO_SCORE,
+        "scored_only": arousal_module.WESAD_ONLY_NOTICE,
     })

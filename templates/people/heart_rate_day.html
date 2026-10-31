@@ -20,7 +20,7 @@
       <dl class="person-facts">
         <div><dt class="label">Readings</dt><dd class="num">{{ count|floatformat:"0g" }}</dd></div>
         <div><dt class="label">Device name(s) in the files</dt>
-          <dd>{% for name, n in devices.items %}{{ name }}{% if not forloop.last %}, {% endif %}{% endfor %}</dd></div>
+          <dd>{% for name in devices %}{{ name }}{% if not forloop.last %}, {% endif %}{% endfor %}</dd></div>
         <div><dt class="label">Spacing between readings</dt>
           <dd class="num derived">median {{ summary.spacing.median|floatformat:1 }} s
             (p05 {{ summary.spacing.p05|floatformat:1 }}, p95 {{ summary.spacing.p95|floatformat:1 }}),
