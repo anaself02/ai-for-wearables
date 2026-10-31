@@ -19,6 +19,7 @@
 
   {% if empty_message %}
     <p class="empty-msg">{{ empty_message }}</p>
+    <p><a class="btn secondary" href="{% url 'people:upload' person.slug %}">Upload data</a></p>
   {% else %}
     <dl class="person-facts">
       <div><dt class="label">Local date range</dt>
@@ -32,6 +33,7 @@
     <p>
       <a class="btn secondary" href="{% url 'people:heart_rate' person.slug %}">Heart rate in detail</a>
       <a class="btn secondary" href="{% url 'people:raw_index' person.slug %}">Raw uploaded rows</a>
+      <a class="btn secondary" href="{% url 'people:upload' person.slug %}">Upload more data</a>
     </p>
 
     <h2>Heart rate, last {{ window }} days with data</h2>

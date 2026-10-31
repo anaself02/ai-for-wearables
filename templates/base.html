@@ -58,6 +58,12 @@
         {% else %}
           <a class="tab" href="{% url 'people:raw_index' person.slug %}">Raw rows</a>
         {% endif %}
+
+        {% if here == "upload" or here == "upload_confirm" %}
+          <a class="tab is-current" href="{% url 'people:upload' person.slug %}" aria-current="page">Upload</a>
+        {% else %}
+          <a class="tab" href="{% url 'people:upload' person.slug %}">Upload</a>
+        {% endif %}
       </nav>
     {% endwith %}
     <div class="topbar-end">

@@ -25,7 +25,7 @@ def make_person(slug, name, device, days, marker):
     person = Person.objects.create(slug=slug, display_name=name,
                                    device_label=device,
                                    adapter_key="fitbit-takeout")
-    files = [SourceFile(*utc_day_file(d, marker=marker)) for d in days]
+    files = [SourceFile(*utc_day_file(d, marker=marker, source=device)) for d in days]
     ingest.commit_plan(ingest.build_plan(person, files))
     return person
 

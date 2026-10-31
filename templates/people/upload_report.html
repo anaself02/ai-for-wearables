@@ -1,0 +1,81 @@
+{% extends "base.html" %}
+{% load tz %}
+{% block title %}Validation report - {{ person.display_name }} ({{ person.device_label }}){% endblock %}
+
+{% block content %}
+  <p class="small"><a href="{% url 'people:upload' person.slug %}">&larr; Upload</a></p>
+  <h1>Validation report</h1>
+  <p class="lede">For {{ person.display_name }} &middot; {{ person.device_label }}. Nothing has been saved yet.</p>
+
+  <p class="notice"><strong>{{ scored_only }}</strong></p>
+  {% if error %}<div class="notice error"><strong>{{ error }}</strong></div>{% endif %}
+
+  {% if report.fatal %}
+    <div class="notice error"><strong>Cannot load: {{ report.fatal }}</strong></div>
+  {% else %}
+    <dl class="person-facts">
+      <div><dt class="label">To load</dt><dd class="num">{{ report.n_will_load }} file(s)</dd></div>
+      <div><dt class="label">Already loaded</dt><dd class="num">{{ report.n_already }} file(s)</dd></div>
+      <div><dt class="label">With errors</dt><dd class="num">{{ report.n_error }} file(s)</dd></div>
+      <div><dt class="label">Skipped, not read</dt><dd class="num">{{ report.skipped_other }} file(s)</dd></div>
+    </dl>
+
+    {% if report.rows_to_load %}
+      <dl class="person-facts">
+        <div><dt class="label">Readings to load</dt><dd class="num">{{ report.rows_to_load|floatformat:"0g" }}</dd></div>
+        <div><dt class="label">UTC range</dt>
+          <dd class="num">{% timezone "UTC" %}{{ report.first_utc|date:"Y-m-d H:i" }}Z to {{ report.last_utc|date:"Y-m-d H:i" }}Z{% endtimezone %}</dd></div>
+        <div><dt class="label">Local range</dt>
+          <dd class="num">{{ report.first_local|date:"Y-m-d" }} to {{ report.last_local|date:"Y-m-d" }}</dd></div>
+        <div><dt class="label">Timezone assumed for local days</dt><dd>{{ report.timezone_assumed }}</dd></div>
+        <div><dt class="label">UTC days</dt><dd class="num">{{ report.days_new }} new, {{ report.days_merged }} merged into existing</dd></div>
+        <div><dt class="label">Device name(s) in the files</dt>
+          <dd>{% for name, n in report.devices.items %}{{ name }} ({{ n|floatformat:"0g" }}){% if not forloop.last %}, {% endif %}{% endfor %}</dd></div>
+      </dl>
+    {% endif %}
+
+    {% for warning in report.warnings %}
+      <div class="notice"><strong>Check this:</strong> {{ warning }}</div>
+    {% endfor %}
+
+    {% if report.n_error or report.n_already %}
+      <h2>Files that will not be loaded</h2>
+      <table>
+        <thead><tr><th>File</th><th>Result</th><th>Why</th></tr></thead>
+        <tbody>
+          {% for f in report.files %}
+            {% if f.status != "will load" %}
+              <tr><td>{{ f.name }}</td><td>{{ f.status }}</td><td class="wrap">{{ f.detail }}</td></tr>
+            {% endif %}
+          {% endfor %}
+        </tbody>
+      </table>
+    {% endif %}
+
+    {% if skipped_names %}
+      <p class="muted small">
+        Skipped without being read:
+        {% for name in skipped_names %}<code>{{ name }}</code>{% if not forloop.last %}, {% endif %}{% endfor %}{% if skipped_more %} and {{ skipped_more }} more{% endif %}.
+      </p>
+    {% endif %}
+
+    {% if token %}
+      <form method="post" action="{% url 'people:upload_confirm' person.slug %}" class="panel">
+        {% csrf_token %}
+        <input type="hidden" name="token" value="{{ token }}">
+        {% if needs_person_check %}
+          <p><label><input type="checkbox" name="confirm_person" value="1">
+            I checked this is the right person's file ({{ person.display_name }}, {{ person.device_label }}).</label></p>
+        {% endif %}
+        <button class="btn" type="submit">Load {{ report.rows_to_load|floatformat:"0g" }} readings for {{ person.display_name }}</button>
+      </form>
+      <form method="post" action="{% url 'people:upload_cancel' person.slug %}">
+        {% csrf_token %}
+        <input type="hidden" name="token" value="{{ token }}">
+        <button class="btn secondary" type="submit">Cancel</button>
+      </form>
+    {% else %}
+      <div class="notice"><strong>{{ report.refusal }}</strong></div>
+    {% endif %}
+  {% endif %}
+{% endblock %}

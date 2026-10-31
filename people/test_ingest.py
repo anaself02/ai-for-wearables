@@ -51,7 +51,7 @@ class LoadTests(TestCase):
         parsed = get_adapter("fitbit-takeout").parse_file(files[1])
         self.assertEqual(list(epochs), list(parsed.epochs))
         self.assertEqual(list(bpm), list(parsed.bpm))
-        self.assertEqual(stored.sources, {"Synthetic Band": 28800})
+        self.assertEqual(stored.sources, {"Fitbit Air": 28800})
         self.assertEqual(stored.gap_median, 3.0)
 
     def test_the_report_names_range_timezone_and_device(self):
@@ -61,7 +61,7 @@ class LoadTests(TestCase):
         self.assertEqual(r.first_utc, datetime(2026, 7, 16, tzinfo=UTC))
         # 00:00Z on the 16th is the evening of the 15th in Toronto
         self.assertEqual(r.first_local, date(2026, 7, 15))
-        self.assertEqual(r.devices, {"Synthetic Band": 28800})
+        self.assertEqual(r.devices, {"Fitbit Air": 28800})
         text = ingest.render_report(r)
         self.assertIn("America/Toronto", text)
         self.assertIn("Ready to load", text)
@@ -120,7 +120,7 @@ class DedupeTests(TestCase):
         self.assertEqual(result.days_merged, 1)
         self.assertEqual(result.rows_already_present, 6 * 1200)
         # exact per-source counts: only genuinely new rows were attributed
-        self.assertEqual(stored.sources, {"Synthetic Band": 12 * 1200,
+        self.assertEqual(stored.sources, {"Fitbit Air": 12 * 1200,
                                           "Other Band": 6 * 1200})
         self.assertEqual(person.recordings.count(), 2)
 

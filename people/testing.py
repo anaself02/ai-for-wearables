@@ -10,7 +10,7 @@ from datetime import datetime, timedelta, timezone
 import numpy as np
 
 
-def hr_csv_bytes(start_utc, end_utc, spacing=3, seed=0, source="Synthetic Band",
+def hr_csv_bytes(start_utc, end_utc, spacing=3, seed=0, source="Fitbit Air",
                  base=62, spread=10, marker=None):
     """Takeout-style heart-rate CSV text between two aware UTC datetimes.
 

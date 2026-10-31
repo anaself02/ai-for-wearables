@@ -25,3 +25,6 @@ data-samples/
 .claude/
 design.md
 skills-lock.json
+
+# Files parked between the validation report and the confirmation.
+uploads_tmp/

@@ -206,3 +206,18 @@ LOGGING = {
         "health": {"level": "DEBUG" if DEBUG else "INFO"},
     },
 }
+
+# ---------------------------------------------------------------------------
+# Uploads
+# ---------------------------------------------------------------------------
+# Files wait here, under a random token, between the validation report and the
+# confirmation. Deleted on confirm, on cancel, or when an hour old. Gitignored.
+UPLOAD_SPOOL_DIR = BASE_DIR / "uploads_tmp"
+
+# Django's default of 100 files per request would refuse the Heart Rate folder of
+# a real Takeout export, which holds about a hundred daily files.
+DATA_UPLOAD_MAX_NUMBER_FILES = 1000
+
+# Total size of one upload. The Heart Rate folder is ~110 MB; the whole export is
+# over a gigabyte and is refused with a message asking for only the folder.
+MAX_UPLOAD_BYTES = 600 * 1024 * 1024

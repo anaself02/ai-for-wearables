@@ -35,7 +35,7 @@ class ParseTests(SimpleTestCase):
         self.assertEqual(parsed.report.status, "parsed")
         self.assertEqual(parsed.report.rows, 28800)
         self.assertTrue((parsed.epochs[1:] > parsed.epochs[:-1]).all())
-        self.assertEqual(parsed.sources, {"Synthetic Band": 28800})
+        self.assertEqual(parsed.sources, {"Fitbit Air": 28800})
         self.assertEqual(parsed.report.first_utc, datetime(2026, 7, 16, tzinfo=UTC))
 
     def test_unsorted_and_duplicate_rows_are_fixed_and_reported(self):

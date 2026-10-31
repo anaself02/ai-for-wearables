@@ -160,7 +160,7 @@ class DayPageTests(TwoPeopleCase):
         series = self.payload(html)
         self.assertEqual(len(series["labels"]), 1440)
         self.assertEqual({v for v in series["datasets"][0]["data"]}, {77.0})
-        self.assertIn("Synthetic Band", html)
+        self.assertIn("Fitbit Air", html)
         self.assertIn("median 3.0 s", html)
         self.assertIn("28,800", html)
         self.assertIn("00:00 / 23:59", html)       # first / last reading, local
