@@ -1,0 +1,27 @@
+{% extends "base.html" %}
+{% block title %}Log in - Health Dashboard{% endblock %}
+
+{% block content %}
+  <h1>Log in</h1>
+  <p class="lede">Use the email and password you signed up with.</p>
+
+  {% if error %}<div class="notice error"><strong>{{ error }}</strong></div>{% endif %}
+
+  <form method="post" class="settings-form" novalidate>
+    {% csrf_token %}
+    <input type="hidden" name="next" value="{{ next }}">
+    <div class="field">
+      <label for="id_email">Email</label>
+      <input id="id_email" type="email" name="email" value="{{ form.email.value|default:'' }}"
+             autocomplete="username" required autofocus>
+    </div>
+    <div class="field">
+      <label for="id_password">Password</label>
+      <input id="id_password" type="password" name="password" autocomplete="current-password" required>
+    </div>
+    <button class="btn" type="submit">Log in</button>
+  </form>
+
+  <p class="muted small">No account yet? <a href="{% url 'members:signup' %}">Sign up</a>.
+    An administrator links your account to your profile.</p>
+{% endblock %}

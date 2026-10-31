@@ -33,6 +33,7 @@ INSTALLED_APPS = [
     "django.contrib.staticfiles",
     "health",
     "people",
+    "members",
 ]
 
 MIDDLEWARE = [
@@ -41,6 +42,8 @@ MIDDLEWARE = [
     "django.middleware.common.CommonMiddleware",
     "django.middleware.csrf.CsrfViewMiddleware",
     "django.contrib.auth.middleware.AuthenticationMiddleware",
+    # After authentication, because it asks whether the request is signed in.
+    "members.middleware.NoStoreForSignedIn",
     "django.contrib.messages.middleware.MessageMiddleware",
     "django.middleware.clickjacking.XFrameOptionsMiddleware",
 ]
@@ -139,3 +142,24 @@ DATA_UPLOAD_MAX_NUMBER_FILES = 1000
 # Total size of one upload. The Heart Rate folder is ~110 MB; the whole export is
 # over a gigabyte and is refused with a message asking for only the folder.
 MAX_UPLOAD_BYTES = 600 * 1024 * 1024
+
+# ---------------------------------------------------------------------------
+# Accounts
+# ---------------------------------------------------------------------------
+# Django's own auth only: email is the login (stored lowercased in username and
+# email). The account system exists only to keep two people's profiles apart on
+# one machine; it is not a service.
+LOGIN_URL = "/login/"
+LOGIN_REDIRECT_URL = "/"
+
+# Session and CSRF cookies: not readable by scripts, not sent on cross-site
+# requests. (Both are Django's defaults; set explicitly so they cannot drift.)
+SESSION_COOKIE_HTTPONLY = True
+SESSION_COOKIE_SAMESITE = "Lax"
+CSRF_COOKIE_HTTPONLY = True
+CSRF_COOKIE_SAMESITE = "Lax"
+
+# No mail server exists and nothing is ever sent: sign-up does not verify the
+# address. The dummy backend makes that true even if some code tried to send.
+EMAIL_BACKEND = "django.core.mail.backends.dummy.EmailBackend"
+
