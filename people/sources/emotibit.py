@@ -36,6 +36,8 @@ MESSAGE = (
 class EmotiBitAdapter(DeviceAdapter):
     key = "emotibit"
     device_label = "EmotiBit"
+    implemented = False
+    not_implemented_message = MESSAGE
 
     def accepts(self, name):
         return False

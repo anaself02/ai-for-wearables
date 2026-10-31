@@ -56,8 +56,17 @@ class FileReport:
 class ParsedFile:
     epochs: np.ndarray
     bpm: np.ndarray
-    sources: dict = field(default_factory=dict)
+    #: Per-row source as a small integer code into `source_names`, so a merge can
+    #: keep exact per-source counts without holding millions of strings.
+    source_names: list = field(default_factory=list)
+    source_codes: np.ndarray = None
     report: FileReport = None
+
+    @property
+    def sources(self):
+        """{source name: reading count}"""
+        counts = np.bincount(self.source_codes, minlength=len(self.source_names))
+        return {name: int(c) for name, c in zip(self.source_names, counts)}
 
 
 class DeviceAdapter:
@@ -65,6 +74,9 @@ class DeviceAdapter:
 
     key = ""
     device_label = ""
+    #: False for a placeholder adapter, so the UI can say so up front.
+    implemented = True
+    not_implemented_message = ""
 
     def accepts(self, name):
         """True if a file with this name is one this adapter reads.

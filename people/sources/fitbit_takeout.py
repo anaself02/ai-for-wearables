@@ -87,12 +87,12 @@ class FitbitTakeoutAdapter(DeviceAdapter):
                 "{:.1f}); this does not look like bpm.".format(
                     name, MAX_STORABLE_BPM, bpm.min(), bpm.max()))
 
-        names, counts = np.unique(sources, return_counts=True)
+        names, codes = np.unique(sources, return_inverse=True)
         report = FileReport(
             name=name, status="parsed", rows=int(len(epochs)),
             first_utc=datetime.fromtimestamp(int(epochs[0]), timezone.utc),
             last_utc=datetime.fromtimestamp(int(epochs[-1]), timezone.utc),
             dropped_unparseable=dropped_bad, dropped_duplicate=dropped_dup)
         return ParsedFile(epochs=epochs, bpm=bpm,
-                          sources={str(n): int(c) for n, c in zip(names, counts)},
-                          report=report)
+                          source_names=[str(n) for n in names],
+                          source_codes=codes.astype("uint8"), report=report)
