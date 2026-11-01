@@ -103,3 +103,56 @@ class NavigationTests(TestCase):
             self.assertIn("/p/{}/import/".format(slug), bar)
             for tab in ("Overview", "Arousal", "Raw rows"):
                 self.assertIn(">{}<".format(tab), bar)
+
+
+def topbar(html):
+    return re.search(r'<header class="topbar">.*?</header>', html, re.S).group(0)
+
+
+class AdminLinkTests(TestCase):
+    """The Admin button is in the markup for staff only, not merely hidden."""
+
+    def test_staff_see_admin_in_the_bar_on_the_chooser_and_a_profile(self):
+        staff, _ = make_user("staff@example.com", staff=True)
+        client = Client()
+        client.force_login(staff)
+        for url in ("/", "/p/anas/"):
+            bar = topbar(client.get(url).content.decode())
+            self.assertIn('href="/admin/"', bar, url)
+            self.assertIn(">Admin<", bar, url)
+
+    def test_an_owner_has_no_admin_link(self):
+        from people.models import Person
+        owner, _ = make_user("owner@example.com", linked_to=Person.objects.get(slug="anas"))
+        client = Client()
+        client.force_login(owner)
+        html = client.get("/p/anas/").content.decode()
+        self.assertNotIn("/admin/", html)
+        self.assertNotIn(">Admin<", html)
+
+    def test_anonymous_pages_have_no_admin_link(self):
+        for url in ("/login/", "/signup/"):
+            html = Client().get(url).content.decode()
+            self.assertNotIn("/admin/", html, url)
+            self.assertNotIn(">Admin<", html, url)
+
+
+class LoginPageTests(TestCase):
+    def test_wrong_password_and_unknown_email_get_one_generic_message(self):
+        make_user("someone@example.com")
+        wrong = self.client.post("/login/", {"email": "someone@example.com",
+                                             "password": "not-the-password"})
+        unknown = self.client.post("/login/", {"email": "nobody@example.com",
+                                               "password": "not-the-password"})
+        for response in (wrong, unknown):
+            html = response.content.decode()
+            self.assertIn('role="alert">Email or password is incorrect.<', html)
+            self.assertIn('aria-invalid="true"', html)
+            self.assertNotIn("nobody@example.com is", html)
+
+    def test_the_password_toggle_is_a_button_with_an_accessible_name(self):
+        html = self.client.get("/login/").content.decode()
+        button = re.search(r"<button[^>]*data-reveal=\"id_password\"[^>]*>", html, re.S).group(0)
+        self.assertIn('type="button"', button)
+        self.assertIn('aria-label="Show password"', button)
+        self.assertIn('aria-pressed="false"', button)

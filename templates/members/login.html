@@ -1,27 +1,38 @@
 {% extends "base.html" %}
 {% block title %}Log in - Health Dashboard{% endblock %}
+{% block signed_out_links %}{% endblock %}
 
 {% block content %}
+<div class="auth">
+  {% include "_mark.html" with class="auth-mark" %}
   <h1>Log in</h1>
-  <p class="lede">Use the email and password you signed up with.</p>
+  <p class="auth-lede">Use the email and password you signed up with.</p>
 
-  {% if error %}<div class="notice error"><strong>{{ error }}</strong></div>{% endif %}
-
-  <form method="post" class="settings-form" novalidate>
+  <form method="post" novalidate>
     {% csrf_token %}
     <input type="hidden" name="next" value="{{ next }}">
     <div class="field">
       <label for="id_email">Email</label>
       <input id="id_email" type="email" name="email" value="{{ form.email.value|default:'' }}"
-             autocomplete="username" required autofocus>
+             autocomplete="email" required autofocus
+             {% if error %}aria-invalid="true" aria-describedby="login-error"{% endif %}>
     </div>
     <div class="field">
       <label for="id_password">Password</label>
-      <input id="id_password" type="password" name="password" autocomplete="current-password" required>
+      <div class="reveal-wrap">
+        <input id="id_password" type="password" name="password" autocomplete="current-password" required
+               {% if error %}aria-invalid="true" aria-describedby="login-error"{% endif %}>
+        {% include "members/_reveal.html" with target="id_password" %}
+      </div>
     </div>
-    <button class="btn" type="submit">Log in</button>
+    {# One message for every failure, so the page never says which part was wrong. #}
+    {% if error %}<p class="field-error" id="login-error" role="alert">{{ error }}</p>{% endif %}
+    <button class="btn auth-submit" type="submit">Log in</button>
   </form>
 
-  <p class="muted small">No account yet? <a href="{% url 'members:signup' %}">Sign up</a>.
-    An administrator links your account to your profile.</p>
+  <p class="auth-foot">No account yet? <a href="{% url 'members:signup' %}">Sign up</a></p>
+  <p class="auth-foot muted small">An administrator links your account to your profile.</p>
+</div>
 {% endblock %}
+
+{% block scripts %}{% include "members/_reveal_script.html" %}{% endblock %}

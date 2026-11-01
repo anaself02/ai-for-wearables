@@ -1,51 +1,64 @@
 {% extends "base.html" %}
 {% block title %}Sign up - Health Dashboard{% endblock %}
+{% block signed_out_links %}{% endblock %}
 
 {% block content %}
+<div class="auth">
+  {% include "_mark.html" with class="auth-mark" %}
   <h1>Sign up</h1>
-  <p class="notice"><strong>{{ notice }}</strong></p>
+  <p class="auth-lede">{{ notice }}</p>
 
   {% if no_profiles %}
-    <div class="notice error"><strong>Every profile already has a linked account, so there is nothing to sign up for.</strong></div>
+    <p class="field-error" role="alert">Every profile already has a linked account, so there is nothing to sign up for.</p>
   {% endif %}
 
-  <form method="post" class="settings-form" novalidate>
+  <form method="post" novalidate>
     {% csrf_token %}
 
     <div class="field">
       <label for="id_email">Email</label>
       <input id="id_email" type="email" name="email" value="{{ form.email.value|default:'' }}"
-             autocomplete="username" required>
-      <p class="field-help">Your email is your login. It is stored lowercased and is never shown to anyone else.</p>
-      {% for error in form.email.errors %}<p class="field-error">{{ error }}</p>{% endfor %}
+             autocomplete="email" required autofocus aria-describedby="email-help{% if form.email.errors %} email-error{% endif %}"
+             {% if form.email.errors %}aria-invalid="true"{% endif %}>
+      <p class="field-help" id="email-help">Your email is your login. It is stored lowercased and is never shown to anyone else.</p>
+      {% if form.email.errors %}<p class="field-error" id="email-error" role="alert">{{ form.email.errors|join:" " }}</p>{% endif %}
     </div>
 
     <div class="field">
       <label for="id_password1">Password</label>
-      <input id="id_password1" type="password" name="password1" autocomplete="new-password" required>
-      {% for error in form.password1.errors %}<p class="field-error">{{ error }}</p>{% endfor %}
+      <div class="reveal-wrap">
+        <input id="id_password1" type="password" name="password1" autocomplete="new-password" required
+               {% if form.password1.errors %}aria-invalid="true" aria-describedby="password1-error"{% endif %}>
+        {% include "members/_reveal.html" with target="id_password1" %}
+      </div>
+      {% if form.password1.errors %}<p class="field-error" id="password1-error" role="alert">{{ form.password1.errors|join:" " }}</p>{% endif %}
     </div>
 
     <div class="field">
       <label for="id_password2">Confirm password</label>
-      <input id="id_password2" type="password" name="password2" autocomplete="new-password" required>
-      {% for error in form.password2.errors %}<p class="field-error">{{ error }}</p>{% endfor %}
+      <input id="id_password2" type="password" name="password2" autocomplete="new-password" required
+             {% if form.password2.errors %}aria-invalid="true" aria-describedby="password2-error"{% endif %}>
+      {% if form.password2.errors %}<p class="field-error" id="password2-error" role="alert">{{ form.password2.errors|join:" " }}</p>{% endif %}
     </div>
 
     <div class="field">
       <label for="id_person">Which profile are you?</label>
-      <select id="id_person" name="person" required>
+      <select id="id_person" name="person" required aria-describedby="person-help{% if form.person.errors %} person-error{% endif %}"
+              {% if form.person.errors %}aria-invalid="true"{% endif %}>
         <option value="">Choose a profile</option>
         {% for person in form.fields.person.queryset %}
           <option value="{{ person.pk }}" {% if form.person.value|stringformat:"s" == person.pk|stringformat:"s" %}selected{% endif %}>{{ person.display_name }}</option>
         {% endfor %}
       </select>
-      <p class="field-help">This sends a request. It never links the account by itself.</p>
-      {% for error in form.person.errors %}<p class="field-error">{{ error }}</p>{% endfor %}
+      <p class="field-help" id="person-help">This sends a request. It never links the account by itself.</p>
+      {% if form.person.errors %}<p class="field-error" id="person-error" role="alert">{{ form.person.errors|join:" " }}</p>{% endif %}
     </div>
 
-    <button class="btn" type="submit">Create account</button>
+    <button class="btn auth-submit" type="submit">Create account</button>
   </form>
 
-  <p class="muted small">Already have an account? <a href="{% url 'members:login' %}">Log in</a>.</p>
+  <p class="auth-foot">Already have an account? <a href="{% url 'members:login' %}">Log in</a></p>
+</div>
 {% endblock %}
+
+{% block scripts %}{% include "members/_reveal_script.html" %}{% endblock %}

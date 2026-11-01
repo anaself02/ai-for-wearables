@@ -1,0 +1,8 @@
+{% comment %}
+  Show / hide for a password field. Hidden until the script below unhides it,
+  so without JavaScript the field is a plain password field and nothing is
+  offered that cannot work. The name stays "Show password"; aria-pressed
+  carries the state.
+{% endcomment %}
+<button class="reveal" type="button" data-reveal="{{ target }}" aria-controls="{{ target }}"
+        aria-pressed="false" aria-label="Show password" hidden>Show</button>
