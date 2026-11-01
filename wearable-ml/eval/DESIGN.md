@@ -27,10 +27,10 @@ features are used; the 40-feature set is used only for the reproduction check.
 | name | estimator | balancing | grid (inner-tuned) |
 |---|---|---|---|
 | majority | DummyClassifier(most_frequent) | - | - |
-| threshold | one HR_mean cut maximising balanced accuracy on the training subjects; 3-class predicts stress / baseline, never amusement | - | - |
+| threshold | one HR_mean cut maximising macro-F1 on the training subjects only (Amendment 4; the demo and dashboard keep balanced accuracy); 3-class predicts stress / baseline, never amusement | - | - |
 | svm | StandardScaler + SVC(rbf) | class_weight="balanced" | C {0.1, 1, 10, 100} x gamma {scale, 0.01, 0.1} |
 | rf | StandardScaler + RandomForest(300 trees) | class_weight="balanced" | max_depth {None, 10, 20} x min_samples_leaf {1, 5} |
-| mlp | StandardScaler + MLPClassifier(early_stopping, max_iter 500) | random oversampling of minority classes to the majority count, inside fit only (scikit-learn 1.5.2's MLP has no sample weights) | hidden {(32,), (64, 32)} x alpha {1e-4, 1e-2} |
+| mlp | StandardScaler + MLPClassifier(max_iter=300, NO early stopping, no validation split inside fit) | random oversampling of minority classes to the majority count, inside fit only, on the rows fit receives (inner-training rows during tuning); scikit-learn 1.5.2's MLP has no sample weights | hidden {(32,), (64, 32)} x alpha {1e-4, 1e-2} |
 
 The scaler is part of each pipeline, so it is fitted only on the rows a model
 is fitted on (inner: 12 subjects; outer refit: 14). The scaler on the RF
@@ -44,9 +44,16 @@ changes nothing (trees are scale-invariant) and is kept for a uniform pipeline.
   scored on the 7th; selection on mean inner macro-F1 (ties: first grid
   point); refit on all 14; one prediction of the test subject.
 - Seeds 0-4. They set the inner fold assignment, the RF and the MLP
-  (initialisation, early-stopping split, oversampling). The SVM and the
+  (initialisation, oversampling). The SVM and the
   baselines are deterministic given the folds.
 - `folds.json` records every outer split and every seed's inner groups.
+- The grid search runs 2 fits in parallel (processes, `GRID_JOBS`); results do
+  not depend on it (a test compares `n_jobs=1` and `2`). Convergence of every
+  inner fit and of each outer refit is read from the fitted MLP (it ran to
+  `max_iter` = the case where scikit-learn warns) and written per fold to
+  `EXPERIMENTS.md` and `results/failures.csv`.
+- Each finished (task, model, seed) is saved to `out/partial/`, so an
+  interrupted run resumes; partials from other code are refused.
 
 ## Metrics and summaries
 
@@ -77,14 +84,14 @@ git-ignored, regenerable).
 
 ## Known leakage risks (none reaches the test subject)
 
-1. MLP early stopping uses scikit-learn's internal random 10% split of the
-   (oversampled) training rows: copies of a minority row, and 50%-overlapping
-   windows of the same subject, can sit on both sides. That makes the
-   stopping point optimistic within training. It never involves the test
-   subject. Fix if wanted: manual early stopping on a held-out training
-   subject.
+1. The MLP no longer uses scikit-learn's internal early-stopping split (which
+   could put copies of oversampled rows, and 50%-overlapping windows of one
+   subject, on both sides of a split). It trains a fixed 300 epochs; the only
+   tuning is in the subject-grouped inner folds.
 2. The features were designed and the IBI filter width chosen before this
    protocol, partly while looking at WESAD 3-class results (disclosed in
-   PRE_DECLARED.md). The grids are fixed now, before any nested result.
+   PRE_DECLARED.md). The grids are fixed before any nested result.
 3. Overlapping windows are only a problem across a split; every split here is
    by subject.
+4. Pairwise CIs are not adjusted for multiplicity (9 pre-declared comparisons
+   per task and metric); nothing outside that list is claimed.

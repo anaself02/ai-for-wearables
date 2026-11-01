@@ -31,8 +31,9 @@ INNER_FOLDS = 7                 # 14 training subjects -> 7 folds of 2 subjects
 N_BOOT = 10000
 BOOT_SEED = 6322
 RF_TREES = 300
-RF_JOBS = 4                     # threads per forest; the grid search itself is serial
-MLP_MAX_ITER = 500
+RF_JOBS = 4                     # threads per forest
+GRID_JOBS = 2                   # parallel grid-search fits (processes); results do not depend on it
+MLP_MAX_ITER = 300              # fixed; no early stopping, no validation split inside fit
 
 GRIDS = {
     "svm": {"clf__C": [0.1, 1, 10, 100], "clf__gamma": ["scale", 0.01, 0.1]},

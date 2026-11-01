@@ -7,14 +7,17 @@ and scored by macro-F1 on the held-out group; the best mean inner macro-F1 wins
 (ties: first in grid order), is refitted on all 14 subjects and predicts the
 test subject once. Baselines are fitted on the 14 subjects without tuning.
 Nothing about the test subject is used before its prediction.
+
+The grid search runs config.GRID_JOBS fits in parallel (processes). Its result
+does not depend on that number. Convergence of every inner fit and of the outer
+refit is read from the fitted model (models.converged) rather than from
+warnings, which worker processes would not report back.
 """
 
 import time
-import warnings
 
 import numpy as np
 from sklearn.base import clone
-from sklearn.exceptions import ConvergenceWarning
 from sklearn.model_selection import GridSearchCV
 
 from . import config, folds, metrics, models
@@ -22,7 +25,7 @@ from .data import labels
 
 
 def run(table, task, model, seed, grid=None, subjects=None, feature_names=None,
-        inner_k=config.INNER_FOLDS, on_fitted=None):
+        inner_k=config.INNER_FOLDS, on_fitted=None, n_jobs=config.GRID_JOBS):
     """-> {"predictions": [...], "folds": [...], "failures": [...], "seconds": float}
 
     on_fitted(test_subject, fitted_estimator, train_index, test_index), if given,
@@ -44,40 +47,48 @@ def run(table, task, model, seed, grid=None, subjects=None, feature_names=None,
         X_train, y_train = X_all[train_index], y_all[train_index]
         chosen, inner_score = None, None
         fold_started = time.perf_counter()
-        with warnings.catch_warnings(record=True) as caught:
-            warnings.simplefilter("always", ConvergenceWarning)
-            try:
-                estimator = models.make(model, task, seed)
-                if grid:
-                    inner = folds.inner_folds(train_subjects, seed, inner_k)
-                    search = GridSearchCV(clone(estimator), grid, scoring="f1_macro",
-                                          cv=folds.inner_splits(groups, train_index, inner),
-                                          refit=True, n_jobs=1, error_score=np.nan)
-                    search.fit(X_train, y_train)
-                    if not np.isfinite(search.best_score_):
-                        raise RuntimeError("every grid point failed in the inner folds")
-                    fitted = search.best_estimator_
-                    chosen = {k: _plain(v) for k, v in search.best_params_.items()}
-                    inner_score = float(search.best_score_)
-                    n_failed = int(np.sum(~np.isfinite(search.cv_results_["mean_test_score"])))
-                    if n_failed:
-                        failures.append({"subject": test_subject, "kind": "grid points failed",
-                                         "count": n_failed})
-                else:
-                    fitted = clone(estimator).fit(X_train, y_train)
-                if on_fitted is not None:
-                    on_fitted(test_subject, fitted, train_index, test_index)
-                y_pred = fitted.predict(X_all[test_index])
-                score = (models.positive_score(fitted, X_all[test_index])
-                         if task == "binary" else None)
-            except Exception as exc:                     # recorded, never hidden
-                failures.append({"subject": test_subject, "kind": "fold failed",
-                                 "error": "{}: {}".format(type(exc).__name__, exc)})
-                continue
-        n_convergence = sum(issubclass(w.category, ConvergenceWarning) for w in caught)
-        if n_convergence:
+        try:
+            estimator = models.make(model, task, seed)
+            if grid:
+                inner = folds.inner_folds(train_subjects, seed, inner_k)
+                search = GridSearchCV(
+                    clone(estimator), grid,
+                    scoring={"f1_macro": "f1_macro", "converged": models.converged},
+                    refit="f1_macro", cv=folds.inner_splits(groups, train_index, inner),
+                    n_jobs=n_jobs, error_score=np.nan)
+                search.fit(X_train, y_train)
+                if not np.isfinite(search.best_score_):
+                    raise RuntimeError("every grid point failed in the inner folds")
+                fitted = search.best_estimator_
+                chosen = {k: _plain(v) for k, v in search.best_params_.items()}
+                inner_score = float(search.best_score_)
+                n_failed = int(np.sum(~np.isfinite(search.cv_results_["mean_test_f1_macro"])))
+                if n_failed:
+                    failures.append({"subject": test_subject, "kind": "grid points failed",
+                                     "count": n_failed})
+                # every inner fit (grid points x inner folds) that hit max_iter
+                per_split = np.array([search.cv_results_["split{}_test_converged".format(i)]
+                                      for i in range(len(inner))])
+                n_inner_fits = int(per_split.size)
+                n_not_converged = int(np.sum(per_split < 0.5))
+            else:
+                fitted = clone(estimator).fit(X_train, y_train)
+                n_inner_fits = n_not_converged = 0
+            refit_converged = bool(models.converged(fitted))
+            if on_fitted is not None:
+                on_fitted(test_subject, fitted, train_index, test_index)
+            y_pred = fitted.predict(X_all[test_index])
+            score = (models.positive_score(fitted, X_all[test_index])
+                     if task == "binary" else None)
+        except Exception as exc:                         # recorded, never hidden
+            failures.append({"subject": test_subject, "kind": "fold failed",
+                             "error": "{}: {}".format(type(exc).__name__, exc)})
+            continue
+        if n_not_converged or not refit_converged:
             failures.append({"subject": test_subject, "kind": "convergence warnings",
-                             "count": n_convergence})
+                             "inner_fits_not_converged": n_not_converged,
+                             "inner_fits": n_inner_fits,
+                             "outer_refit_converged": refit_converged})
         m = metrics.fold_metrics(y_all[test_index], y_pred, score, task_labels)
         fold_rows.append({"task": task, "model": model, "seed": seed, "subject": test_subject,
                           "chosen": chosen, "inner_macro_f1": inner_score,

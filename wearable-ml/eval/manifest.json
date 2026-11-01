@@ -1,0 +1,92 @@
+{
+ "date": "2026-11-01T20:05:21.340821+00:00",
+ "python": "3.12.10",
+ "platform": "Windows-11-10.0.22631-SP0",
+ "versions": {
+  "scikit-learn": "1.5.2",
+  "numpy": "2.1.3",
+  "pandas": "2.2.3",
+  "scipy": "1.14.1"
+ },
+ "seeds": [
+  0,
+  1,
+  2,
+  3,
+  4
+ ],
+ "inner_folds": 7,
+ "n_boot": 10000,
+ "grid_jobs": 2,
+ "rf_jobs": 4,
+ "mlp_max_iter": 300,
+ "mlp_early_stopping": false,
+ "boot_seed": 6322,
+ "grids": {
+  "svm": {
+   "clf__C": [
+    0.1,
+    1,
+    10,
+    100
+   ],
+   "clf__gamma": [
+    "scale",
+    0.01,
+    0.1
+   ]
+  },
+  "rf": {
+   "clf__max_depth": [
+    null,
+    10,
+    20
+   ],
+   "clf__min_samples_leaf": [
+    1,
+    5
+   ]
+  },
+  "mlp": {
+   "clf__hidden_layer_sizes": [
+    [
+     32
+    ],
+    [
+     64,
+     32
+    ]
+   ],
+   "clf__alpha": [
+    0.0001,
+    0.01
+   ]
+  }
+ },
+ "files": {
+  "results/features.csv": "d0d72f86b8a66c09ff0d3258bbba1fbf480f3f92cd85e606af0289d0aaaf2c36"
+ },
+ "code": {
+  "__init__.py": "28004a737655066fd84909065d6b22b89f97cf12a7dc22c66c83d9bbf6c0708b",
+  "config.py": "b03b22a97c605d78357bede871a70588b4349e23ee755ccc7f3e15f76b0f153c",
+  "data.py": "a8ae31fc74aa48f3ff5fd33dd0311b3ff0af856d44ab380625bd6ec530d46533",
+  "folds.py": "9d3e07c6e5581465adff35186b73a0cafb35fe62699338f67ae3823f9f0f1659",
+  "metrics.py": "ad1ed32f5eb7785b004aae51b2c88412fbbe81f9b65cca88db443a568cc9b8b4",
+  "models.py": "80305d725d944aa03e27e76823f3d6e31fbde7213481aedf0a42f60dc22dce90",
+  "nested.py": "74a7caf351ccb935df615a686a7274cb6902283c5ca3fd2fedbd8d3fbcdd6bd9",
+  "reproduce.py": "5008bce58a65bd930a41d5c00c1735e892eed1a0862995e8a70d294f24273b2f",
+  "run_eval.py": "4ac6f77f52ba144924fa9d3742d4260abe402678706f592b680a5c08d1d9a995",
+  "tables.py": "195a48894936c5123ef3417d76156cc6017834c1ccae619182f187d97ce72e55"
+ },
+ "tasks": [
+  "binary",
+  "three"
+ ],
+ "models": [
+  "majority",
+  "threshold",
+  "svm",
+  "rf",
+  "mlp"
+ ]
+}
