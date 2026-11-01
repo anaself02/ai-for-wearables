@@ -156,3 +156,66 @@ weak but above shuffled labels (0.332). WESAD has **15** subjects.
 Back up `db.sqlite3` before migrating a real database. Sample data lives in
 `data-samples/` (gitignored); never copy real files into tests or fixtures: tests
 build synthetic files with the real column names in `people/testing.py`.
+
+## Where things stand (handoff, 2026-10-31)
+
+Read this first in a new session. It records state that is not visible in the code.
+
+### This repository (`health dashboard`)
+
+- **Branch `course-file-mode`**, 22 commits on top of `master` (`master` is the old
+  Google version, untouched). Working tree clean. Not pushed anywhere; no remote.
+- **Tests: 322, all passing** (`manage.py test`, about 70 s).
+- **Real database (`db.sqlite3`)** is migrated to `people.0005`:
+  - Anas: 100 UTC days, 2,984,769 readings loaded from the Takeout Heart Rate folder
+    (2026-07-15 to 2026-10-31 local). Rahil: no data (by design).
+  - **0 accounts.** The old Google-created user row was removed by migration
+    `people.0004`. Nobody can log in until the owner runs `createsuperuser`
+    (username = their email). No claim exists yet.
+- **Backups** (outside the repo, in `Health AI Project\backups\`):
+  `db-pre-course-file-mode-20261031-184811.sqlite3` (before any file-mode migration,
+  still has the Google tokens: treat as sensitive) and
+  `db-pre-accounts-20261031-201913.sqlite3` (before the account tables).
+- **Never edited:** `.env` (it still holds the old Google and Fernet values, which
+  nothing reads any more; the owner may remove them and revoke the app at
+  myaccount.google.com/permissions).
+- The venv was made with `uv` and has no pip: install with
+  `uv pip install --python .venv\Scripts\python.exe <package>`.
+- The commit plan's "commit 14: remove admin" was dropped on purpose: the account
+  feature needs `/admin/`.
+
+### Next steps for this repository
+
+1. Owner: `createsuperuser`, log in, check the chooser, Anas's pages, the arousal
+   page and the Import data tab in a real browser (nothing was checked in a browser).
+2. Exercise one real sign-up -> approve -> owner login by hand.
+3. When Rahil's EmotiBit sample arrives: replace the stub in
+   `people/sources/emotibit.py` (its docstring lists what is needed). Deriving heart
+   rate from raw PPG would be a separate, declared decision.
+
+### The sibling project (`../wearable-ml`), not touched in the dashboard work
+
+- **Stage 1 done** (uncommitted files there: `PRE_DECLARED.md`, `demo/`, plus the
+  untracked `README.md`): `python demo/run_demo.py` runs leave-one-subject-out for the
+  binary (primary) and 3-class (secondary) tasks and scores one Fitbit day from the
+  Takeout heart-rate files with the out-of-distribution caveat. 25 demo tests pass
+  (`python -m unittest discover -s demo/tests`). `--save` writes a date-masked copy to
+  `demo/out/` (gitignored).
+- **`PRE_DECLARED.md`** holds the pre-registered plan and Amendment 1 (binary task
+  drops the 60% dominance flag; made after seeing the 2026-10-30 demo output).
+- **Stage 2 not started; waiting for the owner's go:** nested LOSO tuning, small MLP
+  vs SVM, model x input resolution (beat-level vs ~3 s) heatmap, 5 seeds, bootstrap
+  CIs over subjects, label-to-sampling alignment check when script 02 is re-run.
+  Must be memory safe: one subject at a time, cache per-window series to `.npz`.
+- **LLM comparison (ACT role) is planned only:** template baseline vs LLM feedback,
+  rubric that rewards abstention on out-of-distribution days; only de-identified
+  summary statistics may ever be sent out.
+- `scripts/05_apply_to_personal_data.py` Pass 1 is broken (it imported the
+  dashboard's removed Google client). Leave it unless asked.
+
+### Working notes
+
+- The machine runs low on memory: background servers have been killed before.
+  Never load all WESAD pickles at once.
+- The owner wants a plain-language report after each stage, with what was not
+  verified stated outright, and approval before each next stage.
