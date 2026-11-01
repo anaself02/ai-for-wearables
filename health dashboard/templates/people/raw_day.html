@@ -1,0 +1,39 @@
+{% extends "base.html" %}
+{% block title %}Raw rows {{ day|date:"Y-m-d" }} - {{ person.display_name }} ({{ person.device_label }}){% endblock %}
+
+{% block content %}
+  <p class="small"><a href="{% url 'people:raw_index' person.slug %}">&larr; Raw uploaded rows</a></p>
+  <h1>Raw rows &middot; {{ day|date:"Y-m-d" }}</h1>
+  <p class="lede">{{ person.display_name }} &middot; {{ person.device_label }} &middot; local day in {{ person.timezone }}</p>
+
+  {% if empty_message %}
+    <p class="empty-msg">{{ empty_message }}</p>
+  {% else %}
+    <ul class="chips">
+      {% if prev_day %}<li><a class="chip" href="{% url 'people:raw_day' person.slug prev_day|date:'Y-m-d' %}">&larr; {{ prev_day|date:"Y-m-d" }}</a></li>{% endif %}
+      {% if next_day %}<li><a class="chip" href="{% url 'people:raw_day' person.slug next_day|date:'Y-m-d' %}">{{ next_day|date:"Y-m-d" }} &rarr;</a></li>{% endif %}
+    </ul>
+
+    {% if not total %}
+      <div class="notice">No rows on this local day.</div>
+    {% else %}
+      <p class="muted small">
+        Showing the first {{ shown }} of {{ total|floatformat:"0g" }} rows. Timestamps in the file are
+        UTC; the local column is only a conversion for reading. Rows that were unreadable or duplicated
+        were dropped when the file was loaded and are not shown.
+      </p>
+      <table>
+        <thead><tr><th>Timestamp (UTC, as in the file)</th><th>Local time</th><th class="num">bpm</th></tr></thead>
+        <tbody>
+          {% for utc, local, bpm in rows %}
+            <tr>
+              <td class="num">{{ utc }}</td>
+              <td class="num derived">{{ local }}</td>
+              <td class="num">{{ bpm|floatformat:1 }}</td>
+            </tr>
+          {% endfor %}
+        </tbody>
+      </table>
+    {% endif %}
+  {% endif %}
+{% endblock %}

@@ -1,0 +1,63 @@
+{% extends "base.html" %}
+{% block title %}Heart rate - {{ person.display_name }} ({{ person.device_label }}){% endblock %}
+
+{% block content %}
+  <p class="small"><a href="{% url 'people:person' person.slug %}">&larr; {{ person.display_name }}</a></p>
+  <h1>Heart rate</h1>
+  <p class="lede">{{ person.display_name }} &middot; {{ person.device_label }}</p>
+
+  {% if empty_message %}
+    <p class="empty-msg">{{ empty_message }}</p>
+  {% else %}
+    <ul class="chips">
+      {% for window in windows %}
+        <li><a class="chip {% if window == days %}active{% endif %}" href="?days={{ window }}">{{ window }} days</a></li>
+      {% endfor %}
+    </ul>
+    <p class="muted small">
+      The last {{ days }} calendar days up to {{ person.display_name }}'s latest
+      day with data. {{ readings|floatformat:"0g" }} readings.
+      Reading counts, minimum and maximum are exactly as in the file;
+      <span class="derived">dashed</span> numbers are computed by this app.
+    </p>
+
+    {{ series_json|json_script:"chart-heart-rate" }}
+    <div class="panel">
+      <div class="chart-wrap">
+        <canvas data-chart="chart-heart-rate" data-kind="line" data-unit="bpm"></canvas>
+      </div>
+    </div>
+
+    <h2>Single-day detail</h2>
+    <p class="muted small">
+      Per-minute means for one local day. A whole window of full-resolution
+      readings is far too many points for one chart, so each day has its own page.
+    </p>
+    <select data-day-picker="{% url 'people:heart_rate' person.slug %}day/">
+      <option value="">Pick a day&hellip;</option>
+      {% for option in day_options %}<option value="{{ option }}">{{ option }}</option>{% endfor %}
+    </select>
+
+    <h2>Days</h2>
+    <table>
+      <thead>
+        <tr><th>Local day</th><th class="num">Readings</th><th class="num">Median gap (s)</th>
+            <th class="num">Average bpm</th><th class="num">Min bpm</th><th class="num">Max bpm</th></tr>
+      </thead>
+      <tbody>
+        {% for day in summaries %}
+          <tr>
+            <td><a href="{% url 'people:heart_rate_day' person.slug day.day|date:'Y-m-d' %}">{{ day.day|date:"Y-m-d" }}</a></td>
+            <td class="num">{{ day.n|floatformat:"0g" }}</td>
+            <td class="num derived">{{ day.spacing.median|floatformat:1 }}</td>
+            <td class="num derived">{{ day.mean|floatformat:1 }}</td>
+            <td class="num">{{ day.min|floatformat:0 }}</td>
+            <td class="num">{{ day.max|floatformat:0 }}</td>
+          </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  {% endif %}
+{% endblock %}
+
+{% block scripts %}{% if not empty_message %}{% include "health/_chart_scripts.html" %}{% endif %}{% endblock %}

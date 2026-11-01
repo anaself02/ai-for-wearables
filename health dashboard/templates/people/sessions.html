@@ -1,0 +1,159 @@
+{% extends "base.html" %}
+{% load tz %}
+{% block title %}Sessions - {{ person.display_name }} ({{ person.device_label }}){% endblock %}
+
+{% comment %}
+  A person's own labelled sessions, and how the WESAD-trained binary models
+  grade against them.
+
+  Structural rule: every score (metrics, confusion matrices, per-session shares)
+  is printed inside the ONE block that starts with the caveat, the device and the
+  reading spacing (`session-score`). There is no path through this file that
+  prints a score without them. people/test_sessions.py asserts it.
+
+  The note is shown only in this person's own list and edit form.
+{% endcomment %}
+
+{% block content %}
+  <p class="small"><a href="{% url 'people:person' person.slug %}">&larr; {{ person.display_name }}</a></p>
+  <h1>Sessions</h1>
+  <p class="lede">{{ person.display_name }} &middot; {{ person.device_label }}</p>
+
+  <p class="notice"><strong>Your labels only grade the model. The model is trained on WESAD only; nothing is trained, tuned, calibrated or adjusted on your sessions.</strong></p>
+
+  <section aria-labelledby="how-heading">
+    <h2 id="how-heading">How to run a session</h2>
+    <ol>
+      <li>10 minutes of seated rest (kind: Rest).</li>
+      <li>10 minutes of timed mental arithmetic, for example counting backwards aloud by 13, restarting after a mistake (kind: Stress task).</li>
+      <li>About 20 minutes of seated recovery (kind: Recovery).</li>
+    </ol>
+    <p>Only on yourself. Stop at any time if it becomes uncomfortable. Enter times in {{ person.timezone }} local time.</p>
+    <p class="muted small">Limits of these labels: they are subjective (a task may not stress, rest may not rest);
+      the body lags behind the label, which the {{ label_lag }} s buffer only reduces; and the same task
+      stresses different people, and the same person on different days, unevenly.</p>
+  </section>
+
+  <section aria-labelledby="form-heading">
+    <h2 id="form-heading">{% if editing %}Edit session{% else %}Add a session{% endif %}</h2>
+    <form method="post" class="settings-form" novalidate
+          action="{% if editing %}{% url 'people:session_edit' person.slug editing.pk %}{% else %}{% url 'people:sessions' person.slug %}{% endif %}">
+      {% csrf_token %}
+      {% for error in form.non_field_errors %}<p class="field-error" role="alert">{{ error }}</p>{% endfor %}
+      {% for field in form %}
+        <div class="field">
+          <label for="{{ field.id_for_label }}">{{ field.label }}</label>
+          {{ field }}
+          {% for error in field.errors %}<p class="field-error" role="alert">{{ error }}</p>{% endfor %}
+        </div>
+      {% endfor %}
+      <button class="btn" type="submit">{% if editing %}Save changes{% else %}Add session{% endif %}</button>
+      {% if editing %}<a class="btn secondary" href="{% url 'people:sessions' person.slug %}">Cancel</a>{% endif %}
+    </form>
+  </section>
+
+  <section aria-labelledby="list-heading">
+    <h2 id="list-heading">Your sessions</h2>
+    {% if not rows %}
+      <p class="empty-msg">No sessions recorded yet.</p>
+    {% else %}
+      <p class="muted small">Coverage is computed by this app from the stored readings (dashed): readings in the session,
+        the first and last, and the share of the session's minutes holding at least one reading. Under {% widthratio coverage_warning 1 100 %}% is flagged.</p>
+      {% timezone person.timezone %}
+      <div class="table-scroll">
+      <table>
+        <thead><tr><th>#</th><th>Kind</th><th>Start</th><th>End</th><th class="num">Rating</th>
+          <th class="num">Readings</th><th>First / last reading</th><th class="num">Coverage</th><th>Note</th><th></th></tr></thead>
+        <tbody>
+        {% for row in rows %}
+          <tr>
+            <td>Session {{ row.number }}</td>
+            <td>{{ row.session.get_kind_display }}</td>
+            <td>{{ row.session.start_utc|date:"Y-m-d H:i" }}</td>
+            <td>{{ row.session.end_utc|date:"H:i" }}</td>
+            <td class="num">{{ row.session.rating|default:"-" }}</td>
+            <td class="num derived">{{ row.coverage.readings }}</td>
+            <td class="derived">{% if row.coverage.first %}{{ row.coverage.first|date:"H:i:s" }} / {{ row.coverage.last|date:"H:i:s" }}{% else %}none{% endif %}</td>
+            <td class="num derived">{% widthratio row.coverage.share 1 100 %}%{% if row.coverage.low %} <strong class="coverage-low">low coverage</strong>{% endif %}</td>
+            <td>{{ row.session.note }}</td>
+            <td>
+              <a href="{% url 'people:session_edit' person.slug row.session.pk %}">Edit</a>
+              <form method="post" action="{% url 'people:session_delete' person.slug row.session.pk %}" class="inline-form">
+                {% csrf_token %}<button class="btn secondary" type="submit">Delete</button>
+              </form>
+            </td>
+          </tr>
+        {% endfor %}
+        </tbody>
+      </table>
+      </div>
+      {% endtimezone %}
+    {% endif %}
+  </section>
+
+  <section aria-labelledby="score-heading">
+    <h2 id="score-heading">How the WESAD models grade against your labels</h2>
+    <p class="muted small">Pre-declared rule (docs/SESSIONS_PROTOCOL.md): windows of {{ window_seconds }} s stepping {{ step_seconds }} s,
+      at least {{ min_samples }} readings each, fully inside one session and starting at least
+      <strong>{{ label_lag }} s</strong> after the session start (label-lag buffer). Primary score: Rest (non-stress)
+      against Stress task (stress). Recovery and Natural stress are reported per session only.
+      A headline score needs at least <strong>{{ min_per_class }}</strong> labelled windows per class.</p>
+
+    {% if not score.available %}
+      <p class="empty-msg">{{ score.reason }}</p>
+    {% else %}
+      <div class="session-score">
+        <p class="notice"><strong>{{ score.caveat }}</strong></p>
+        <p>Device: {{ score.devices|join:", "|default:"unknown" }} &middot; median reading spacing
+          <span class="derived">{% if score.spacing.median is not None %}{{ score.spacing.median|floatformat:1 }} s{% else %}unknown{% endif %}</span>
+          (WESAD heart rate is beat-level).
+          {% if score.out_of_distribution %}<strong>OUT OF DISTRIBUTION:</strong> at least {% widthratio ood_flag 1 100 %}% of the labelled windows fall outside the WESAD training range on one heart-rate feature.{% endif %}</p>
+        <p class="muted small">{{ no_intervals }} {{ model_label }} Majority class and the HR_mean threshold
+          (<span class="derived">{{ score.threshold|floatformat:1 }} bpm</span>) are fitted on WESAD only
+          ({{ score.n_wesad_windows }} windows, {{ score.n_wesad_subjects }} subjects).</p>
+
+        <p>Labelled windows: non-stress <strong>{{ score.counts.non_stress }}</strong>,
+          stress <strong>{{ score.counts.stress }}</strong>, other kinds {{ score.counts.other }}.</p>
+
+        {% if score.enough %}
+          <h3>Primary score (same windows for every model)</h3>
+          {% for title, m in score.results %}
+            <div class="score-model">
+              <h4>{{ title }}</h4>
+              <p>Macro-F1 <strong class="derived">{{ m.macro_f1|floatformat:3 }}</strong> &middot;
+                balanced accuracy <strong class="derived">{{ m.balanced_accuracy|floatformat:3 }}</strong></p>
+              <div class="table-scroll"><table>
+                <thead><tr><th>Class</th><th class="num">Precision</th><th class="num">Recall</th><th class="num">Windows</th></tr></thead>
+                <tbody>{% for c in m.per_class %}<tr><td>{{ c.name }}</td><td class="num derived">{{ c.precision|floatformat:3 }}</td><td class="num derived">{{ c.recall|floatformat:3 }}</td><td class="num">{{ c.support }}</td></tr>{% endfor %}</tbody>
+              </table></div>
+              <div class="table-scroll"><table aria-label="Confusion matrix, {{ title }}">
+                <thead><tr><th>Actual \ predicted</th><th class="num">non-stress</th><th class="num">stress</th></tr></thead>
+                <tbody>
+                  <tr><td>non-stress</td><td class="num">{{ m.confusion.0.0 }}</td><td class="num">{{ m.confusion.0.1 }}</td></tr>
+                  <tr><td>stress</td><td class="num">{{ m.confusion.1.0 }}</td><td class="num">{{ m.confusion.1.1 }}</td></tr>
+                </tbody>
+              </table></div>
+            </div>
+          {% endfor %}
+        {% else %}
+          <p class="empty-msg">{{ not_enough }}</p>
+        {% endif %}
+
+        <h3>Per session</h3>
+        <div class="table-scroll"><table>
+          <thead><tr><th>Session</th><th>Kind</th><th>In primary score</th><th class="num">Labelled windows</th>
+            <th class="num">SVM: share predicted stress</th><th class="num">Rule: share predicted stress</th></tr></thead>
+          <tbody>
+          {% for row in score.per_session %}
+            <tr><td>Session {{ row.number }}</td><td>{{ row.kind_label }}</td><td>{{ row.primary|yesno:"yes,no" }}</td>
+              <td class="num">{{ row.windows }}</td>
+              <td class="num derived">{% if row.svm_stress is not None %}{% widthratio row.svm_stress 1 100 %}%{% else %}-{% endif %}</td>
+              <td class="num derived">{% if row.rule_stress is not None %}{% widthratio row.rule_stress 1 100 %}%{% else %}-{% endif %}</td></tr>
+          {% endfor %}
+          </tbody>
+        </table></div>
+        <p><a class="btn secondary" href="{% url 'people:sessions_export' person.slug %}">Export session results (CSV, no dates, no notes)</a></p>
+      </div>
+    {% endif %}
+  </section>
+{% endblock %}

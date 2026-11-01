@@ -1,0 +1,129 @@
+{% extends "base.html" %}
+{% block title %}How the arousal signal works - {{ person.display_name }} ({{ person.device_label }}){% endblock %}
+
+{% comment %}
+  The honesty layer for the arousal page.
+
+  Everything factual on this page is rendered from models/model_card.json,
+  which the training project writes at the moment it trains the model. Nothing
+  is typed in here, so these figures cannot drift away from that project's
+  RESULTS.md the way copied numbers would.
+{% endcomment %}
+
+{% block content %}
+  <p class="small"><a href="{% url 'people:arousal' person.slug %}">&larr; Arousal signal</a></p>
+  <h1>How the arousal signal works</h1>
+  <p class="lede">
+    What the model is, how it was tested, and the things it cannot tell you.
+  </p>
+  <p class="notice"><strong>{{ scored_only }}</strong></p>
+
+  {% if not card %}
+
+    <p class="empty-msg">
+      The model card could not be read, so this page cannot describe the
+      model honestly. Check that <code>WEARABLE_ML_DIR</code> points at the
+      wearable-ml project and that it has been trained.
+    </p>
+
+  {% else %}
+
+    <h2>The short version</h2>
+    <p><strong>{{ card.honest_summary }}</strong></p>
+
+    <h2>What it is</h2>
+    <table class="ood">
+      <tbody>
+        <tr><th>Algorithm</th><td>{{ card.algorithm }}</td></tr>
+        <tr><th>Trained on</th><td>
+          {{ card.trained_on.dataset }} &mdash; {{ card.trained_on.signals }}
+        </td></tr>
+        <tr><th>Training data</th><td>
+          {{ card.trained_on.n_windows }} windows of
+          {{ card.trained_on.window_seconds }} s from
+          {{ card.trained_on.n_subjects }} subjects
+        </td></tr>
+        <tr><th>Classes</th><td>
+          {% for number, name in card.classes.items %}{{ name }}{% if not forloop.last %}, {% endif %}{% endfor %}
+        </td></tr>
+        <tr><th>Validation</th><td>{{ card.validation }}</td></tr>
+      </tbody>
+    </table>
+
+    <h2>How well it actually does</h2>
+    <p class="muted small">
+      Every figure below comes from leave-one-subject-out cross-validation:
+      each fold trains on all but one person and is tested on the person it
+      has never seen. These are single runs with default hyperparameters and no
+      confidence interval, so small differences between rows should not be read
+      as one model being better than another.
+    </p>
+    <table class="ood">
+      <thead>
+        <tr><th>Sensors</th><th>Model</th><th>Accuracy</th><th>Macro-F1</th></tr>
+      </thead>
+      <tbody>
+        {% for feature_set, models in card.scores.items %}
+          {% for model_name, score in models.items %}
+            <tr>
+              <td>{% if feature_set == "hr_only" %}heart rate only{% else %}all 8 channels{% endif %}</td>
+              <td>{{ model_name }}</td>
+              <td>{{ score.accuracy|floatformat:3 }}</td>
+              <td>{{ score.f1_macro|floatformat:3 }}</td>
+            </tr>
+          {% endfor %}
+        {% endfor %}
+        <tr class="muted">
+          <td colspan="2">always guessing the most common class</td>
+          <td>{{ card.always_guess_largest_class.accuracy|floatformat:3 }}</td>
+          <td>{{ card.always_guess_largest_class.f1_macro|floatformat:3 }}</td>
+        </tr>
+      </tbody>
+    </table>
+    <p class="muted small">
+      This page uses the <strong>heart rate only</strong> SVM, because heart rate
+      is the one of these signals a consumer wrist device reports. The gap between
+      that row and the 8-channel row is the cost of not having electrodermal
+      activity and skin temperature.
+    </p>
+
+    <h2>What it cannot tell you</h2>
+    <ul class="limitations">
+      {% for limitation in card.limitations %}
+        <li>{{ limitation }}</li>
+      {% endfor %}
+    </ul>
+
+    <h2>How a day's number is produced</h2>
+    <ol>
+      <li>The readings stored for {{ person.display_name }} on one local day
+        ({{ person.timezone }}) are read. They came from uploaded files and
+        nothing is fetched from anywhere.</li>
+      <li>They are cut into {{ window_seconds }}-second windows, stepping
+        every {{ step_seconds }} seconds &mdash; the same geometry the model
+        was trained on. A window holding fewer than {{ min_samples }} readings
+        is dropped rather than described by statistics computed from almost
+        nothing. A day is only scored if at least {{ min_windows }} windows remain.</li>
+      <li>Five features are computed per window: mean, standard deviation,
+        minimum, maximum and slope of the heart rate.</li>
+      <li>The model labels each window, and the page reports the label that
+        won the most windows.</li>
+      <li>Before that label is shown, each feature is compared against the
+        range seen in training, and the comparison is displayed with it.</li>
+      <li>Nothing is learned from the day: the model was fitted on WESAD only
+        and the uploaded data is only scored.</li>
+    </ol>
+
+    <h2>Why there is no accuracy figure for uploaded data</h2>
+    <p>
+      There is no ground truth. Nobody recorded which minutes of these days
+      were stressful, so there is nothing to score the predictions against.
+      The cross-validated numbers above describe how the model performs on
+      the laboratory dataset it was trained on &mdash; they are not a claim
+      about how it performs on {{ person.display_name }}.
+    </p>
+
+  {% endif %}
+
+  <p><a href="{% url 'people:arousal' person.slug %}">&larr; Back to the arousal page</a></p>
+{% endblock %}

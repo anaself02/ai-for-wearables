@@ -1,0 +1,60 @@
+{% extends "base.html" %}
+{% block title %}{{ person.display_name }} ({{ person.device_label }}) - Health Dashboard{% endblock %}
+
+{% comment %}
+  One person's overview. Everything on it is read through the repository with
+  this person named, so it cannot contain anyone else's readings.
+
+  Values computed by the app from the uploaded rows (daily average, median gap)
+  carry the "derived" class and are drawn dashed, so they are never mistaken for
+  a number exactly as the device wrote it.
+{% endcomment %}
+
+{% block content %}
+  <h1>{{ person.display_name }}</h1>
+
+  {% if empty_message %}
+    <p class="empty-msg">{{ empty_message }}</p>
+    <p><a class="btn secondary" href="{% url 'people:import_data' person.slug %}">Import data</a></p>
+  {% else %}
+    <p>
+      <a class="btn secondary" href="{% url 'people:heart_rate' person.slug %}">Heart rate in detail</a>
+      <a class="btn secondary" href="{% url 'people:raw_index' person.slug %}">Raw uploaded rows</a>
+    </p>
+
+    <h2>Heart rate, last {{ window }} days with data</h2>
+    <p class="muted small">
+      Solid numbers are exactly as in the uploaded file. <span class="derived">Dashed</span>
+      numbers are computed by this app from the uploaded rows.
+    </p>
+    {{ series_json|json_script:"chart-heart-rate" }}
+    <div class="panel">
+      <div class="chart-wrap">
+        <canvas data-chart="chart-heart-rate" data-kind="line" data-unit="bpm"></canvas>
+      </div>
+    </div>
+
+    <h2>Most recent days</h2>
+    <table>
+      <thead>
+        <tr><th>Local day</th><th class="num">Readings</th>
+            <th class="num">Median gap (s)</th>
+            <th class="num">Average bpm</th><th class="num">Min bpm</th><th class="num">Max bpm</th></tr>
+      </thead>
+      <tbody>
+        {% for day in recent %}
+          <tr>
+            <td><a href="{% url 'people:heart_rate_day' person.slug day.day|date:'Y-m-d' %}">{{ day.day|date:"Y-m-d" }}</a></td>
+            <td class="num">{{ day.n|floatformat:"0g" }}</td>
+            <td class="num derived">{{ day.spacing.median|floatformat:1 }}</td>
+            <td class="num derived">{{ day.mean|floatformat:1 }}</td>
+            <td class="num">{{ day.min|floatformat:0 }}</td>
+            <td class="num">{{ day.max|floatformat:0 }}</td>
+          </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  {% endif %}
+{% endblock %}
+
+{% block scripts %}{% if not empty_message %}{% include "health/_chart_scripts.html" %}{% endif %}{% endblock %}

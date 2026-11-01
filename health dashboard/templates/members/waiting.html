@@ -1,0 +1,49 @@
+{% extends "base.html" %}
+{% block title %}Waiting for approval - Health Dashboard{% endblock %}
+
+{% comment %}
+  What an account with no linked profile sees. No data, and no other account's
+  email: only this account's own request, by profile name.
+{% endcomment %}
+
+{% block content %}
+  <h1>Waiting for an administrator</h1>
+
+  {% if claim.status == "pending" %}
+    <p class="lede">
+      Your request to be linked to the profile <strong>{{ claim.person.display_name }}</strong>
+      is waiting for an administrator to approve it. Until then no data is visible to this account.
+    </p>
+  {% elif claim.status == "rejected" %}
+    <p class="lede">
+      Your request for the profile <strong>{{ claim.person.display_name }}</strong> was not approved.
+      No data is visible to this account. You can ask for a profile again below.
+    </p>
+  {% else %}
+    <p class="lede">
+      This account is not linked to a profile yet, so no data is visible to it.
+      Ask for a profile below; an administrator must approve the link.
+    </p>
+  {% endif %}
+
+  {% if form %}
+    <form method="post" action="{% url 'members:claim' %}" class="settings-form">
+      {% csrf_token %}
+      <div class="field">
+        <label for="id_person">Which profile are you?</label>
+        <select id="id_person" name="person" required>
+          <option value="">Choose a profile</option>
+          {% for person in form.fields.person.queryset %}
+            <option value="{{ person.pk }}">{{ person.display_name }}</option>
+          {% endfor %}
+        </select>
+      </div>
+      <button class="btn" type="submit">Ask for this profile</button>
+    </form>
+  {% endif %}
+
+  <form method="post" action="{% url 'members:logout' %}">
+    {% csrf_token %}
+    <button class="btn secondary" type="submit">Log out</button>
+  </form>
+{% endblock %}

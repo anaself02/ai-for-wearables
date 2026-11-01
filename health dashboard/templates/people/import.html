@@ -1,0 +1,43 @@
+{% extends "base.html" %}
+{% block title %}Import data - {{ person.display_name }} ({{ person.device_label }}){% endblock %}
+
+{% block content %}
+  <p class="small"><a href="{% url 'people:person' person.slug %}">&larr; {{ person.display_name }}</a></p>
+  <h1>Import data</h1>
+  <p class="lede">For {{ person.display_name }} &middot; {{ person.device_label }}.</p>
+
+  <p class="notice"><strong>{{ scored_only }}</strong></p>
+
+  {% if error %}<div class="notice error"><strong>{{ error }}</strong></div>{% endif %}
+
+  {% if not adapter.implemented %}
+    <div class="notice"><strong>{{ adapter.not_implemented_message }}</strong>
+      Nothing can be loaded for {{ person.display_name }} yet, and anything chosen here is not read or saved.</div>
+    <h2>What is needed from the export</h2>
+    <ul class="limitations">
+      {% for need in adapter.needs %}<li>{{ need }}</li>{% endfor %}
+    </ul>
+  {% else %}
+    <p>
+      Choose {{ accepted }}. A <code>.csv</code> or <code>.xlsx</code> (first sheet) is
+      accepted by its header, which must be exactly the three columns
+      <code>timestamp</code>, <code>beats per minute</code>, <code>data source</code>;
+      any other column refuses the file and no other layout is guessed. In a zip, only
+      members named <code>heart_rate_YYYY-MM-DD.csv</code> are read; every other member
+      is skipped without being opened.
+    </p>
+    <p class="muted small">
+      You will see a validation report first. Nothing is saved until you confirm it,
+      uploading the same file again changes nothing, and the files themselves are not kept.
+    </p>
+  {% endif %}
+
+  {% include "people/_loaded_data.html" %}
+
+  <form method="post" enctype="multipart/form-data" class="panel">
+    {% csrf_token %}
+    <label for="files">Files</label>
+    <input id="files" type="file" name="files" multiple accept=".csv,.xlsx,.zip" required>
+    <p><button class="btn" type="submit">Check these files</button></p>
+  </form>
+{% endblock %}

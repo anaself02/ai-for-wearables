@@ -1,8 +1,15 @@
-"""Run the WESAD-trained heart-rate model against a day of live readings.
+"""Score one person's day of stored heart rate with the WESAD-trained model.
 
 This is the dashboard's action/feedback layer: it takes a model trained in a
 separate project and does something with its output, rather than drawing
 another chart of the same numbers.
+
+MODEL TRAINED ON WESAD ONLY; UPLOADED DATA IS ONLY SCORED
+---------------------------------------------------------
+Nothing in this module trains, fits, tunes or saves a model. It loads a
+pipeline that was fitted on the public WESAD dataset in the wearable-ml project
+and calls `predict` on a person's windows. A guard test runs this whole path
+with every fit and save patched to raise.
 
 WHAT IT IS NOT
 --------------
@@ -11,8 +18,15 @@ The model was trained on WESAD - fifteen people in a laboratory, where
 has never seen ordinary daily life, it has no "none of these" class, and
 there is no ground truth for anybody's real days. Every assessment this
 module produces therefore travels with its own caveat, and `Assessment` is
-built so that a prediction cannot be constructed without one. See
-`templates/health/methodology.html`, which renders the model's own card.
+built so that a prediction cannot be constructed without one.
+
+WHOSE DATA
+----------
+Every assessment is for one named person on one local day, read through
+people.repository, which refuses to read without a Person. The device and the
+spacing between that device's readings travel with the result, because a
+Fitbit's smoothed readings every ~2-3 s and an EmotiBit's are different
+measurements and the difference is a confound that must stay visible.
 
 HOW IT REACHES THE MODEL
 ------------------------
@@ -25,17 +39,17 @@ The trained pipeline lives in the wearable-ml project at
     models/model_card.json               scores and limitations
 
 Unpickling a scikit-learn pipeline needs scikit-learn importable in *this*
-process, which is why the dashboard's requirements.txt pins the same
-versions that project used. Those imports are deliberately kept inside the
-functions that need them: a missing or broken ML stack then degrades this one
-card instead of stopping the whole site from starting.
+process, which is why the requirements pin the same versions that project
+used. Those imports are kept inside the functions that need them: a missing or
+broken ML stack then degrades this one page instead of stopping the site.
 """
 
 import json
 import logging
 import os
 from dataclasses import dataclass, field
-from datetime import datetime, timedelta
+from datetime import datetime, timezone
+from zoneinfo import ZoneInfo
 
 from django.conf import settings
 
@@ -51,16 +65,37 @@ logger = logging.getLogger(__name__)
 WINDOW_SECONDS = 60
 STEP_SECONDS = 30
 
-# The watch reports roughly one reading every 3 s, so a 60 s window holds
-# about 20. Fewer than half of that and the statistics are not worth
+# A Fitbit reports roughly one reading every 2-3 s, so a 60 s window holds
+# about 20-26. Fewer than half of that and the statistics are not worth
 # computing, so the window is dropped.
 MIN_SAMPLES_PER_WINDOW = 10
+
+# A day is only offered for scoring when it holds at least this many scorable
+# windows (30 minutes of wear). It is a constant the page prints, not a hidden
+# cut-off.
+MIN_WINDOWS_TO_SCORE = 60
+
+# A day is COMPLETE when at least this many hours hold a reading (minutes with
+# at least one reading, divided by 60). Shorter days can still be scored when
+# chosen, but are marked partial and are never the default.
+COMPLETE_DAY_HOURS = 20
+PARTIAL_NOTE = ("This day is PARTIAL: only {:.1f} hours hold readings (a complete "
+                "day has at least {}). The result describes those hours only.")
 
 # Predictions made while asleep are not meaningful: the model has no sleep
 # class and WESAD contains no sleep. They are still computed - hiding them
 # would misrepresent how much of the day they are - but reported separately.
 WAKING_START_HOUR = 8
 WAKING_END_HOUR = 23
+
+# Display rules, fixed before the first run (wearable-ml/PRE_DECLARED.md).
+# A day is flagged OUT OF DISTRIBUTION when this share of its windows falls
+# outside the training range on any heart-rate feature. Predictions are flagged
+# DEGENERATE when one class takes this share of windows (the 3-class rule).
+OOD_FLAG_SHARE = 0.25
+DOMINANT_CLASS_SHARE = 0.60
+
+WESAD_ONLY_NOTICE = "Model trained on WESAD only; uploaded data is only scored."
 
 MODEL_FILENAME = "svm_hr_only.joblib"
 FEATURE_CONFIG_FILENAME = "feature_config_hr_only.json"
@@ -74,20 +109,29 @@ EXPECTED_SKLEARN_VERSION = "1.5.2"
 
 # Plain-language wording for each class the model can emit. The raw class
 # names ("stress", "amusement") would overstate what a wrist heart rate can
-# support, so the card never shows them.
+# support, so the page never shows them as the headline.
 CLASS_WORDING = {
     1: ("Settled baseline signal",
-        "Today's heart-rate pattern most resembles the calm baseline "
+        "This day's heart-rate pattern most resembles the calm baseline "
         "condition the model was trained on."),
     2: ("Elevated arousal signal",
-        "Today's heart-rate pattern most resembles the stressed condition "
-        "the model was trained on. That is not the same as saying you were "
-        "stressed."),
+        "This day's heart-rate pattern most resembles the stressed condition "
+        "the model was trained on. That is not the same as saying the person "
+        "was stressed."),
     3: ("Light arousal signal",
-        "Today's heart-rate pattern most resembles the amusement condition "
+        "This day's heart-rate pattern most resembles the amusement condition "
         "the model was trained on - raised, but not in the way the stress "
         "condition was."),
 }
+
+# Shown instead of the amusement-like headline when the day is both out of
+# distribution and degenerate: the label would mean nothing, the caveats stay.
+NO_RESULT = ("No interpretable result for this day",
+             "The day is out of distribution and one class takes most windows, so "
+             "no condition is reported. The notes below say why.")
+
+# Class names for the notes only (the 3-class model's own labels).
+CLASS_NAMES = {1: "baseline", 2: "stress", 3: "amusement"}
 
 # Every assessment is labelled low confidence. Nothing here has been
 # validated against real-world stress, so there is no honest basis on which
@@ -105,7 +149,7 @@ class ArousalUnavailable(Exception):
 
 @dataclass(frozen=True)
 class Assessment:
-    """One day's assessment, or an explanation of why there isn't one.
+    """One person-day's assessment, or an explanation of why there isn't one.
 
     Build these through the two classmethods, never directly. `predicted`
     requires the out-of-distribution evidence as an argument, which is what
@@ -127,6 +171,14 @@ class Assessment:
     ood_rows: list = field(default_factory=list)
     worst_ood_feature: str = ""
     worst_ood_share: float = 0.0
+    notes: list = field(default_factory=list)
+    device_names: list = field(default_factory=list)
+    spacing: dict = field(default_factory=dict)
+    n_readings: int = 0
+    timezone: str = ""
+    median_values_per_window: float = 0.0
+    wesad_values_per_window: float = 0.0
+    coverage: dict = field(default_factory=dict)
 
     @classmethod
     def unavailable(cls, day, reason):
@@ -135,7 +187,7 @@ class Assessment:
 
     @classmethod
     def predicted(cls, day, dominant, shares, waking_shares, n_windows,
-                  n_waking_windows, mean_bpm, ood_rows):
+                  n_waking_windows, mean_bpm, ood_rows, **context):
         """A prediction, which cannot be built without its caveat evidence."""
         if not ood_rows:
             raise ValueError(
@@ -144,6 +196,13 @@ class Assessment:
 
         headline, explanation = CLASS_WORDING[dominant]
         worst = max(ood_rows, key=lambda row: row["share_outside"])
+        notes = notes_for(shares, worst["share_outside"])
+        if (dominant == 3 and worst["share_outside"] >= OOD_FLAG_SHARE
+                and shares[dominant] >= DOMINANT_CLASS_SHARE):
+            headline, explanation = NO_RESULT
+        coverage = context.get("coverage") or {}
+        if coverage.get("partial"):
+            notes.insert(0, PARTIAL_NOTE.format(coverage["hours"], COMPLETE_DAY_HOURS))
 
         return cls(
             day=str(day),
@@ -159,6 +218,8 @@ class Assessment:
             ood_rows=ood_rows,
             worst_ood_feature=worst["feature"],
             worst_ood_share=worst["share_outside"],
+            notes=notes,
+            **context,
         )
 
     @property
@@ -168,9 +229,35 @@ class Assessment:
             return ""
         return (
             "Wrist heart rate only, from a model trained on laboratory stress "
-            "- not a clinical or validated measure. {:.0%} of today's windows "
-            "fall outside the range it was trained on ({})."
+            "- not a clinical or validated measure. {:.0%} of this day's "
+            "windows fall outside the range it was trained on ({})."
         ).format(self.worst_ood_share, self.worst_ood_feature)
+
+
+def notes_for(shares, worst_ood_share):
+    """Plain-language notes shown with the label, from the pre-declared rules."""
+    notes = []
+    named = {CLASS_NAMES[label]: share for label, share in shares.items()}
+    top_name, top_share = max(named.items(), key=lambda kv: kv[1])
+    out_of_distribution = worst_ood_share >= OOD_FLAG_SHARE
+    degenerate = top_share >= DOMINANT_CLASS_SHARE
+
+    if out_of_distribution:
+        notes.append(
+            "This day is OUT OF DISTRIBUTION: at least {:.0%} of its windows "
+            "fall outside the WESAD training range on one heart-rate feature."
+            .format(OOD_FLAG_SHARE))
+    if degenerate:
+        notes.append(
+            "The predictions are DEGENERATE: one class ({}) takes {:.0%} of "
+            "windows.".format(top_name, top_share))
+        if top_name == "amusement":
+            notes.append(
+                "The model cannot separate amusement from baseline using "
+                "heart rate alone, and this day is out of distribution.")
+    if out_of_distribution or degenerate:
+        notes.append("The class shares are therefore NOT interpretable.")
+    return notes
 
 
 # ---------------------------------------------------------------------------
@@ -224,7 +311,7 @@ def load_artifacts():
     distribution = _read_json(DISTRIBUTION_FILENAME)
 
     # Imported here, not at module scope, so that an ML stack which is
-    # missing or broken costs this one card and not the whole site.
+    # missing or broken costs this one page and not the whole site.
     try:
         import joblib
         import sklearn
@@ -298,85 +385,107 @@ def basic_features(values):
     }
 
 
-def parse_samples(points):
-    """Turn raw heart-rate data points into (datetime, bpm) pairs.
+def window_starts(day, tz_name):
+    """Window start times (UTC epoch seconds), anchored to local midnight.
 
-    The payload shape, confirmed against the live API rather than assumed:
-
-        {"heartRate": {"beatsPerMinute": "71",
-                       "sampleTime": {"civilTime": {"date": {...},
-                                                    "time": {...}}}}}
-
-    beatsPerMinute arrives as a STRING. Zero-valued time fields are omitted
-    entirely rather than sent as 0, so midnight arrives as an empty dict.
-    Civil times are local wall-clock with no offset, which is what we want -
-    "this afternoon" is a local-time question.
+    Built from the real local midnights, so a daylight-saving day is 23 or 25
+    hours long and its windows follow.
     """
-    samples = []
-    for point in points:
-        body = point.get("heartRate") or {}
-        civil = (body.get("sampleTime") or {}).get("civilTime") or {}
-        day_part = civil.get("date") or {}
-        time_part = civil.get("time") or {}
-        bpm = body.get("beatsPerMinute")
-
-        if not day_part or bpm is None:
-            continue
-
-        samples.append((
-            datetime(
-                year=day_part["year"],
-                month=day_part["month"],
-                day=day_part["day"],
-                hour=time_part.get("hours", 0),
-                minute=time_part.get("minutes", 0),
-                second=time_part.get("seconds", 0),
-            ),
-            float(bpm),
-        ))
-
-    samples.sort(key=lambda pair: pair[0])
-    return samples
-
-
-def build_windows(samples, feature_names):
-    """Slide a 60 s window across the day and compute features for each.
-
-    Windows are anchored to midnight and step every 30 s, so a window's start
-    is a real clock time and can be reported as "this afternoon" rather than
-    as an offset from whenever the first reading happened to arrive.
-
-    Returns (list of feature dicts, list of window start datetimes). Raises
-    ArousalUnavailable if the day holds too little data to window at all.
-    """
-    if not samples:
-        raise ArousalUnavailable(
-            "No heart-rate readings were returned for this day.")
-
     import numpy as np
 
-    times = np.array([sample[0] for sample in samples], dtype="datetime64[s]")
-    bpm = np.array([sample[1] for sample in samples], dtype=float)
+    from people.repository import local_day_bounds
 
-    midnight = times[0].astype("datetime64[D]").astype("datetime64[s]")
-    day_end = midnight + np.timedelta64(24 * 3600, "s")
+    start, end = local_day_bounds(day, tz_name)
+    return np.arange(start, end - WINDOW_SECONDS + 1, STEP_SECONDS)
 
-    rows = []
-    starts = []
-    start = midnight
-    step = np.timedelta64(STEP_SECONDS, "s")
-    length = np.timedelta64(WINDOW_SECONDS, "s")
 
-    while start + length <= day_end:
-        first = int(np.searchsorted(times, start, side="left"))
-        last = int(np.searchsorted(times, start + length, side="left"))
+def grid_starts(anchor, first, last):
+    """Window starts on the 30 s grid from `anchor`, from >= first to <= last.
 
-        if last - first >= MIN_SAMPLES_PER_WINDOW:
-            stats = basic_features(bpm[first:last])
-            rows.append({"HR_" + name: value for name, value in stats.items()})
-            starts.append(start.astype(datetime))
+    The arousal page anchors at local midnight; the sessions page anchors at the
+    local midnight of the session's day, so both cut the same windows.
+    """
+    import numpy as np
 
-        start = start + step
+    lo = anchor + -(-(first - anchor) // STEP_SECONDS) * STEP_SECONDS
+    if last < lo:
+        return np.array([], dtype="int64")
+    return np.arange(lo, last + 1, STEP_SECONDS, dtype="int64")
+
+
+def window_features(epochs, bpm, starts):
+    """The one windowing and feature step shared by every page that scores.
+
+    For each start, the readings in [start, start + 60 s); a window with fewer
+    than MIN_SAMPLES_PER_WINDOW readings is dropped. Returns (feature dicts
+    named HR_mean ... HR_slope, kept starts, readings per kept window).
+    """
+    import numpy as np
+
+    starts = np.asarray(starts, dtype="int64")
+    lo = np.searchsorted(epochs, starts, side="left")
+    hi = np.searchsorted(epochs, starts + WINDOW_SECONDS, side="left")
+    rows, kept, sizes = [], [], []
+    for start, first, last in zip(starts, lo, hi):
+        if last - first < MIN_SAMPLES_PER_WINDOW:
+            continue
+        stats = basic_features(bpm[first:last])
+        rows.append({"HR_" + name: value for name, value in stats.items()})
+        kept.append(int(start))
+        sizes.append(int(last - first))
+    return rows, kept, sizes
+
+
+def day_coverage(epochs, tz_name):
+    """First and last reading (local), readings, and hours with data.
+
+    Hours with data = minutes holding at least one reading, divided by 60.
+    """
+    import numpy as np
+
+    tz = ZoneInfo(tz_name)
+    hours = len(np.unique(np.asarray(epochs) // 60)) / 60 if len(epochs) else 0.0
+    return {
+        "readings": int(len(epochs)),
+        "first": (datetime.fromtimestamp(int(epochs[0]), timezone.utc).astimezone(tz)
+                  if len(epochs) else None),
+        "last": (datetime.fromtimestamp(int(epochs[-1]), timezone.utc).astimezone(tz)
+                 if len(epochs) else None),
+        "hours": hours,
+        "partial": hours < COMPLETE_DAY_HOURS,
+    }
+
+
+def count_scorable_windows(epochs, day, tz_name):
+    """How many 60 s windows of this day hold at least 10 readings."""
+    import numpy as np
+
+    if len(epochs) == 0:
+        return 0
+    starts = window_starts(day, tz_name)
+    lo = np.searchsorted(epochs, starts, side="left")
+    hi = np.searchsorted(epochs, starts + WINDOW_SECONDS, side="left")
+    return int(np.sum((hi - lo) >= MIN_SAMPLES_PER_WINDOW))
+
+
+def build_windows(epochs, bpm, day, tz_name, feature_names):
+    """Slide a 60 s window across a local day and compute features for each.
+
+    Windows are anchored to local midnight and step every 30 s, so a window's
+    start is a real clock time and can be reported as "this afternoon".
+
+    Returns (feature dicts, waking flags, readings per window). Raises
+    ArousalUnavailable if the day holds too little data to window at all.
+    """
+    if len(epochs) == 0:
+        raise ArousalUnavailable(
+            "No heart-rate readings are stored for this person on this day.")
+
+    rows, kept, sizes = window_features(epochs, bpm, window_starts(day, tz_name))
+    tz = ZoneInfo(tz_name)
+    waking = [WAKING_START_HOUR
+              <= datetime.fromtimestamp(start, timezone.utc).astimezone(tz).hour
+              < WAKING_END_HOUR for start in kept]
 
     if not rows:
         raise ArousalUnavailable(
@@ -389,7 +498,7 @@ def build_windows(samples, feature_names):
             "The model expects features this code does not compute: {}."
             .format(", ".join(missing)))
 
-    return rows, starts
+    return rows, waking, sizes
 
 
 # ---------------------------------------------------------------------------
@@ -397,16 +506,16 @@ def build_windows(samples, feature_names):
 # ---------------------------------------------------------------------------
 
 def out_of_distribution(rows, feature_names, distribution):
-    """Measure how far today's features sit outside the training data.
+    """Measure how far this day's features sit outside the training data.
 
-    Same two measures script 05 uses in the wearable-ml project, against the
-    same training statistics file:
+    Same two measures the wearable-ml demo uses, against the same training
+    statistics file:
 
-      share_outside - the fraction of today's windows whose value falls
+      share_outside - the fraction of the day's windows whose value falls
                       outside the min-max range seen in training. Blunt, but
                       it needs no assumption about the shape of either
                       distribution.
-      median_shift  - how far today's median sits from the training mean,
+      median_shift  - how far the day's median sits from the training mean,
                       counted in training standard deviations.
 
     This matters more than it would for most models. The classifier is an
@@ -455,19 +564,32 @@ def _shares(predictions):
     }
 
 
-def assess(points, day):
-    """Turn one day of raw heart-rate points into an Assessment.
+def assess(person, day):
+    """Score one local day of one person's stored heart rate.
 
-    Never raises for an expected problem: a missing model, an ML stack that
-    is not installed, or a day with too little data all come back as an
-    unavailable Assessment carrying a readable reason.
+    `person` must be a Person: the readings are read through the repository,
+    which refuses anything else. Never raises for an expected problem: a
+    missing model, an ML stack that is not installed, or a day with too little
+    data all come back as an unavailable Assessment carrying a readable reason.
     """
+    from people import repository
+
+    repository.require_person(person)
     try:
         model, feature_names, distribution = load_artifacts()
 
-        samples = parse_samples(points)
-        rows, starts = build_windows(samples, feature_names)
+        epochs, bpm = repository.local_day_readings(person, day)
+        rows, waking, sizes = build_windows(
+            epochs, bpm, day, person.timezone, feature_names)
 
+        if len(rows) < MIN_WINDOWS_TO_SCORE:
+            raise ArousalUnavailable(
+                "Too few scorable windows on this day: {} (at least {} are "
+                "needed, which is {} minutes of wear).".format(
+                    len(rows), MIN_WINDOWS_TO_SCORE,
+                    MIN_WINDOWS_TO_SCORE * STEP_SECONDS // 60))
+
+        import numpy as np
         import pandas as pd
 
         # A DataFrame with named columns, in the order the pipeline was
@@ -477,24 +599,28 @@ def assess(points, day):
         frame = pd.DataFrame(rows)[feature_names]
         predictions = [int(value) for value in model.predict(frame)]
 
-        waking = [
-            prediction
-            for prediction, start in zip(predictions, starts)
-            if WAKING_START_HOUR <= start.hour < WAKING_END_HOUR
-        ]
-
-        dominant = max(_shares(predictions).items(), key=lambda kv: kv[1])[0]
-        mean_bpm = sum(row["HR_mean"] for row in rows) / len(rows)
+        waking_predictions = [p for p, flag in zip(predictions, waking) if flag]
+        shares = _shares(predictions)
+        dominant = max(shares.items(), key=lambda kv: kv[1])[0]
+        mean_hr_training = distribution["features"]["HR_mean"]["mean"]
 
         return Assessment.predicted(
             day=day,
             dominant=dominant,
-            shares=_shares(predictions),
-            waking_shares=_shares(waking),
+            shares=shares,
+            waking_shares=_shares(waking_predictions),
             n_windows=len(predictions),
-            n_waking_windows=len(waking),
-            mean_bpm=mean_bpm,
+            n_waking_windows=len(waking_predictions),
+            mean_bpm=sum(row["HR_mean"] for row in rows) / len(rows),
             ood_rows=out_of_distribution(rows, feature_names, distribution),
+            device_names=repository.device_names_for_day(person, day),
+            spacing=repository.spacing(epochs),
+            n_readings=int(len(epochs)),
+            timezone=person.timezone,
+            median_values_per_window=float(np.median(sizes)),
+            # One value per heartbeat, so about one per beat in a 60 s window.
+            wesad_values_per_window=float(mean_hr_training),
+            coverage=day_coverage(epochs, person.timezone),
         )
 
     except ArousalUnavailable as exc:
@@ -505,54 +631,37 @@ def assess(points, day):
             day, "The assessment could not be computed: {}".format(exc))
 
 
-# ---------------------------------------------------------------------------
-# Caching
-# ---------------------------------------------------------------------------
+def scorable_days(person):
+    """Local days with data, newest first, each with its scorable-window count.
 
-def _cache_parts(user, day):
-    return ("arousal", user.pk, str(day))
-
-
-def cached_assessment(user, day):
-    """Return a previously computed assessment, or None. Never computes."""
-    from . import cache as health_cache
-
-    return health_cache.cached_compute(
-        _cache_parts(user, day), settings.AROUSAL_CACHE_SECONDS,
-        produce=None, only_if_cached=True)
-
-
-def store_unavailable(user, day, reason):
-    """Cache an explanation so the card can show why there is no assessment.
-
-    Used when the failure happens before `assess` is reached - a failed API
-    fetch, say. Without this the card would fall back to "not computed yet"
-    and give the visitor no idea that anything had gone wrong.
+    A day is `scorable` when it holds at least MIN_WINDOWS_TO_SCORE windows of
+    at least MIN_SAMPLES_PER_WINDOW readings.
     """
-    from . import cache as health_cache
+    from people import repository
 
-    assessment = Assessment.unavailable(day, reason)
-    health_cache.cached_compute(
-        _cache_parts(user, day), settings.AROUSAL_CACHE_SECONDS,
-        lambda: assessment, force=True)
-    return assessment
+    repository.require_person(person)
+    days = []
+    for day in sorted(repository.local_dates_with_data(person), reverse=True):
+        epochs, _ = repository.local_day_readings(person, day)
+        windows = count_scorable_windows(epochs, day, person.timezone)
+        hours = day_coverage(epochs, person.timezone)["hours"]
+        days.append({"day": day, "readings": int(len(epochs)),
+                     "windows": windows, "hours": hours,
+                     "complete": hours >= COMPLETE_DAY_HOURS,
+                     "scorable": windows >= MIN_WINDOWS_TO_SCORE})
+    return days
 
 
-def compute_assessment(client, user, day, *, force=False):
-    """Compute (or reuse) an assessment for one day, and cache it.
+def default_day(days):
+    """The most recent complete, scorable day from `scorable_days`.
 
-    The heart-rate samples come from the same cached intraday fetch the rest
-    of the dashboard uses, so asking for an assessment on a day already being
-    viewed costs no extra API calls.
+    If no day is complete, the most recent scorable one (shown as partial);
+    None if nothing can be scored.
     """
-    from . import cache as health_cache
-    from . import datatypes
-
-    def produce():
-        fetched = health_cache.fetch_intraday(
-            client, datatypes.get("heart-rate"), day, user=user, force=force)
-        return assess(fetched.points, day)
-
-    return health_cache.cached_compute(
-        _cache_parts(user, day), settings.AROUSAL_CACHE_SECONDS,
-        produce, force=force)
+    for entry in days:
+        if entry["scorable"] and entry["complete"]:
+            return entry["day"]
+    for entry in days:
+        if entry["scorable"]:
+            return entry["day"]
+    return None

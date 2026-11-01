@@ -1,658 +1,104 @@
-# Personal Health Dashboard
+# Health Dashboard (course project viewer)
 
-Django app that reads personal fitness and health data live from the
-**Google Health API v4** (`https://health.googleapis.com/v4`).
+A local, file-based viewer for two people's wearable heart-rate data, built for
+COEN 6322 (AI for Wearable Health Applications).
 
-Server-rendered Django templates, SQLite, no JavaScript build step.
+- Two participants, each collecting only on themselves, on different devices:
+  **Anas** (Fitbit Air, Google Takeout export) and **Rahil** (EmotiBit, data
+  expected after the mid-project presentation).
+- Data comes from **uploaded files**. There is no Google sign-in, no API and no
+  network access to any health service.
+- The two people's data is **never pooled**. Every page is about one named
+  person and shows their name and device in the top bar, because the devices
+  differ and that difference is a confound the project keeps visible.
+- A model trained on the public **WESAD** dataset is applied to a chosen day of
+  a person's data. **The model is trained on WESAD only; uploaded data is only
+  scored**, never used to train, tune or fine-tune anything.
 
----
+Django, server-rendered templates, SQLite, no npm and no build step. Local only:
+`ALLOWED_HOSTS` is `localhost` and `127.0.0.1`.
 
-## Status
+## Run it
 
-| Build step | State |
-|---|---|
-| 1. Django skeleton + Sign in with Google | done, needs your client ID/secret to run |
-| 2. One view fetching one data type, raw JSON | done (`/raw/exercise/`) |
-| 3. Remaining data types | done — 13 of 16 confirmed returning live data (see below) |
-| 4. Dashboard UI with Chart.js | done |
-| 5. Token auto-refresh | already wired via `AuthorizedSession`; hardening is step 5 |
-| Historical VO2 max import | built; run the command to populate (see below) |
-
----
-
-## One-time setup in Google Cloud Console
-
-**1. Add the redirect URI.** On your existing OAuth 2.0 client
-(Credentials → your "Web application" client → Authorized redirect URIs), add
-exactly:
-
-```
-http://localhost:8000/oauth/callback/
-```
-
-Plain `http` is correct: Google exempts `localhost` from its HTTPS-only rule.
-Keep the two entries you already have; this is an addition, not a replacement.
-
-**2. Add the sign-in scopes.** On the OAuth consent screen's Data Access page,
-add these three alongside the health scopes you already granted. They are
-non-sensitive and are what lets the app create a Django `User` record:
-
-```
-openid
-https://www.googleapis.com/auth/userinfo.email
-https://www.googleapis.com/auth/userinfo.profile
-```
-
-No additional *health* scope is needed. The three you already have cover every
-metric this app reads.
-
----
-
-## Local setup
-
-```
-# from the project root
-.venv\Scripts\python.exe -m pip install -r requirements.txt   # already installed
-```
-
-Open `.env` and paste your credentials into these two lines:
-
-```
-GOOGLE_OAUTH_CLIENT_ID=...apps.googleusercontent.com
-GOOGLE_OAUTH_CLIENT_SECRET=...
-```
-
-`DJANGO_SECRET_KEY` and `FERNET_KEY` are already generated. `.env` is
-gitignored; nothing secret is committed.
-
-Then:
+Windows, from this folder:
 
 ```
 .venv\Scripts\python.exe manage.py migrate
-.venv\Scripts\python.exe manage.py runserver
+.venv\Scripts\python.exe manage.py createsuperuser     # once; use your EMAIL as the username
+.venv\Scripts\python.exe manage.py runserver 127.0.0.1:8000
 ```
 
-Open <http://localhost:8000/>. Use `localhost`, not `127.0.0.1` — the redirect
-URI registered with Google is host-specific.
+Open http://127.0.0.1:8000 and log in. The only value `.env` needs is
+`DJANGO_SECRET_KEY` (see `.env.example`).
 
-Run the tests with:
+## Accounts
+
+Everything is behind a login. The account system exists only to keep the two
+people's profiles apart on one machine.
+
+- **You (administrator):** `createsuperuser` makes the first one; use your email as
+  the username, because the login form takes an email. Administrators see the
+  person chooser and can open any profile.
+- **A teammate:** goes to `/signup/`, gives an email and password and picks "Which
+  profile are you?". That only creates a **pending claim**. No email is sent.
+- **Approve a claim:** log in, open `/admin/`, go to *Users*, tick the account (the
+  *pending claims* filter finds it), and choose *Approve the selected accounts'
+  pending claims*. Until then they see only a waiting page. The same list can
+  reject a claim or unlink an account.
+- **Linked accounts** see only their own profile; any other profile is a 404.
+
+## Add a person's data
+
+From a Google Takeout, take the `heart_rate_YYYY-MM-DD.csv` files from
+`Takeout/Google Health/Physical Activity_GoogleData/Heart Rate/`.
+
+- **Command line:** `manage.py import_heart_rate anas "<path to that folder>"`
+  (add `--dry-run` to see the report without storing anything).
+- **Browser:** open the person's page and use the **Import data** tab. It takes
+  a `.csv`, an `.xlsx` (first sheet) or a `.zip`, several at once.
+
+Both use the same code: files are parsed into a plan, a validation report is
+shown (what was read, what was skipped and why, row counts, UTC and local date
+range, timezone assumed, device names found), and nothing is stored until it is
+confirmed. Loading the same file again changes nothing (same SHA-256), and
+overlapping files are merged by timestamp. Only files named
+`heart_rate_YYYY-MM-DD.csv` are opened; every other file in a Takeout (profile,
+location, security) is skipped without being read. Original files are not kept.
+
+Rahil's reader is a placeholder: it needs a sample export before a parser can be
+written, so nothing can be loaded for him yet.
+
+## Pages
+
+| URL | What |
+|---|---|
+| `/` | Choose whose data to view (administrators; others go to their own profile) |
+| `/signup/`, `/login/`, `/logout/` (POST) | Accounts |
+| `/admin/` | Who is linked to which profile; approve, reject, unlink |
+| `/p/<slug>/import/` | Import data |
+| `/p/<slug>/` | One person's overview |
+| `/p/<slug>/heart-rate/` | Daily average, minimum and maximum over 7, 30 or 90 days |
+| `/p/<slug>/heart-rate/day/<date>/` | One local day as per-minute means |
+| `/p/<slug>/raw/` and `/raw/<date>/` | The files loaded and the rows as loaded |
+| `/p/<slug>/arousal/` | Score a chosen day with the WESAD-trained model |
+
+Values exactly as in the uploaded file are drawn solid. Values the app computes
+(daily averages, per-minute means, spacing, shares) are drawn **dashed**.
+
+## The model
+
+`health/arousal.py` loads a scikit-learn pipeline from the sibling `wearable-ml`
+project (`WEARABLE_ML_DIR`, default `../wearable-ml`), reading four files and
+writing none. It needs scikit-learn exactly 1.5.2 and refuses anything else.
+Results always carry a caveat: the model was trained on laboratory stress, has no
+"none of these" class, and a consumer device's smoothed readings are measurably
+out of distribution. Each result prints the device and the spacing between its
+readings.
+
+## Tests
 
 ```
 .venv\Scripts\python.exe manage.py test
 ```
 
----
-
-## How the pieces fit
-
-```
-accounts/
-  crypto.py      Fernet encrypt/decrypt, key from FERNET_KEY
-  fields.py      EncryptedTextField - ciphertext in the column, plain str in Python
-  models.py      GoogleCredential: one row per user, converts to/from google-auth
-  oauth.py       Flow construction, authorization URL, ID-token verification
-  views.py       landing / google_login / oauth_callback / sign_out
-health/
-  datatypes.py   registry of every data type: slug, filter field, scope, quirks
-  client.py      GoogleHealthClient over AuthorizedSession (auto-refreshes)
-  views.py       index + raw JSON dump per data type
-```
-
-### PKCE, and why the session carries two values
-
-google-auth-oauthlib performs PKCE by default. `Flow.authorization_url()`
-generates a `code_verifier` **on the Flow object** and sends only its SHA-256
-challenge to Google; `Flow.fetch_token()` then has to send the original
-verifier back.
-
-The callback arrives as a separate HTTP request with a separate `Flow`
-instance, so both the `state` *and* the `code_verifier` are stashed in the
-Django session at `/oauth/login/` and popped at `/oauth/callback/`. Losing the
-verifier produces exactly this error from Google:
-
-```
-(invalid_grant) Missing code verifier.
-```
-
-Restarting `runserver` mid-sign-in can also trigger it if the session is
-cleared; the callback detects a missing verifier and asks the user to start
-again rather than failing opaquely.
-
-### Sleep-stage timeline (hypnogram)
-
-`/metric/sleep/night/<YYYY-MM-DD>/` draws five horizontal bands - Total awake
-time, Restlessness, REM, Light, Deep - with each band's actual segments across
-the night on a shared time axis, its total duration in the label above it, and
-bedtime / midpoint / wake time on the axis below. The multi-day sleep table links
-into it from each night's date.
-
-**What the API actually provides**, checked before anything was built:
-
-- `sleep.stages` is a list of segments, each `{startTime, startUtcOffset,
-  endTime, endUtcOffset, type}` with type `AWAKE | REM | LIGHT | DEEP`. A real
-  night had 34 of them.
-- The segments **tile the night exactly** - 0 gaps, 0 overlaps, first start ==
-  `interval.startTime`, last end == `interval.endTime`.
-- Their durations sum **exactly** to `summary.stagesSummary` (44 / 104 / 309 /
-  113 minutes on the night checked), so totals are computed from the segments and
-  still agree with what the API reports.
-
-Two things that would be easy to get wrong:
-
-- **`shortAwakenings` are nested inside the stage segments, not alongside them.**
-  One night had 21 of them while `stagesSummary` reported an AWAKE count of 3.
-  They get their own "Restlessness" band - which is how Google's own app shows
-  them - but their minutes are never added to the Awake total and the band has no
-  share-of-night percentage, because that time is already counted under whichever
-  stage it interrupted.
-- **`sleep.type` can be `classic` instead of `STAGES`**, in which case there is no
-  breakdown at all. That renders an explanation rather than an empty chart.
-
-**How it is drawn.** Not with Chart.js. The bands are rounded tracks with
-absolutely positioned segments sized in percent, which reflows with the viewport
-and puts every segment in the DOM as a real element - so hover text and
-screen-reader labels come from the markup instead of needing a parallel table
-beside a canvas. Chart.js fought the two things this layout needs: labels sit
-*above* each band rather than as y-axis ticks, and each band has its own rounded
-track behind the segments. It stays the charting library everywhere else.
-
-Times come from each segment's own `startUtcOffset`, so a night reads in the
-device's local wall clock: `04:00Z` at UTC-4 is `00:00`, not `04:00`. The axis
-prints bedtime, the midpoint and wake time.
-
-### Insights
-
-`health/insights.py` computes derived observations from the daily series the
-dashboard already fetches. Every function is **pure** - it takes plain
-`[(date, value)]` and returns an `Insight` - so each one is tested against a
-synthetic series whose answer is known in advance (an exact 3 bpm drift, a
-deficit that sums to a round number, a correlation whose p-value is in the
-standard tables).
-
-Each insight also **degrades on its own**: too little data yields
-`available=False` with a note saying what is missing, so one thin metric never
-blanks the section. Insights currently computed:
-
-| Insight | What it does |
-|---|---|
-| Resting heart rate trend | Least-squares drift across the window |
-| HRV trend | Same, on daily RMSSD |
-| Sleep debt | Running total against a fixed 7.5h reference |
-| Resting HR and sleep length | Bottom vs top third of nights by duration |
-| Sleep consistency | Night-to-night standard deviation |
-| HRV and resting heart rate | Named correlation |
-| Deep sleep and HRV | Named correlation |
-| Strongest relationship | Scans every pair, reports the largest |
-
-**Every insight carries its own verdict.** Each one reports a significance state
-- `significant in this sample`, `not distinguishable from chance`, `survives
-multiple-comparison correction`, or `descriptive` for a plain arithmetic summary
-- and **the sentence is phrased to match it**. A trend that fails its test reads
-"drifted up by about 0.5 ms ... but the day-to-day scatter is wide enough that
-this is not distinguishable from no trend at all", not "trended up". Tests assert
-that an insight whose test failed never contains overclaiming language.
-
-This distinction earns its keep on the current data: the resting-HR trend fits at
-r = +0.74, p < 0.001, while the HRV "trend" is r = +0.03, p ≈ 0.905. Before slope
-significance was tested, both were worded identically.
-
-Weak and null results stay **visible** rather than being hidden below a
-threshold. "Tested, no clear relationship" is more defensible than silence,
-and it shows the comparison was made rather than quietly dropped.
-
-**Methodology notes** are rendered on the page itself, not just in this file, and
-are generated from the computed insights so the numbers they quote cannot drift
-out of date.
-
-**On the statistics.** This is n≈25 from one person with no control and no
-randomisation. The wording is observational throughout - "resting heart rate was
-higher on mornings after the shortest nights", never "short sleep raises resting
-heart rate" - and a test asserts that no insight's text contains causal verbs.
-Three specific honesty problems are handled rather than hidden:
-
-- **Circularity.** The API reports `calculationMethod: "WITH_SLEEP"` for daily
-  resting heart rate, so it is *derived from* the same night's sleep. Correlating
-  the two is partly definitional, and the insight says so.
-- **Multiple comparisons.** "Strongest relationship" is the maximum of ~20
-  correlations, so the single-test 0.05 threshold does not apply. It reports a
-  Bonferroni-corrected threshold and states whether the result survives it. On
-  the current data it does not.
-- **Nested metrics.** Deep sleep is a component of time asleep, so that pair is
-  excluded from the scan - a metric correlating with a quantity it is part of is
-  arithmetic, not a finding.
-
-p-values come from the usual t approximation, with the incomplete beta function
-implemented in `insights.py` (no scipy). They describe this sample; consecutive
-days from one person are not independent observations.
-
-**Two data-quality fixes this surfaced**, both verified against live responses:
-
-- **Naps were being counted as nights.** The API returns them as ordinary sleep
-  sessions. `metadata.nap` is the reliable flag - `mainSleep` is *absent* on one
-  nap and `true` on another, so it cannot be used. Filtering naps flipped the
-  sleep-debt figure from a 7.4h deficit to a 3.7h surplus.
-- **A single date can carry two sessions** (a nap plus the night). Only the
-  longest surviving session per date is kept, so pairing cannot silently pick
-  whichever happened to sort last.
-
-The overview now fetches a 30-day window and slices the last 7 points for the
-card sparklines, rather than issuing a second short-window request for the same
-metrics.
-
-### Response caching
-
-The overview needs one API call per metric, so an uncached browser refresh cost
-ten calls to Google. `health/cache.py` puts a short-lived cache in front of every
-fetch. Measured on this machine:
-
-| page | cold | warm |
-|---|---|---|
-| `/dashboard/` | 2.26s | **0.24s** |
-| `/metric/heart-rate/?days=90` | 4.61s | **0.21s** |
-| `/metric/heart-rate/day/<date>/` | 3.11s | **0.30s** |
-
-Every page shows when its data was fetched and carries a **Refresh now** link;
-`?refresh=1` on any page deletes that entry and re-fetches.
-
-Two properties are load-bearing and have tests:
-
-- **Keys are per user.** These are personal health readings - a shared key would
-  show one person another's data. The user id is part of every key, alongside the
-  metric, its source endpoint and the exact window.
-- **Failures are never cached.** The value is only written back after a
-  successful return, so an error is retried on the next request instead of being
-  remembered for the rest of the TTL.
-
-A civil day that has already ended cannot gain new samples, so the intraday
-drill-down for a past day is held for 24 hours rather than 10 minutes.
-
-Tuning, via `.env`:
-
-```
-HEALTH_CACHE_SECONDS=600        # 0 disables caching entirely
-HEALTH_CACHE_SECONDS_PAST_DAY=86400
-```
-
-The backend is `LocMemCache`: no extra service, but per-process and empty after a
-restart. Switch to the database or Redis backend if this is ever served by more
-than one worker.
-
-### Checking the credentials
-
-```
-.venv\Scripts\python.exe manage.py check_google_auth
-```
-
-Forces a real token refresh against Google and then makes one live API call, so
-a bad client secret is caught in seconds rather than during a browser sign-in.
-All values are masked in the output. It distinguishes the two failure modes:
-
-- `invalid_client` - the secret in `.env` does not match this OAuth client
-- `invalid_grant` - the refresh token expired (see the 7-day note below)
-
-### Rotating the client secret
-
-Google lets one OAuth client hold two secrets at once, so this needs no downtime
-and does **not** invalidate existing refresh tokens (they are bound to the client
-id, not the secret).
-
-1. Cloud Console -> Credentials -> the OAuth client -> **Add secret**
-2. Copy the new value into `GOOGLE_OAUTH_CLIENT_SECRET` in `.env`
-3. Restart the server - `runserver`'s autoreloader watches `.py` files but
-   **not** `.env`, so an edit alone changes nothing:
-   ```
-   .venv\Scripts\python.exe manage.py runserver --noreload
-   ```
-4. `manage.py check_google_auth` - confirms the new secret before you touch the
-   old one
-5. Only then: Cloud Console -> **delete the old secret**
-6. Re-run `check_google_auth` and do one browser sign-in to confirm the full flow
-
-### Timezone
-
-`TIME_ZONE` is `America/New_York`, set deliberately rather than left on UTC.
-
-The API stamps civil times with the recording device's own offset - observed
-`"startUtcOffset": "-14400s"`, i.e. UTC-4. Day windows therefore have to resolve
-"today" in that same zone. All window maths goes through
-`django.utils.timezone.localdate()`, never `date.today()`: the host clock and the
-configured zone agree for most of the day but diverge by a full day between local
-midnight and UTC midnight, which would silently shift every chart.
-
-Override with `DJANGO_TIME_ZONE` in `.env` if the device reports a different zone.
-
-`accounts.models` deliberately keeps using `timezone.now()` for token expiry -
-that comparison is absolute and must not follow the display zone.
-
-### Token storage
-
-Access and refresh tokens are Fernet-encrypted before they reach SQLite. The
-key lives only in `.env`, so a copy of `db.sqlite3` on its own is not enough to
-call the API. `EncryptedTextField` does this in `get_prep_value` /
-`from_db_value`, so application code never sees ciphertext.
-
-Rotating `FERNET_KEY` makes existing tokens unreadable — the app logs a warning
-and asks the affected user to reconnect rather than crashing.
-
-### Token refresh
-
-`google.auth.transport.requests.AuthorizedSession` renews an expired access
-token from the stored refresh token before the request goes out.
-`GoogleHealthClient` compares the token before and after each call and writes a
-renewed one back to the database.
-
-When Google *rejects* the refresh token, the client raises
-`GoogleReconnectRequired`, flags the row with `needs_reconnect`, and the view
-renders a "Reconnect with Google" page instead of a 500.
-
-### The 7-day refresh token
-
-While the OAuth consent screen is in **Testing** mode, Google expires refresh
-tokens after **7 days**. Expect to hit the reconnect page about weekly. Moving
-the consent screen to "In Production" removes this; refresh tokens then last
-until revoked or unused for ~6 months.
-
----
-
-## Google Health API notes
-
-Facts below were read from the live discovery document
-(`https://health.googleapis.com/$discovery/rest?version=v4`, revision
-`20260916`), not from memory.
-
-### Two spellings of every data type
-
-The URL path uses kebab-case, filter expressions use snake_case:
-
-```
-GET /v4/users/me/dataTypes/daily-resting-heart-rate/dataPoints
-  ?filter=daily_resting_heart_rate.date >= "2026-09-01"
-```
-
-`datatypes.py` keeps both and a test asserts they stay in sync.
-
-### Which time field is filterable
-
-| Kind | Filter field | Literal format |
-|---|---|---|
-| interval | `{t}.interval.civil_start_time` | `YYYY-MM-DD[THH:mm:ss]` |
-| sample | `{t}.sample_time.civil_time` | `YYYY-MM-DD[THH:mm:ss]` |
-| daily | `{t}.date` | `YYYY-MM-DD` |
-| session | `{t}.interval.civil_start_time` | `YYYY-MM-DD[THH:mm:ss]` |
-| **sleep** | `sleep.interval.civil_end_time` | sleep is filtered on END time only |
-
-Only `>=` and `<` are supported. There is no `BETWEEN` and no `<=`.
-
-### Data types used here
-
-| Metric | dataType | Kind | Scope |
-|---|---|---|---|
-| Steps | `steps` | interval | activity_and_fitness |
-| Distance | `distance` | interval | activity_and_fitness |
-| Active minutes | `active-minutes` | interval | activity_and_fitness |
-| Exercise sessions | `exercise` | session | activity_and_fitness |
-| Heart rate | `heart-rate` | sample | health_metrics |
-| Resting HR | `daily-resting-heart-rate` | daily | health_metrics |
-| HRV | `heart-rate-variability` | sample | health_metrics |
-| HRV daily | `daily-heart-rate-variability` | daily | health_metrics |
-| SpO2 | `oxygen-saturation` | sample | health_metrics |
-| SpO2 daily | `daily-oxygen-saturation` | daily | health_metrics |
-| Respiratory rate | `daily-respiratory-rate` | daily | health_metrics |
-| Respiratory rate by stage | `respiratory-rate-sleep-summary` | sample | health_metrics |
-| Sleep | `sleep` | session | sleep |
-| VO2 max (daily) | `daily-vo2-max` | daily | activity_and_fitness |
-| VO2 max (runs) | `run-vo2-max` | sample | activity_and_fitness |
-| VO2 max (measured) | `vo2-max` | sample | activity_and_fitness |
-
-### Live confirmation run
-
-30-day window, measured 2026-09-19, all HTTP 200:
-
-| dataType | points | dataType | points |
-|---|---|---|---|
-| `exercise` | 24 | `daily-heart-rate-variability` | 24 |
-| `steps` | 2918 | `oxygen-saturation` | 2678 |
-| `distance` | 2078 | `daily-oxygen-saturation` | 24 |
-| `active-minutes` | 1532 | `daily-respiratory-rate` | 24 |
-| `heart-rate` | 5000 | `respiratory-rate-sleep-summary` | 59 |
-| `daily-resting-heart-rate` | 28 | `sleep` | 12 |
-| `heart-rate-variability` | 2265 | | |
-
-The three VO2 max types (`daily-vo2-max`, `run-vo2-max`, `vo2-max`) return **zero
-points even at 90 days**. That is expected, not a bug: Google Health only derives
-VO2 max from outdoor runs recorded with GPS, and the exercise history over that
-window contains `WALKING`, `TENNIS`, `SPORT`, `CARDIO_WORKOUT` and `BIKING` —
-no running. These will start populating after a tracked outdoor run.
-
-`heart-rate` returning exactly 5000 is a page boundary, not a total; raising
-`max_pages` or switching to `dailyRollUp` gets the rest.
-
-### dailyRollUp does not behave like list
-
-Everything below was found by calling the live API, and several points contradict
-the reference docs. `health/metrics.py` holds the extractors that deal with it.
-
-**1. Four documented rollup types are actually rejected.** The docs page lists
-`daily-resting-heart-rate` and `daily-heart-rate-variability` as rollup-capable.
-The API disagrees:
-
-```
-HTTP 400  DailyRollup is not supported for data type daily-resting-heart-rate,
-          but the following actions are supported: list, reconcile
-```
-
-Same for `daily-oxygen-saturation` and `daily-respiratory-rate`. All four are
-already one point per day, so `list` is the right call and nothing is lost. The
-registry flags were corrected to match the live API.
-
-Verified rollup-capable, and all this dashboard uses: `steps`, `distance`,
-`active-minutes`, `heart-rate`.
-
-**2. The date lives somewhere else.** A rollup point carries
-`civilStartTime.date`; a list point carries it inside the type's own payload at
-`<payloadKey>.date`. No shared path.
-
-**3. The value field is renamed, not reused.**
-
-| | `list` | `dailyRollUp` |
-|---|---|---|
-| steps | `steps.count` | `steps.countSum` |
-| distance | `distance.millimeters` | `distance.millimetersSum` |
-
-**4. `active-minutes` does not roll up to a scalar.** It returns one entry per
-activity level, which has to be summed:
-
-```json
-"activeMinutes": {"activeMinutesRollupByActivityLevel": [
-  {"activityLevel": "LIGHT", "activeMinutesSum": "52"}
-]}
-```
-
-**5. `heart-rate` rolls up to three values** — `beatsPerMinuteAvg`,
-`beatsPerMinuteMin`, `beatsPerMinuteMax` — which is exactly what the overview
-chart needs instead of 5000 raw samples.
-
-**6. Types are inconsistent across the same metric.** `list` gives
-`beatsPerMinute` as the **string** `"76"`; the rollup gives `beatsPerMinuteAvg`
-as the **number** `57.93969891042169`. Ints are strings, floats are numbers, and
-both appear in one response. Everything goes through a coercion helper.
-
-**7. Other shape differences.** The response key is `rollupDataPoints`, not
-`dataPoints`. Rollup points carry **no `dataSource`**, so the recording device is
-unknown there. Civil times come back with `"time": {}` — an empty object rather
-than an absent key.
-
-**8. The 14-day cap is real and forces chunking.** A 90-day heart-rate chart is
-seven separate requests. Run sequentially that took 19.7s; issued together it is
-7.1s. See `metrics.fetch_points`.
-
-### Dashboard structure
-
-```
-/dashboard/                       overview, one card per metric
-/metric/<slug>/?days=7|30|90      detail chart, table for event metrics
-/metric/<slug>/day/<YYYY-MM-DD>/  full-resolution intraday drill-down
-/raw/ and /raw/<slug>/            unprocessed JSON, kept as a debugging aid
-```
-
-Metrics fall into four presentation groups, set in `health/metrics.py`:
-
-- **daily** — one point per day. Steps, distance and active minutes come from
-  `dailyRollUp`; resting HR, HRV, SpO2 and respiratory rate from `list`, because
-  the API refuses to roll those up.
-- **intraday** — heart rate is charted as a daily average with the day's min and
-  max, with the full-resolution trace on its own single-day page. Steps, SpO2 and
-  HRV have the same drill-down.
-- **event** — exercise and sleep get tables. Sleep also gets a stacked bar per
-  night broken down by stage.
-- **unavailable** — the three VO2 max types render an empty-state card and make
-  no API call at all.
-
-The overview issues ten API calls; they are fanned out over a thread pool, which
-takes the page from roughly ten seconds to about 1.7s.
-
-### Historical metrics from Google Takeout
-
-Some metrics cannot be obtained from the live API at all. Those - and only those
-- are imported once by hand from a Takeout export. This is never a sync, and
-nothing in `health/takeout.py` contacts Google.
-
-```
-manage.py import_takeout "<path to the Takeout folder>" [--only X] [--user Y] [--dry-run]
-```
-
-The path may be a single export file, its folder, or the Takeout root - the
-command searches recursively. Re-running updates in place rather than
-duplicating (unique on user + metric type + date), so it is safe after a newer
-export. `manage.py import_takeout_vo2max` still works as an alias for
-`--only vo2-max`.
-
-**What is imported, and why it has to be**
-
-| Metric | Rows | Why the live API cannot supply it |
-|---|---|---|
-| Sleep score | 45 | No sleep score endpoint exists. The API returns stages and minute counts only. |
-| VO2 max | 57 | The passive `demographic_vo2_max` estimate was retired in the migration; live VO2 max needs a GPS-tracked run. |
-
-**What is deliberately not imported.** Checked against a live 90-day query on
-2026-09-19 - the API already serves all of these, so importing them would only
-duplicate live data:
-
-| Takeout folder | Rows | Live equivalent |
-|---|---|---|
-| Active Zone Minutes (AZM) | 1020 | `active-zone-minutes` - 913 points |
-| Temperature | 48 | `daily-sleep-temperature-derivations` - 49 points |
-| Heart Rate Variability | 4558 | `daily-heart-rate-variability` |
-| Oxygen Saturation (SpO2) | 24869 | `daily-oxygen-saturation` |
-| Stress Score | **0** | header-only file, nothing to import |
-| Daily Readiness | **0** | header-only file, nothing to import |
-
-**Sleep score format** - `Sleep Score/sleep_score.csv`:
-
-```
-sleep_log_entry_id,timestamp,overall_score,composition_score,revitalization_score,...
-53548224804,2026-09-11T11:56:30Z,78,,79,,109,53,0.157...
-```
-
-`overall_score` is the headline 0-100 value; the sub-scores are frequently blank
-in real exports and are kept in `extra` rather than charted. The `timestamp` is
-UTC at wake time and is converted to the configured timezone before taking its
-date, so a night is keyed the same way the live sleep data keys it - by the
-civil date it *ends* on. Taking the UTC date directly happens to work for a
-morning wake time but breaks across midnight UTC; there is a test for this.
-
-**The file**
-
-```
-Takeout/Google Health/Global Export Data/demographic_vo2_max-<date>.json
-```
-
-```json
-{"dateTime": "07/15/26 00:00:00",
- "value": {"demographicVO2Max": 53.14916,
-           "demographicVO2MaxError": 3.0,
-           "filteredDemographicVO2Max": 53.14916,
-           "filteredDemographicVO2MaxError": 3.0}}
-```
-
-Two things about this format are easy to get wrong:
-
-- **`dateTime` is `MM/DD/YY`,** not ISO and not day-first. Confirmed against a real
-  export whose records run `07/15/26` to `09/11/26` exactly one day apart - read
-  day-first that sequence is impossible. There is a test pinning this.
-- **There are two values per record.** `demographicVO2Max` is the raw daily
-  estimate; `filteredDemographicVO2Max` is the smoothed series whose error term
-  shrinks from 3.0 to 0.36 as readings accumulate, and is what Fitbit displayed
-  as the Cardio Fitness Score. The filtered value is stored; the raw one and the
-  error term are kept in `HistoricalMetric.extra`.
-
-**The model** - `health.models.HistoricalMetric(user, metric_type, date, value,
-unit, source, extra)` - is generic; adding another legacy metric means writing a
-parser and one `LegacyImport` entry in `health/takeout.py`.
-
-**In the UI**, an imported reading is never presented as live. Two presentation
-groups cover the difference:
-
-- `UNAVAILABLE` - a live endpoint exists but returns nothing for this user (the
-  three VO2 max cards). The imported value is shown *beside* the live empty
-  state, which still says a GPS-tracked run is required.
-- `LEGACY` - no live endpoint exists at all (sleep score). Rendered from stored
-  history alone, with an explanation of why there is no live version.
-
-Both get a dashed border, an amber `legacy` tag, and the value's date and source.
-Neither makes an API call. All three VO2 max cards read the one `vo2-max` series.
-
-### Performance: broken IPv6 makes every call take ~169 seconds
-
-Symptom: every API-backed page took ~169s and browsers gave up with
-`Broken pipe` in the server log. The time was identical regardless of response
-size — 3.8 KB and 2.8 MB responses both took 169s — which ruled out pagination,
-payload size and rate limiting.
-
-Cause: this host advertises IPv6 but has no working IPv6 route.
-`health.googleapis.com` resolves to 8 AAAA records **before** its 8 A records,
-and urllib3 walks `getaddrinfo` results strictly in order with no Happy Eyeballs.
-Each dead IPv6 address cost ~21s:
-
-```
-IPv6  2001:4860:4846:400::   FAILED  20.015s  TimeoutError
-... x8 ...
-IPv4  172.217.118.4          connect OK  0.046s
-```
-
-8 x 21s = ~169s. Browsers and curl hide this because they race both families in
-parallel, which is why the same calls were fast in the OAuth Playground.
-
-Fix: `FORCE_IPV4=True` in `.env`, applied by `config/net.py`. After it, the same
-pages return in **under 1.3s**. Set it to `False` on a host with working IPv6.
-
-Note that `runserver`'s autoreloader watches `.py` files but **not `.env`** —
-after changing `.env` you must restart the server by hand.
-
-### Gotchas worth knowing before step 4
-
-- **`exercise` and `sleep` cap `pageSize` at 25** — both default *and* maximum.
-  Everything else defaults to 1440, max 10000.
-- **Daily step totals should use `dailyRollUp`, not `list`.** `list` on `steps`
-  returns intraday buckets. `POST .../dataPoints:dailyRollUp` aggregates per
-  civil day server-side and returns `rollupDataPoints[].steps.countSum`.
-- **`dailyRollUp`'s `range` takes `CivilDateTime`, not a bare date:**
-  `{"range": {"start": {"date": {"year": 2026, "month": 9, "day": 1}}, ...}}`.
-  Several doc pages show the flat form; the discovery document does not.
-- **`dailyRollUp` range caps:** 14 days for `heart-rate`, `active-minutes`,
-  `total-calories` and `calories-in-heart-rate-zone`; 90 days otherwise.
-- **Rolling up `daily-resting-heart-rate` returns a *personal range*** under
-  `restingHeartRatePersonalRange`, not a plain daily value — for a resting-HR
-  trend chart, plain `list` is the right call. Same for
-  `daily-heart-rate-variability`.
-- **There is no sleep score.** The API exposes `sleep.summary.minutesAsleep`,
-  `minutesInSleepPeriod`, `minutesAwake`, `minutesToFallAsleep`,
-  `minutesAfterWakeUp`, a `stages[]` array (LIGHT / DEEP / REM / AWAKE) and
-  `stagesSummary[]`. Sleep efficiency must be computed:
-  `round(minutesAsleep / minutesInSleepPeriod * 100)`.
-- **VO2 max has three data types.** `daily-vo2-max` is the passive daily
-  estimate, carrying `cardioFitnessLevel` and an `estimated` flag for
-  low-confidence values — this is the one to show on a dashboard.
-  `run-vo2-max` only populates from outdoor runs recorded with GPS.
-- **Int64 fields arrive as JSON strings** (`steps.count`, `beatsPerMinute`,
-  `minutesAsleep`). Cast before doing arithmetic.
+All readings in tests are synthetic.

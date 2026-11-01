@@ -1,0 +1,53 @@
+{% extends "base.html" %}
+{% block title %}Raw uploaded rows - {{ person.display_name }} ({{ person.device_label }}){% endblock %}
+
+{% block content %}
+  <p class="small"><a href="{% url 'people:person' person.slug %}">&larr; {{ person.display_name }}</a></p>
+  <h1>Raw uploaded rows</h1>
+  <p class="lede">
+    {{ person.display_name }} &middot; {{ person.device_label }}. The rows exactly as
+    loaded from the uploaded files, with no processing, to show the pipeline is not
+    inventing anything.
+  </p>
+
+  {% if empty_message %}
+    <p class="empty-msg">{{ empty_message }}</p>
+  {% else %}
+    <h2>Files loaded</h2>
+    <p class="muted small">
+      The files themselves are not kept; only their rows and this record are.
+      The fingerprint (SHA-256, first 12 characters) is what makes uploading the same file twice do nothing.
+    </p>
+    <table>
+      <thead>
+        <tr><th>File</th><th>Fingerprint</th><th class="num">Rows</th><th>Loaded</th><th>Timezone assumed</th></tr>
+      </thead>
+      <tbody>
+        {% for recording in recordings %}
+          <tr>
+            <td>{{ recording.original_filename }}</td>
+            <td><code>{{ recording.sha256|slice:":12" }}</code></td>
+            <td class="num">{{ recording.row_count|floatformat:"0g" }}</td>
+            <td>{{ recording.uploaded_at|date:"Y-m-d H:i" }}</td>
+            <td>{{ recording.timezone_assumed }}</td>
+          </tr>
+        {% empty %}
+          <tr><td colspan="5" class="muted">No file records.</td></tr>
+        {% endfor %}
+      </tbody>
+    </table>
+
+    <h2>Days</h2>
+    <table>
+      <thead><tr><th>Local day</th><th class="num">Rows</th></tr></thead>
+      <tbody>
+        {% for day in days %}
+          <tr>
+            <td><a href="{% url 'people:raw_day' person.slug day.day|date:'Y-m-d' %}">{{ day.day|date:"Y-m-d" }}</a></td>
+            <td class="num">{{ day.n|floatformat:"0g" }}</td>
+          </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  {% endif %}
+{% endblock %}
