@@ -69,8 +69,6 @@ def login_view(request):
                 throttle.reset(email)
                 login(request, user)
                 return redirect(safe_next(request))
-    elif request.method == "POST":
-        error = NOT_AVAILABLE      # an empty field gets the same one message
     return render(request, "members/login.html",
                   {"form": form, "error": error,
                    "next": request.GET.get("next", "")})

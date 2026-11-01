@@ -243,7 +243,7 @@ header.topbar {
 .tab:hover { color: var(--ink); background: var(--surface-2); }
 .tab.is-current { background: var(--ink); color: var(--ground); }
 
-.topbar-end { display: flex; flex-wrap: wrap; align-items: center; gap: var(--s4); }
+.topbar-end { display: flex; align-items: center; gap: var(--s4); }
 .topbar-end form { display: flex; align-items: center; gap: var(--s3); }
 .who { color: var(--ink-3); font-size: var(--t-sm); }
 
@@ -733,8 +733,6 @@ dl.meta dd { margin: 0; overflow-wrap: anywhere; }
   .tab { padding: var(--s1) var(--s3); }
   main { padding: var(--s5) var(--s4) var(--s6); }
   .who { display: none; }
-  .topbar-end { gap: var(--s2); }
-  .auth { margin-top: var(--s4); }
 }
 
 @media (max-width: 560px) {
@@ -778,42 +776,6 @@ dl.meta dd { margin: 0; overflow-wrap: anywhere; }
 .field-error { margin: var(--s1) 0 0; font-size: var(--t-label); color: var(--neg); }
 
 .settings-form { max-width: 46ch; }
-
-/* ---- log in and sign up -------------------------------------------------- */
-
-/* One narrow column, centred: mark, heading, one line, the form. No card, no
-   box; a hairline separates the form from what comes after it. Existing
-   tokens only, and --neg only for error text (via .field-error). */
-.auth { max-width: 380px; margin: var(--s6) auto 0; }
-.auth-mark { width: 32px; height: 32px; display: block; margin-bottom: var(--s4); }
-.auth h1 { margin: 0 0 var(--s2); }
-.auth-lede { margin: 0 0 var(--s5); color: var(--ink-3); }
-.auth .field { max-width: none; }
-.auth .field input, .auth .field select { min-height: 44px; }
-.auth .field input[aria-invalid="true"], .auth .field select[aria-invalid="true"] { border-color: var(--neg); }
-.auth .field-error { margin: 0 0 var(--s4); }
-.auth .field .field-error { margin: var(--s1) 0 0; }
-.reveal-wrap { position: relative; }
-.reveal-wrap input { padding-right: 64px; }
-.reveal {
-  position: absolute;
-  top: 0;
-  right: 0;
-  min-width: 44px;
-  height: 100%;
-  min-height: 44px;
-  padding: 0 var(--s3);
-  border: 0;
-  background: transparent;
-  color: var(--ink-3);
-  font: var(--w-semi) var(--t-label)/1 var(--sans);
-  cursor: pointer;
-}
-.reveal:hover, .reveal[aria-pressed="true"] { color: var(--ink); }
-.reveal[hidden] { display: none; }
-.auth-submit { width: 100%; min-height: 44px; margin-top: var(--s2); }
-.auth-foot { margin: var(--s5) 0 0; padding-top: var(--s4); border-top: 1px solid var(--rule); }
-.auth-foot + .auth-foot { margin-top: var(--s2); padding-top: 0; border-top: 0; }
 
 /* ---- people: the chooser and the person bar ------------------------------ */
 

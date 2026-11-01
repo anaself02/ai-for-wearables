@@ -78,7 +78,6 @@
         <span class="device-chip">{{ person.device_label }}</span>
       </span>
       {% if user.is_staff %}<a class="btn secondary" href="{% url 'people:home' %}">Switch</a>{% endif %}
-      {% if request.user.is_staff %}<a class="btn secondary" href="{% url 'admin:index' %}">Admin</a>{% endif %}
       {% comment %}
         Three states, not a two-way switch: following the system is a real
         answer and the only one that can be right at both ends of a day.
@@ -95,7 +94,6 @@
     </div>
   {% else %}
     <div class="topbar-end">
-      {% if request.user.is_staff %}<a class="btn secondary" href="{% url 'admin:index' %}">Admin</a>{% endif %}
       <div class="theme" role="group" aria-label="Theme">
         <button class="theme-option" type="button" data-theme-set="light">Day</button>
         <button class="theme-option" type="button" data-theme-set="dark">Night</button>
@@ -107,11 +105,8 @@
           <button class="btn secondary" type="submit">Log out</button>
         </form>
       {% else %}
-        {# The log-in and sign-up pages blank this: the form is the page. #}
-        {% block signed_out_links %}
         <a class="btn secondary" href="{% url 'members:login' %}">Log in</a>
         <a class="btn secondary" href="{% url 'members:signup' %}">Sign up</a>
-        {% endblock %}
       {% endif %}
     </div>
   {% endif %}
