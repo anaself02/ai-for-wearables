@@ -779,14 +779,20 @@ dl.meta dd { margin: 0; overflow-wrap: anywhere; }
 
 /* ---- people: the chooser and the person bar ------------------------------ */
 
-.people { display: grid; gap: var(--s4); grid-template-columns: repeat(auto-fit, minmax(280px, 1fr)); margin: var(--s5) 0; }
-.person-card { background: var(--surface); border: 1px solid var(--rule); border-radius: var(--r-2); padding: var(--s4); display: grid; gap: var(--s3); align-content: start; }
-.person-card-head { display: flex; align-items: baseline; justify-content: space-between; gap: var(--s3); }
+/* Two cards side by side, stacked on a narrow screen. minmax(0, 1fr) lets a card
+   shrink below its content instead of pushing the second card off the page, and
+   text wraps rather than being cut off. Existing tokens only. */
+.people { display: grid; gap: var(--s4); grid-template-columns: repeat(2, minmax(0, 1fr)); margin: var(--s5) 0; }
+.person-card { min-width: 0; background: var(--surface); border: 1px solid var(--rule); border-radius: var(--r-2); padding: var(--s4); display: grid; gap: var(--s3); align-content: start; overflow-wrap: anywhere; }
+.person-card-head { display: flex; flex-wrap: wrap; align-items: baseline; justify-content: space-between; gap: var(--s2) var(--s3); }
 .person-card-head h2 { margin: 0; }
 .person-facts { display: flex; flex-wrap: wrap; gap: var(--s4) var(--s5); margin: var(--s3) 0; }
 .person-facts dd { margin: var(--s1) 0 0; }
 .person-facts .num { font-family: var(--mono); font-variant-numeric: tabular-nums; }
-.device-chip { font-size: var(--t-label); color: var(--ink-2); border: 1px solid var(--rule-strong); border-radius: var(--r-pill); padding: 2px var(--s3); white-space: nowrap; }
+.device-chip { font-size: var(--t-label); color: var(--ink-2); border: 1px solid var(--rule-strong); border-radius: var(--r-pill); padding: 2px var(--s3); }
+@media (max-width: 640px) {
+  .people { grid-template-columns: minmax(0, 1fr); }
+}
 .person-badge { display: inline-flex; align-items: center; gap: var(--s2); }
 
 /* Dashed means one thing: computed by this app from the uploaded rows, not a
