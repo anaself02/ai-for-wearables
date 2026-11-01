@@ -123,7 +123,25 @@ machine.** It is not a service, has no public sign-up and no remote access.
 - Erasing an account is deleting it in the admin: its profile link is removed and
   the profile's readings are untouched.
 
-## 10. What this is not
+## 10. Sessions (a person's own labels)
+
+A person may record **their own** labelled sessions (rest, a timed arithmetic
+task, recovery, or a naturally stressful moment), run only on themselves and
+stopped at any time if uncomfortable (`docs/SESSIONS_PROTOCOL.md`). Sessions are
+stored for that person only and are visible only to them and administrators.
+
+- The labels are used **only to grade** the WESAD-trained models. They are never
+  used to train, tune, calibrate, set a threshold or adapt anything; the binary
+  model is trained in memory on the WESAD feature table only, and tests run the
+  sessions flow with every fit and save patched to raise.
+- The optional free-text **note stays local**: it lives only in `db.sqlite3`, is
+  shown only in that person's own list, and is never logged, exported or sent to
+  any external service.
+- The export replaces dates with "Session 1..N" and minutes relative to the
+  first session, and contains no notes. Results from one person do not
+  generalise, and no confidence interval is claimed.
+
+## 11. What this is not
 
 - Not a commercial product, not deployed, not handling anyone else's data.
 - PIPEDA and Quebec Law 25 do not bind a personal course project, but their

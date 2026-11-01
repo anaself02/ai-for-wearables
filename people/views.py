@@ -65,6 +65,15 @@ def render_person(request, template, person, context=None):
     return render(request, template, context)
 
 
+def loaded_data(person):
+    """The "Loaded data" summary on the Import data page: range, readings, devices."""
+    if not person.has_data:
+        return {}
+    stats = repository.totals(person)
+    return {"range": person.local_range(), "readings": stats["readings"],
+            "devices": stats["devices"]}
+
+
 def chart_series(summaries):
     """Chart.js payload of daily average / min / max, from computed summaries."""
     return {
@@ -112,12 +121,8 @@ def person_home(request, person):
     if not person.has_data:
         return render_person(request, "people/person_home.html", person)
 
-    stats = repository.totals(person)
     summaries = repository.daily_summaries(person, days=DEFAULT_WINDOW)
     return render_person(request, "people/person_home.html", person, {
-        "range": person.local_range(),
-        "readings": stats["readings"],
-        "devices": stats["devices"],
         "recent": list(reversed(summaries))[:14],
         "series_json": chart_series(summaries),
         "window": DEFAULT_WINDOW,

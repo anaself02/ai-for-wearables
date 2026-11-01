@@ -73,6 +73,42 @@ def local_day_readings(person, day):
     return epochs[keep], values[keep]
 
 
+def _utc_dates_between(start, end):
+    first = datetime.fromtimestamp(start, timezone.utc).date()
+    last = datetime.fromtimestamp(max(start, end - 1), timezone.utc).date()
+    return [first + timedelta(days=i) for i in range((last - first).days + 1)]
+
+
+def readings_between(person, start, end):
+    """(epoch seconds, bpm) with start <= t < end (UTC epoch seconds), sorted."""
+    require_person(person)
+    rows = HeartRateDay.objects.filter(
+        person=person, utc_date__in=_utc_dates_between(start, end))
+    epochs, values = [], []
+    for row in rows:
+        e, b = row.unpack()
+        epochs.append(e)
+        values.append(b)
+    if not epochs:
+        return np.array([], dtype="int64"), np.array([], dtype=float)
+    epochs, values = np.concatenate(epochs), np.concatenate(values)
+    order = np.argsort(epochs, kind="stable")
+    epochs, values = epochs[order], values[order]
+    keep = (epochs >= start) & (epochs < end)
+    return epochs[keep], values[keep]
+
+
+def device_names_between(person, start, end):
+    """Source names on the UTC days a span touches (names only, as for a day)."""
+    require_person(person)
+    names = set()
+    rows = HeartRateDay.objects.filter(
+        person=person, utc_date__in=_utc_dates_between(start, end))
+    for sources in rows.values_list("sources", flat=True):
+        names.update(sources)
+    return sorted(names)
+
+
 def local_dates_with_data(person):
     """Local dates (in the person's timezone) that hold at least one reading."""
     require_person(person)

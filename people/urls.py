@@ -2,7 +2,7 @@ from datetime import date
 
 from django.urls import path, register_converter
 
-from . import views, views_import
+from . import views, views_import, views_sessions
 
 
 class DateConverter:
@@ -35,6 +35,13 @@ urlpatterns = [
          name="import_confirm"),
     path("p/<slug:slug>/import/cancel/", views_import.import_cancel,
          name="import_cancel"),
+    path("p/<slug:slug>/sessions/", views_sessions.sessions_page, name="sessions"),
+    path("p/<slug:slug>/sessions/<int:pk>/edit/", views_sessions.session_edit,
+         name="session_edit"),
+    path("p/<slug:slug>/sessions/<int:pk>/delete/", views_sessions.session_delete,
+         name="session_delete"),
+    path("p/<slug:slug>/sessions/export.csv", views_sessions.sessions_export,
+         name="sessions_export"),
     path("p/<slug:slug>/raw/", views.raw_index, name="raw_index"),
     path("p/<slug:slug>/raw/<isodate:day>/", views.raw_day, name="raw_day"),
 ]

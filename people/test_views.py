@@ -204,3 +204,33 @@ class RepositoryGuardTests(TwoPeopleCase):
     def test_storage_rows_are_one_per_person_and_utc_day(self):
         self.assertEqual(HeartRateDay.objects.filter(person=self.alpha).count(), 2)
         self.assertEqual(HeartRateDay.objects.filter(person=self.beta).count(), 2)
+
+
+class LoadedDataLocationTests(TwoPeopleCase):
+    """The data summary lives on the Import data page, not on Overview."""
+
+    MARKERS = ("Loaded data", "Local date range", "Device name(s) in the files",
+               "the files themselves are in UTC")
+
+    def test_the_summary_is_on_the_import_page_and_not_on_overview(self):
+        main = lambda html: re.search(r"<main.*?</main>", html, re.S).group(0)
+        imported = main(self.client.get(
+            reverse("people:import_data", args=["alpha"])).content.decode())
+        overview = main(self.client.get(
+            reverse("people:person", args=["alpha"])).content.decode())
+        for marker in self.MARKERS:
+            self.assertIn(marker, imported, marker)
+            self.assertNotIn(marker, overview, marker)
+        self.assertIn("2026-07-14 to 2026-07-16", imported)
+        self.assertIn("57,600", imported)
+        self.assertLess(imported.index("Loaded data"), imported.index('enctype="multipart/form-data"'))
+        self.assertNotIn("Import more data", overview)
+        self.assertIn("Heart rate in detail", overview)
+        self.assertIn("Raw uploaded rows", overview)
+
+    def test_rahils_import_page_shows_the_empty_state_and_no_numbers(self):
+        html = self.client.get(reverse("people:import_data", args=["rahil"])).content.decode()
+        section = re.search(r'<section class="loaded-data".*?</section>', html, re.S).group(0)
+        self.assertIn(AWAITING, section)
+        self.assertNotIn("Local date range", section)
+        self.assertNotRegex(section, r"\d{4}-\d{2}-\d{2}")

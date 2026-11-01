@@ -41,6 +41,26 @@ profiles apart on one machine.
 5. **No invented data.** A day or person with no readings says so; minutes with no
    readings are chart gaps, never bridged. Rahil's pages show no numbers.
 
+## Sessions (people/sessions.py, the Sessions tab)
+
+- A person records their own labelled sessions (`Session`: kind rest /
+  stress_task / recovery / natural_stress, start and end entered in local time
+  and stored in UTC, optional 1-5 rating, optional short note). Times that do not
+  exist or happen twice on a daylight-saving day are refused; overlaps are refused.
+- **Labels only grade.** The pre-declared rule is in `docs/SESSIONS_PROTOCOL.md`
+  (and Amendment 2 of `wearable-ml/PRE_DECLARED.md`): shared windows from
+  `health.arousal.window_features` (the one windowing implementation), labelled
+  only when fully inside one session and starting >= 60 s after its start;
+  primary score rest vs stress_task; >= 30 windows per class for a headline.
+- `health/wesad_binary.py` is the only dashboard module that fits, and only on
+  WESAD: `train()` takes no argument, reads `wearable-ml/results/features.csv`,
+  fits the binary SVM (demo defaults) in memory, and derives the majority class
+  and HR_mean threshold. Nothing is saved. `people/sessions.py` has no fit call;
+  tests scan it and run the whole flow under `fit_guard()`.
+- The score renders only inside the block that starts with its caveat (OOD
+  share, device, spacing, no CIs, one person). Export: `Session 1..N`, minutes
+  since the first session, no dates, no notes.
+
 ## Accounts and access (members app)
 
 - Django's built-in auth only; email is the login, stored lowercased in `username`
@@ -85,11 +105,12 @@ people/            who the data belongs to, and everything about their readings
   xlsx.py          first sheet of a workbook -> the same CSV text, header-checked
   management/      import_heart_rate
 members/           signup, login, logout, waiting page, throttle, access rules, admin
-health/            arousal.py: the WESAD model runner (and its tests)
+  sessions.py      labelled sessions: local->UTC, coverage, labelling rule, grading, export
+health/            arousal.py: the WESAD model runner (and its tests); wesad_binary.py
 config/            settings, urls
 templates/         base.html, people/*, health/_chart_scripts.html
 static/            app.css, charts.js, theme.js
-docs/              ETHICS_AND_PRIVACY.md
+docs/              ETHICS_AND_PRIVACY.md, SESSIONS_PROTOCOL.md
 ```
 
 ## Data model and decisions
@@ -165,8 +186,8 @@ Read this first in a new session. It records state that is not visible in the co
 
 - **Branch `course-file-mode`**, 22 commits on top of `master` (`master` is the old
   Google version, untouched). Working tree clean. Not pushed anywhere; no remote.
-- **Tests: 322, all passing** (`manage.py test`, about 70 s).
-- **Real database (`db.sqlite3`)** is migrated to `people.0005`:
+- **Tests: 356, all passing** (`manage.py test`, about 70 s).
+- **Real database (`db.sqlite3`)** is migrated to `people.0006` (sessions table, empty):
   - Anas: 100 UTC days, 2,984,769 readings loaded from the Takeout Heart Rate folder
     (2026-07-15 to 2026-10-31 local). Rahil: no data (by design).
   - **0 accounts.** The old Google-created user row was removed by migration
@@ -175,7 +196,8 @@ Read this first in a new session. It records state that is not visible in the co
 - **Backups** (outside the repo, in `Health AI Project\backups\`):
   `db-pre-course-file-mode-20261031-184811.sqlite3` (before any file-mode migration,
   still has the Google tokens: treat as sensitive) and
-  `db-pre-accounts-20261031-201913.sqlite3` (before the account tables).
+  `db-pre-accounts-20261031-201913.sqlite3` (before the account tables) and
+  `db-pre-sessions-20261031-213816.sqlite3` (before the sessions table).
 - **Never edited:** `.env` (it still holds the old Google and Fernet values, which
   nothing reads any more; the owner may remove them and revoke the app at
   myaccount.google.com/permissions).

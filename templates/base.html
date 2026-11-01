@@ -65,6 +65,12 @@
           <a class="tab" href="{% url 'people:raw_index' person.slug %}">Raw rows</a>
         {% endif %}
 
+        {% if here == "sessions" or here == "session_edit" %}
+          <a class="tab is-current" href="{% url 'people:sessions' person.slug %}" aria-current="page">Sessions</a>
+        {% else %}
+          <a class="tab" href="{% url 'people:sessions' person.slug %}">Sessions</a>
+        {% endif %}
+
         {% if here == "import_data" or here == "import_confirm" %}
           <a class="tab is-current" href="{% url 'people:import_data' person.slug %}" aria-current="page">Import data</a>
         {% else %}

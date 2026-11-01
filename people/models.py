@@ -213,3 +213,42 @@ class ProfileClaim(models.Model):
 
     def __str__(self):
         return "claim for {} ({})".format(self.person.display_name, self.status)
+
+
+class Session(models.Model):
+    """A span of time a person labelled themselves: their own ground truth.
+
+    Used ONLY to grade predictions of models trained on WESAD, never to train,
+    tune, calibrate or set a threshold (docs/SESSIONS_PROTOCOL.md). Times are
+    entered in the person's local time and stored in UTC. The note stays in this
+    database: it is never logged, exported or sent anywhere.
+    """
+
+    class Kind(models.TextChoices):
+        REST = "rest", "Rest"
+        STRESS_TASK = "stress_task", "Stress task"
+        RECOVERY = "recovery", "Recovery"
+        NATURAL_STRESS = "natural_stress", "Natural stress"
+
+    person = models.ForeignKey(Person, on_delete=models.CASCADE,
+                               related_name="sessions")
+    kind = models.CharField(max_length=20, choices=Kind.choices)
+    start_utc = models.DateTimeField()
+    end_utc = models.DateTimeField()
+    rating = models.PositiveSmallIntegerField(null=True, blank=True)
+    note = models.CharField(max_length=200, blank=True)
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        ordering = ["start_utc"]
+        constraints = [
+            models.CheckConstraint(condition=Q(end_utc__gt=models.F("start_utc")),
+                                   name="session_ends_after_it_starts"),
+            models.CheckConstraint(condition=Q(rating__isnull=True)
+                                   | Q(rating__gte=1, rating__lte=5),
+                                   name="session_rating_1_to_5"),
+        ]
+
+    def __str__(self):
+        # No note here: __str__ ends up in logs and the admin.
+        return "{} session for {}".format(self.get_kind_display(), self.person.display_name)

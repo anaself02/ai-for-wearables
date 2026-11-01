@@ -33,7 +33,7 @@ from django.views.decorators.http import require_POST
 
 from . import ingest, spool
 from .sources import SourceError, SourceFile, get_adapter
-from .views import person_page, render_person
+from .views import loaded_data, person_page, render_person
 from .xlsx import xlsx_to_csv_bytes
 
 SCORED_ONLY_NOTICE = "Model trained on WESAD only; uploaded data is only scored."
@@ -81,15 +81,15 @@ def collect(adapter, uploads):
     return files, skipped_names, skipped_count
 
 
-def _context(adapter):
-    return {"adapter": adapter, "scored_only": SCORED_ONLY_NOTICE, "accepted": ACCEPTED}
+def _context(adapter, person):
+    return {**loaded_data(person), "adapter": adapter, "scored_only": SCORED_ONLY_NOTICE, "accepted": ACCEPTED}
 
 
 @person_page
 def import_data(request, person):
     """The import form (GET) and the validation step (POST)."""
     adapter = get_adapter(person.adapter_key)
-    context = _context(adapter)
+    context = _context(adapter, person)
 
     if request.method != "POST":
         return render_person(request, "people/import.html", person, context)
@@ -129,7 +129,7 @@ def import_data(request, person):
 def import_confirm(request, person):
     """Store a validated import from the parked readings."""
     adapter = get_adapter(person.adapter_key)
-    context = _context(adapter)
+    context = _context(adapter, person)
     token = request.POST.get("token", "")
 
     try:

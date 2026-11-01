@@ -777,6 +777,12 @@ dl.meta dd { margin: 0; overflow-wrap: anywhere; }
 
 .settings-form { max-width: 46ch; }
 
+/* ---- sessions ------------------------------------------------------------ */
+
+.coverage-low { color: var(--warn); font-weight: var(--w-semi); }
+.session-score { border-top: 1px solid var(--rule); padding-top: var(--s3); }
+.score-model { margin: var(--s4) 0; }
+
 /* ---- people: the chooser and the person bar ------------------------------ */
 
 /* Two cards side by side, stacked on a narrow screen. minmax(0, 1fr) lets a card

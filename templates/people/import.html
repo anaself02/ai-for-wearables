@@ -32,6 +32,8 @@
     </p>
   {% endif %}
 
+  {% include "people/_loaded_data.html" %}
+
   <form method="post" enctype="multipart/form-data" class="panel">
     {% csrf_token %}
     <label for="files">Files</label>

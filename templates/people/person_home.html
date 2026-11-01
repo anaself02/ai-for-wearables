@@ -12,28 +12,14 @@
 
 {% block content %}
   <h1>{{ person.display_name }}</h1>
-  <p class="lede">
-    Device: <strong>{{ person.device_label }}</strong>. Local days are cut in
-    {{ person.timezone }}; the files themselves are in UTC.
-  </p>
 
   {% if empty_message %}
     <p class="empty-msg">{{ empty_message }}</p>
     <p><a class="btn secondary" href="{% url 'people:import_data' person.slug %}">Import data</a></p>
   {% else %}
-    <dl class="person-facts">
-      <div><dt class="label">Local date range</dt>
-        <dd class="num">{{ range.0|date:"Y-m-d" }} to {{ range.1|date:"Y-m-d" }}</dd></div>
-      <div><dt class="label">Readings</dt>
-        <dd class="num">{{ readings|floatformat:"0g" }}</dd></div>
-      <div><dt class="label">Device name(s) in the files</dt>
-        <dd>{% for name, count in devices.items %}{{ name }}{% if not forloop.last %}, {% endif %}{% endfor %}</dd></div>
-    </dl>
-
     <p>
       <a class="btn secondary" href="{% url 'people:heart_rate' person.slug %}">Heart rate in detail</a>
       <a class="btn secondary" href="{% url 'people:raw_index' person.slug %}">Raw uploaded rows</a>
-      <a class="btn secondary" href="{% url 'people:import_data' person.slug %}">Import more data</a>
     </p>
 
     <h2>Heart rate, last {{ window }} days with data</h2>

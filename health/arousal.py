@@ -378,6 +378,43 @@ def window_starts(day, tz_name):
     return np.arange(start, end - WINDOW_SECONDS + 1, STEP_SECONDS)
 
 
+def grid_starts(anchor, first, last):
+    """Window starts on the 30 s grid from `anchor`, from >= first to <= last.
+
+    The arousal page anchors at local midnight; the sessions page anchors at the
+    local midnight of the session's day, so both cut the same windows.
+    """
+    import numpy as np
+
+    lo = anchor + -(-(first - anchor) // STEP_SECONDS) * STEP_SECONDS
+    if last < lo:
+        return np.array([], dtype="int64")
+    return np.arange(lo, last + 1, STEP_SECONDS, dtype="int64")
+
+
+def window_features(epochs, bpm, starts):
+    """The one windowing and feature step shared by every page that scores.
+
+    For each start, the readings in [start, start + 60 s); a window with fewer
+    than MIN_SAMPLES_PER_WINDOW readings is dropped. Returns (feature dicts
+    named HR_mean ... HR_slope, kept starts, readings per kept window).
+    """
+    import numpy as np
+
+    starts = np.asarray(starts, dtype="int64")
+    lo = np.searchsorted(epochs, starts, side="left")
+    hi = np.searchsorted(epochs, starts + WINDOW_SECONDS, side="left")
+    rows, kept, sizes = [], [], []
+    for start, first, last in zip(starts, lo, hi):
+        if last - first < MIN_SAMPLES_PER_WINDOW:
+            continue
+        stats = basic_features(bpm[first:last])
+        rows.append({"HR_" + name: value for name, value in stats.items()})
+        kept.append(int(start))
+        sizes.append(int(last - first))
+    return rows, kept, sizes
+
+
 def count_scorable_windows(epochs, day, tz_name):
     """How many 60 s windows of this day hold at least 10 readings."""
     import numpy as np
@@ -399,26 +436,15 @@ def build_windows(epochs, bpm, day, tz_name, feature_names):
     Returns (feature dicts, waking flags, readings per window). Raises
     ArousalUnavailable if the day holds too little data to window at all.
     """
-    import numpy as np
-
     if len(epochs) == 0:
         raise ArousalUnavailable(
             "No heart-rate readings are stored for this person on this day.")
 
-    starts = window_starts(day, tz_name)
-    lo = np.searchsorted(epochs, starts, side="left")
-    hi = np.searchsorted(epochs, starts + WINDOW_SECONDS, side="left")
-
+    rows, kept, sizes = window_features(epochs, bpm, window_starts(day, tz_name))
     tz = ZoneInfo(tz_name)
-    rows, waking, sizes = [], [], []
-    for start, first, last in zip(starts, lo, hi):
-        if last - first < MIN_SAMPLES_PER_WINDOW:
-            continue
-        stats = basic_features(bpm[first:last])
-        rows.append({"HR_" + name: value for name, value in stats.items()})
-        hour = datetime.fromtimestamp(int(start), timezone.utc).astimezone(tz).hour
-        waking.append(WAKING_START_HOUR <= hour < WAKING_END_HOUR)
-        sizes.append(int(last - first))
+    waking = [WAKING_START_HOUR
+              <= datetime.fromtimestamp(start, timezone.utc).astimezone(tz).hour
+              < WAKING_END_HOUR for start in kept]
 
     if not rows:
         raise ArousalUnavailable(
