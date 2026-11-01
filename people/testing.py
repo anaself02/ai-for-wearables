@@ -53,3 +53,25 @@ def make_user(email, staff=False, linked_to=None):
         linked_to.owner = user
         linked_to.save(update_fields=["owner"])
     return user, password
+
+
+def _staff_test_case():
+    from django.test import TestCase
+
+    class StaffTestCase(TestCase):
+        """A TestCase whose client is signed in as a synthetic staff account.
+
+        Every page is behind a login, so the many tests about what a page shows
+        run as an administrator, who may open any profile. Tests about WHO may
+        open what use their own accounts instead.
+        """
+
+        def setUp(self):
+            super().setUp()
+            self.staff_user, _ = make_user("staff@example.com", staff=True)
+            self.client.force_login(self.staff_user)
+
+    return StaffTestCase
+
+
+StaffTestCase = _staff_test_case()

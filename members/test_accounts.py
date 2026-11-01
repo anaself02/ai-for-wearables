@@ -186,7 +186,9 @@ class LoginLogoutTests(CleanCache):
         self.assertEqual(strict.post(reverse("members:login"),
                                      {"email": "person@example.com",
                                       "password": self.password}).status_code, 403)
+        strict.force_login(self.user)                 # logout is only reachable signed in
         self.assertEqual(strict.post(reverse("members:logout")).status_code, 403)
+        self.assertIn("_auth_user_id", strict.session)
 
 
 class ThrottleTests(CleanCache):

@@ -18,7 +18,10 @@ from django.contrib import messages
 from django.shortcuts import get_object_or_404, render
 from django.views.decorators.cache import never_cache
 
+from django.http import Http404
+
 from health import arousal as arousal_module
+from members.access import person_or_404
 
 from . import repository
 from .models import Person
@@ -47,6 +50,7 @@ def person_page(view):
     @wraps(view)
     def wrapper(request, slug, *args, **kwargs):
         person = get_object_or_404(Person, slug=slug)
+        person_or_404(request.user, person)     # an account sees only its own profile
         return view(request, person, *args, **kwargs)
 
     return wrapper
@@ -82,7 +86,9 @@ def chart_series(summaries):
 
 @never_cache
 def home(request):
-    """Lists everyone with device, date range and status. No sign-in."""
+    """The person chooser: staff only. Everyone else is sent to their own profile."""
+    if not request.user.is_staff:
+        raise Http404("No such page.")   # the access rules never let them get here
     rows = []
     for person in Person.objects.all():
         stats = repository.totals(person)

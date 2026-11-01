@@ -16,7 +16,7 @@ from django.urls import reverse
 from people import ingest, repository
 from people.models import HeartRateDay, Person
 from people.sources import SourceFile
-from people.testing import utc_day_file
+from people.testing import utc_day_file, StaffTestCase
 
 AWAITING = "No data uploaded yet. Expected after the mid-project presentation."
 
@@ -30,7 +30,7 @@ def make_person(slug, name, device, days, marker):
     return person
 
 
-class TwoPeopleCase(TestCase):
+class TwoPeopleCase(StaffTestCase):
     @classmethod
     def setUpTestData(cls):
         cls.alpha = make_person("alpha", "Alpha", "Fitbit Air",
@@ -39,7 +39,7 @@ class TwoPeopleCase(TestCase):
                                [date(2026, 8, 1), date(2026, 8, 2)], 133)
 
 
-class HomePageTests(TestCase):
+class HomePageTests(StaffTestCase):
     def test_the_seeded_people_are_listed_with_device_and_status(self):
         response = self.client.get(reverse("people:home"))
         self.assertEqual(response.status_code, 200)

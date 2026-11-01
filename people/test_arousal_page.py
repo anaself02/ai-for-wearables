@@ -11,6 +11,8 @@ from unittest import mock
 from django.test import TestCase
 from django.urls import reverse
 
+from people.testing import StaffTestCase
+
 from health import arousal
 from health.test_arousal import (FEATURE_NAMES, fake_artifacts, fake_model,
                                  make_person, make_short_person)
@@ -33,7 +35,7 @@ def result_block(html):
     return html[start:end]
 
 
-class CaveatInTheSameBranchTests(TestCase):
+class CaveatInTheSameBranchTests(StaffTestCase):
     """Property 1: no label is ever printed without its caveat beside it."""
 
     @classmethod
@@ -84,7 +86,7 @@ class CaveatInTheSameBranchTests(TestCase):
         self.assertIn("NOT interpretable", block)
 
 
-class ChoosingADayTests(TestCase):
+class ChoosingADayTests(StaffTestCase):
     @classmethod
     def setUpTestData(cls):
         cls.person = make_person()
@@ -130,7 +132,7 @@ class ChoosingADayTests(TestCase):
         self.assertIn("no-store", self.get()["Cache-Control"])
 
 
-class DeviceAndSpacingTests(TestCase):
+class DeviceAndSpacingTests(StaffTestCase):
     def test_the_result_names_the_person_device_and_reading_spacing(self):
         person = make_person()
         with patched():
@@ -153,7 +155,7 @@ class DeviceAndSpacingTests(TestCase):
         self.assertIn(NOTICE, html)
 
 
-class OnlyDaysWithEnoughDataTests(TestCase):
+class OnlyDaysWithEnoughDataTests(StaffTestCase):
     def test_a_short_day_is_marked_not_scorable_and_is_not_the_default(self):
         short = make_short_person(minutes=10)
         with patched():
@@ -172,7 +174,7 @@ class OnlyDaysWithEnoughDataTests(TestCase):
         self.assertEqual(response.status_code, 200)
 
 
-class IsolationTests(TestCase):
+class IsolationTests(StaffTestCase):
     @classmethod
     def setUpTestData(cls):
         cls.alpha = make_marked_person("alpha", "Alpha", "Fitbit Air",
@@ -210,7 +212,7 @@ class IsolationTests(TestCase):
             self.assertIn(reverse("people:arousal", args=[slug]), bar)
 
 
-class EmptyStateTests(TestCase):
+class EmptyStateTests(StaffTestCase):
     def test_rahil_gets_the_honest_message_and_no_scoring(self):
         with patched() as loaded:
             response = self.client.get(reverse("people:arousal", args=["rahil"]))
@@ -226,7 +228,7 @@ class EmptyStateTests(TestCase):
         self.assertNotContains(response, "Expected after the mid-project")
 
 
-class MethodologyPageTests(TestCase):
+class MethodologyPageTests(StaffTestCase):
     def card(self):
         return {"honest_summary": "A demonstration, not a validated detector.",
                 "algorithm": "SVM", "trained_on": {"dataset": "WESAD", "signals": "hr",
@@ -256,7 +258,7 @@ class MethodologyPageTests(TestCase):
                       " ".join(response.content.decode().split()))
 
 
-class NeverTrainsOnTheDayTests(TestCase):
+class NeverTrainsOnTheDayTests(StaffTestCase):
     def test_the_arousal_page_flow_never_fits_or_saves_a_model(self):
         person = make_person()
         with fit_guard(), patched():

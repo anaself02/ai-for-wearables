@@ -44,6 +44,7 @@ MIDDLEWARE = [
     "django.contrib.auth.middleware.AuthenticationMiddleware",
     # After authentication, because it asks whether the request is signed in.
     "members.middleware.NoStoreForSignedIn",
+    "members.access.AccessControl",
     "django.contrib.messages.middleware.MessageMiddleware",
     "django.middleware.clickjacking.XFrameOptionsMiddleware",
 ]
@@ -162,4 +163,12 @@ CSRF_COOKIE_SAMESITE = "Lax"
 # No mail server exists and nothing is ever sent: sign-up does not verify the
 # address. The dummy backend makes that true even if some code tried to send.
 EMAIL_BACKEND = "django.core.mail.backends.dummy.EmailBackend"
+
+# Under the test runner only: a fast password hasher, so the many synthetic accounts
+# the tests create do not each spend a third of a second hashing. Real runs keep
+# Django's default (PBKDF2).
+import sys  # noqa: E402
+
+if "test" in sys.argv:
+    PASSWORD_HASHERS = ["django.contrib.auth.hashers.MD5PasswordHasher"]
 

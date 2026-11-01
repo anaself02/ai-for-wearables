@@ -15,7 +15,7 @@ from people import ingest
 from people.models import Person
 from people.sources import SourceFile
 from people.test_views import AWAITING, TwoPeopleCase, make_person
-from people.testing import hr_csv_bytes, utc_day_file
+from people.testing import hr_csv_bytes, utc_day_file, StaffTestCase
 
 
 def routes(person, day):
@@ -84,7 +84,7 @@ class EveryPageIsolationTests(TwoPeopleCase):
         self.assertContains(response, "No rows on this local day.")
 
 
-class EmptyStateOnEveryPageTests(TestCase):
+class EmptyStateOnEveryPageTests(StaffTestCase):
     def test_rahils_pages_are_all_honest_and_hold_no_numbers(self):
         day = date(2026, 7, 16)
         for name, url in routes(Person.objects.get(slug="rahil"), day).items():
@@ -219,7 +219,7 @@ class RawPageTests(TwoPeopleCase):
         self.assertIn("77.0", html)
 
 
-class DaylightSavingDayTests(TestCase):
+class DaylightSavingDayTests(StaffTestCase):
     def test_a_25_hour_day_has_1500_minutes_and_a_repeated_hour(self):
         person = Person.objects.create(slug="dst", display_name="Dst",
                                        device_label="Fitbit Air",
@@ -238,7 +238,7 @@ class DaylightSavingDayTests(TestCase):
         self.assertEqual(series["labels"].count("01:00"), 2)    # the hour that repeats
 
 
-class RemovedRoutesTests(TestCase):
+class RemovedRoutesTests(StaffTestCase):
     def test_the_old_signed_in_pages_are_gone(self):
         for url in ("/dashboard/", "/insights/", "/fitness/", "/sleep-calculator/",
                     "/raw/", "/metric/heart-rate/", "/arousal/compute/",

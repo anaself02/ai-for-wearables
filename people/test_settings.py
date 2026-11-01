@@ -13,6 +13,7 @@ import sys
 from pathlib import Path
 
 from django.db import connection
+from people.testing import StaffTestCase
 from django.test import TestCase
 
 BASE_DIR = Path(__file__).resolve().parent.parent
@@ -37,7 +38,7 @@ print("started")
 """
 
 
-class StartsWithoutGoogleTests(TestCase):
+class StartsWithoutGoogleTests(StaffTestCase):
     def test_the_app_starts_with_only_the_django_secret_key(self):
         env = {k: v for k, v in os.environ.items()
                if not k.startswith(("GOOGLE_", "FERNET", "DJANGO_"))}
@@ -48,7 +49,7 @@ class StartsWithoutGoogleTests(TestCase):
         self.assertIn("started", result.stdout)
 
 
-class NothingImportsGoogleOrEncryptionTests(TestCase):
+class NothingImportsGoogleOrEncryptionTests(StaffTestCase):
     def test_no_application_module_imports_the_removed_libraries(self):
         banned = re.compile(
             r"^\s*(import|from)\s+(google|google_auth_oauthlib|oauthlib|requests_oauthlib|"
@@ -81,7 +82,7 @@ class NothingImportsGoogleOrEncryptionTests(TestCase):
             self.assertEqual(self.client.get(url).status_code, 404, url)
 
 
-class DropOldTablesMigrationTests(TestCase):
+class DropOldTablesMigrationTests(StaffTestCase):
     def sql(self):
         from importlib import import_module
         module = import_module("people.migrations.0003_drop_oauth_tables")

@@ -77,7 +77,7 @@
         <strong>{{ person.display_name }}</strong>
         <span class="device-chip">{{ person.device_label }}</span>
       </span>
-      <a class="btn secondary" href="{% url 'people:home' %}">Switch</a>
+      {% if user.is_staff %}<a class="btn secondary" href="{% url 'people:home' %}">Switch</a>{% endif %}
       {% comment %}
         Three states, not a two-way switch: following the system is a real
         answer and the only one that can be right at both ends of a day.
@@ -87,6 +87,10 @@
         <button class="theme-option" type="button" data-theme-set="dark">Night</button>
         <button class="theme-option" type="button" data-theme-set="auto">Auto</button>
       </div>
+      <form method="post" action="{% url 'members:logout' %}">
+        {% csrf_token %}
+        <button class="btn secondary" type="submit">Log out</button>
+      </form>
     </div>
   {% else %}
     <div class="topbar-end">
@@ -95,6 +99,15 @@
         <button class="theme-option" type="button" data-theme-set="dark">Night</button>
         <button class="theme-option" type="button" data-theme-set="auto">Auto</button>
       </div>
+      {% if user.is_authenticated %}
+        <form method="post" action="{% url 'members:logout' %}">
+          {% csrf_token %}
+          <button class="btn secondary" type="submit">Log out</button>
+        </form>
+      {% else %}
+        <a class="btn secondary" href="{% url 'members:login' %}">Log in</a>
+        <a class="btn secondary" href="{% url 'members:signup' %}">Sign up</a>
+      {% endif %}
     </div>
   {% endif %}
 </header>

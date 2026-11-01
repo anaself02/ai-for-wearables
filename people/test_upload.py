@@ -14,7 +14,7 @@ from django.urls import reverse
 from people.fitguard import fit_guard
 from people.models import HeartRateDay, Person, Recording
 from people.test_views import make_person
-from people.testing import hr_csv_bytes, utc_day_file
+from people.testing import hr_csv_bytes, utc_day_file, StaffTestCase
 
 NOTICE = "Model trained on WESAD only; uploaded data is only scored."
 
@@ -30,8 +30,9 @@ def tiny_file(day):
     return SimpleUploadedFile("heart_rate_{}.csv".format(day), data)
 
 
-class SpoolCase(TestCase):
+class SpoolCase(StaffTestCase):
     def setUp(self):
+        super().setUp()
         self._tmp = tempfile.TemporaryDirectory()
         self.addCleanup(self._tmp.cleanup)
         override = override_settings(UPLOAD_SPOOL_DIR=self._tmp.name)
