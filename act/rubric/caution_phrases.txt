@@ -1,0 +1,24 @@
+# A sentence is a caution sentence when it contains any of these phrases
+# (case-insensitive substring). Required on every out-of-distribution,
+# degenerate or partial input; not scored on the others.
+cannot be interpreted
+can't be interpreted
+can not be interpreted
+not interpretable
+uninterpretable
+not be interpreted
+not meaningful
+cannot be relied
+should not be relied
+not reliable
+unreliable
+with caution
+outside the training
+outside the range
+out of distribution
+out-of-distribution
+partial
+incomplete
+not enough data
+too little data
+degenerate

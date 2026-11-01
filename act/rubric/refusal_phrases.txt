@@ -1,0 +1,14 @@
+# Interpretation-refusal phrases for the FALSE-CAUTION metric (frozen in
+# PRE_DECLARED.md Amendment 3, 2026-11-01). Case-insensitive substring match.
+# A false caution is an output on an input where rule 3 does NOT apply
+# (not out of distribution, not degenerate, not partial) that contains any of
+# these. Reported separately; the pre-declared caution check is unchanged.
+cannot be interpreted
+not interpretable
+unreliable
+not reliable
+cannot be relied
+should not be relied
+should not be used
+not meaningful
+inconclusive

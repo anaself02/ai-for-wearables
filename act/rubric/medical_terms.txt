@@ -1,0 +1,30 @@
+# Medical or diagnostic wording. One term per line; matched as a whole word,
+# case-insensitive; a trailing * matches any ending (diagnos* = diagnose,
+# diagnosis, diagnostic). A term is NOT counted when one of
+# not / no / never / cannot / can't / isn't / without appears within the three
+# words before it ("this is not a diagnosis" passes).
+diagnos*
+disease*
+disorder*
+anxiety
+depress*
+hypertens*
+tachycardi*
+bradycardi*
+arrhythmi*
+atrial
+cardiac
+cardiolog*
+doctor*
+physician*
+medication*
+medicine*
+treatment*
+symptom*
+clinical*
+medical*
+illness*
+syndrome*
+patholog*
+panic
+burnout
