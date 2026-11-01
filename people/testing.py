@@ -35,7 +35,7 @@ def utc_day_file(day, **kwargs):
             hr_csv_bytes(start, start + timedelta(days=1), **kwargs))
 
 
-def make_user(email, staff=False, linked_to=None):
+def make_user(email, staff=False, linked_to=None, superuser=False):
     """A synthetic account for tests. Returns (user, password).
 
     The password is random per run and never written anywhere: tests that need to
@@ -48,7 +48,7 @@ def make_user(email, staff=False, linked_to=None):
     password = secrets.token_urlsafe(18)
     user = get_user_model().objects.create_user(
         username=email.lower(), email=email.lower(), password=password,
-        is_staff=staff)
+        is_staff=staff or superuser, is_superuser=superuser)
     if linked_to is not None:
         linked_to.owner = user
         linked_to.save(update_fields=["owner"])
