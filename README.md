@@ -24,11 +24,28 @@ Windows, from this folder:
 
 ```
 .venv\Scripts\python.exe manage.py migrate
+.venv\Scripts\python.exe manage.py createsuperuser     # once; use your EMAIL as the username
 .venv\Scripts\python.exe manage.py runserver 127.0.0.1:8000
 ```
 
-Open http://127.0.0.1:8000. The only value `.env` needs is `DJANGO_SECRET_KEY`
-(see `.env.example`).
+Open http://127.0.0.1:8000 and log in. The only value `.env` needs is
+`DJANGO_SECRET_KEY` (see `.env.example`).
+
+## Accounts
+
+Everything is behind a login. The account system exists only to keep the two
+people's profiles apart on one machine.
+
+- **You (administrator):** `createsuperuser` makes the first one; use your email as
+  the username, because the login form takes an email. Administrators see the
+  person chooser and can open any profile.
+- **A teammate:** goes to `/signup/`, gives an email and password and picks "Which
+  profile are you?". That only creates a **pending claim**. No email is sent.
+- **Approve a claim:** log in, open `/admin/`, go to *Users*, tick the account (the
+  *pending claims* filter finds it), and choose *Approve the selected accounts'
+  pending claims*. Until then they see only a waiting page. The same list can
+  reject a claim or unlink an account.
+- **Linked accounts** see only their own profile; any other profile is a 404.
 
 ## Add a person's data
 
@@ -37,7 +54,8 @@ From a Google Takeout, take the `heart_rate_YYYY-MM-DD.csv` files from
 
 - **Command line:** `manage.py import_heart_rate anas "<path to that folder>"`
   (add `--dry-run` to see the report without storing anything).
-- **Browser:** open the person's page and use the import page.
+- **Browser:** open the person's page and use the **Import data** tab. It takes
+  a `.csv`, an `.xlsx` (first sheet) or a `.zip`, several at once.
 
 Both use the same code: files are parsed into a plan, a validation report is
 shown (what was read, what was skipped and why, row counts, UTC and local date
@@ -54,7 +72,10 @@ written, so nothing can be loaded for him yet.
 
 | URL | What |
 |---|---|
-| `/` | Choose whose data to view |
+| `/` | Choose whose data to view (administrators; others go to their own profile) |
+| `/signup/`, `/login/`, `/logout/` (POST) | Accounts |
+| `/admin/` | Who is linked to which profile; approve, reject, unlink |
+| `/p/<slug>/import/` | Import data |
 | `/p/<slug>/` | One person's overview |
 | `/p/<slug>/heart-rate/` | Daily average, minimum and maximum over 7, 30 or 90 days |
 | `/p/<slug>/heart-rate/day/<date>/` | One local day as per-minute means |
