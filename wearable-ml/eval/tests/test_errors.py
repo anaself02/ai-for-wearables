@@ -77,6 +77,41 @@ class ErrorTests(unittest.TestCase):
         self.assertFalse(preds.wrong.any())
         self.assertEqual(int(preds.n_seeds.max()), 3)
 
+    def test_examples_only_list_errors_with_a_wrong_prediction(self):
+        # seeds split: the shown prediction must differ from the truth and be the most common
+        # WRONG one; a window wrong in only 2 of 5 seeds is not an error and must not appear
+        f = self.feats
+        per_seed = {0: [1, 1, 2, 3, 3],      # 3 of 5 wrong; mode of all five is 1 (the truth)
+                    1: [1, 1, 1, 3, 3],      # 2 of 5 wrong: NOT an error
+                    2: [2, 2, 3, 3, 1],      # 4 of 5 wrong; wrong tie 2 vs 3 -> lowest, 2
+                    3: [3, 3, 3, 3, 3]}      # 5 of 5 wrong
+        seeds = []
+        for seed in range(5):
+            pred = f.label.to_numpy().copy()
+            for row, votes in per_seed.items():
+                pred[row] = votes[seed]
+            seeds.append(pd.DataFrame({
+                "task": "three", "model": "svm", "seed": seed, "fold": f.subject_id,
+                "subject": f.subject_id, "condition": f.label_name,
+                "window_start_s": f.window_start_s, "y_true": f.label, "y_pred": pred,
+                "score": np.nan}))
+        path = self.write(pd.concat(seeds), "three_svm_seed_all.csv")
+        preds, task, _ = errors.load_predictions(path)
+        table = errors.attach_context(preds, self.feat_path)
+        picked, _ = errors.examples(table, task, per_type=100)
+        self.assertEqual(len(picked), 3)
+        key = lambda r: (r.subject_id, r.window_start_s)
+        shown = {key(r): r.predicted for r in picked.itertuples()}
+        row = lambda i: (f.subject_id.iat[i], f.window_start_s.iat[i])
+        self.assertEqual(shown[row(0)], "amusement")
+        self.assertEqual(shown[row(2)], "stress")
+        self.assertEqual(shown[row(3)], "amusement")
+        self.assertNotIn(row(1), shown)
+        truth = table.set_index(["subject_id", "window_start_s"])
+        for (subject, start), name in shown.items():
+            self.assertTrue(truth.loc[(subject, start), "wrong"])
+            self.assertNotEqual(name, truth.loc[(subject, start), "condition"])
+
     def test_several_models_need_model_flag(self):
         f = self.feats.head(4)
         frame = pd.DataFrame({"task": "binary", "model": ["svm", "rf"] * 2, "subject": f.subject_id,

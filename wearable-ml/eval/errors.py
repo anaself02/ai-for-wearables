@@ -79,6 +79,12 @@ def load_predictions(pattern, model=None, task=None):
             y_true=("y_true", "first"), y_pred=("y_pred", lambda s: s.mode().iat[0]),
             error=("error", "mean"), score=("score", "mean"),
             n_seeds=("seed", "nunique")).reset_index()
+        # prediction shown for an error: most common WRONG prediction across the seeds that
+        # got the window wrong; a tie goes to the lowest class label (value_counts is sorted
+        # by label and idxmax returns the first maximum). Display only: metrics use y_pred.
+        shown = (raw[raw["error"] == 1].groupby(KEYS)["y_pred"]
+                 .agg(lambda s: s.value_counts().sort_index().idxmax()).rename("y_pred_shown"))
+        agg = agg.merge(shown.reset_index(), on=KEYS, how="left")
         desc = "{} ({} task), {} seed(s), from {}".format(
             models[0], task, int(agg["n_seeds"].max()), ", ".join(os.path.basename(p) for p in paths))
     else:                                                          # old format
@@ -96,6 +102,7 @@ def load_predictions(pattern, model=None, task=None):
             note = "3-class"
         agg["error"] = (agg["y_true"] != agg["y_pred"]).astype(float)
         agg["score"], agg["n_seeds"] = np.nan, 1
+        agg["y_pred_shown"] = agg["y_pred"]
         agg = agg.drop(columns="label")
         desc = "{} ({}), default hyperparameters, one run, from {}".format(
             model or "svm", note, os.path.basename(paths[0]))
@@ -224,7 +231,7 @@ def examples(table, task, per_type=2):
     type, i.e. typical rather than extreme errors."""
     names = CLASS_NAMES[task]
     wrong = table[table["wrong"]].copy()
-    wrong["predicted"] = wrong["y_pred"].map(names)
+    wrong["predicted"] = wrong["y_pred_shown"].astype(int).map(names)
     cols = ["subject_id", "window_start_s", "condition", "predicted", "position", "HR_mean",
             "HR_std", "ACC_mag_std"]
     if wrong["score"].notna().any():
