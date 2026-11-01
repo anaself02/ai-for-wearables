@@ -25,3 +25,8 @@ results/before_ibi_median_filter/feature_distribution_comparison.csv
 # --- Python -----------------------------------------------------------------
 __pycache__/
 *.py[cod]
+
+# --- Demo output copies (day-level personal statistics) ---------------------
+demo/out/
+
+.env

@@ -1,0 +1,5 @@
+# Day-level statistics of a real person (de-identified, but still personal):
+# real inputs, prompts, raw responses, reports and the spot-check files.
+inputs/real_days.jsonl
+inputs/inputs.jsonl
+runs/
