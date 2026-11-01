@@ -1,4 +1,5 @@
 {% extends "base.html" %}
+{% load tz %}
 {% block title %}Arousal signal - {{ person.display_name }} ({{ person.device_label }}){% endblock %}
 
 {% comment %}
@@ -36,14 +37,16 @@
       A day can be scored when it holds at least <strong>{{ min_windows }}</strong>
       windows ({{ window_seconds }} s, stepping {{ step_seconds }} s) with at least
       {{ min_samples }} readings each. Days are local days in {{ person.timezone }}.
-      The default is the most recent day that qualifies.
+      A day is <strong>complete</strong> when at least <strong>{{ complete_hours }}</strong>
+      hours hold readings (minutes with at least one reading, divided by 60); shorter days
+      are marked partial. The default is the most recent complete day that qualifies.
     </p>
     <form method="get" class="inline-form">
       <label for="date" class="visually-hidden">Day</label>
       <select id="date" name="date">
         {% for entry in days %}
           <option value="{{ entry.day|date:'Y-m-d' }}" {% if entry.day == chosen %}selected{% endif %}>
-            {{ entry.day|date:"Y-m-d" }}{% if not entry.scorable %} (too few windows){% endif %}
+            {{ entry.day|date:"Y-m-d" }}{% if not entry.complete %} (partial){% endif %}{% if not entry.scorable %} (too few windows){% endif %}
           </option>
         {% endfor %}
       </select>
@@ -99,6 +102,10 @@
           <div><dt class="label">Device name(s) in the files</dt>
             <dd>{% for name in assessment.device_names %}{{ name }}{% if not forloop.last %}, {% endif %}{% endfor %}</dd></div>
           <div><dt class="label">Readings</dt><dd class="num">{{ assessment.n_readings|floatformat:"0g" }}</dd></div>
+          <div><dt class="label">First / last reading ({{ person.timezone }})</dt>
+            <dd class="num">{{ assessment.coverage.first|timezone:person.timezone|time:"H:i:s" }} / {{ assessment.coverage.last|timezone:person.timezone|time:"H:i:s" }}</dd></div>
+          <div><dt class="label">Hours with data</dt>
+            <dd class="num derived">{{ assessment.coverage.hours|floatformat:1 }} h{% if assessment.coverage.partial %} (partial: under {{ complete_hours }} h){% endif %}</dd></div>
           <div><dt class="label">Spacing between readings</dt>
             <dd class="num derived">median {{ spacing.median|floatformat:1 }} s
               (p05 {{ spacing.p05|floatformat:1 }}, p95 {{ spacing.p95|floatformat:1 }}),
@@ -159,12 +166,14 @@
     <h2>Days</h2>
     <table>
       <thead><tr><th>Local day</th><th class="num">Readings</th>
+          <th class="num">Hours with data</th>
           <th class="num">Scorable windows</th><th>Can be scored</th><th></th></tr></thead>
       <tbody>
         {% for entry in days %}
           <tr>
-            <td>{{ entry.day|date:"Y-m-d" }}</td>
+            <td>{{ entry.day|date:"Y-m-d" }}{% if not entry.complete %} (partial){% endif %}</td>
             <td class="num">{{ entry.readings|floatformat:"0g" }}</td>
+            <td class="num derived">{{ entry.hours|floatformat:1 }}</td>
             <td class="num derived">{{ entry.windows|floatformat:"0g" }}</td>
             <td>{% if entry.scorable %}yes{% else %}no (fewer than {{ min_windows }}){% endif %}</td>
             <td><a href="?date={{ entry.day|date:'Y-m-d' }}">Score</a></td>

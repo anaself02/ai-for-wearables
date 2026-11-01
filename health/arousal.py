@@ -75,6 +75,13 @@ MIN_SAMPLES_PER_WINDOW = 10
 # cut-off.
 MIN_WINDOWS_TO_SCORE = 60
 
+# A day is COMPLETE when at least this many hours hold a reading (minutes with
+# at least one reading, divided by 60). Shorter days can still be scored when
+# chosen, but are marked partial and are never the default.
+COMPLETE_DAY_HOURS = 20
+PARTIAL_NOTE = ("This day is PARTIAL: only {:.1f} hours hold readings (a complete "
+                "day has at least {}). The result describes those hours only.")
+
 # Predictions made while asleep are not meaningful: the model has no sleep
 # class and WESAD contains no sleep. They are still computed - hiding them
 # would misrepresent how much of the day they are - but reported separately.
@@ -116,6 +123,12 @@ CLASS_WORDING = {
         "the model was trained on - raised, but not in the way the stress "
         "condition was."),
 }
+
+# Shown instead of the amusement-like headline when the day is both out of
+# distribution and degenerate: the label would mean nothing, the caveats stay.
+NO_RESULT = ("No interpretable result for this day",
+             "The day is out of distribution and one class takes most windows, so "
+             "no condition is reported. The notes below say why.")
 
 # Class names for the notes only (the 3-class model's own labels).
 CLASS_NAMES = {1: "baseline", 2: "stress", 3: "amusement"}
@@ -165,6 +178,7 @@ class Assessment:
     timezone: str = ""
     median_values_per_window: float = 0.0
     wesad_values_per_window: float = 0.0
+    coverage: dict = field(default_factory=dict)
 
     @classmethod
     def unavailable(cls, day, reason):
@@ -182,6 +196,13 @@ class Assessment:
 
         headline, explanation = CLASS_WORDING[dominant]
         worst = max(ood_rows, key=lambda row: row["share_outside"])
+        notes = notes_for(shares, worst["share_outside"])
+        if (dominant == 3 and worst["share_outside"] >= OOD_FLAG_SHARE
+                and shares[dominant] >= DOMINANT_CLASS_SHARE):
+            headline, explanation = NO_RESULT
+        coverage = context.get("coverage") or {}
+        if coverage.get("partial"):
+            notes.insert(0, PARTIAL_NOTE.format(coverage["hours"], COMPLETE_DAY_HOURS))
 
         return cls(
             day=str(day),
@@ -197,7 +218,7 @@ class Assessment:
             ood_rows=ood_rows,
             worst_ood_feature=worst["feature"],
             worst_ood_share=worst["share_outside"],
-            notes=notes_for(shares, worst["share_outside"]),
+            notes=notes,
             **context,
         )
 
@@ -415,6 +436,26 @@ def window_features(epochs, bpm, starts):
     return rows, kept, sizes
 
 
+def day_coverage(epochs, tz_name):
+    """First and last reading (local), readings, and hours with data.
+
+    Hours with data = minutes holding at least one reading, divided by 60.
+    """
+    import numpy as np
+
+    tz = ZoneInfo(tz_name)
+    hours = len(np.unique(np.asarray(epochs) // 60)) / 60 if len(epochs) else 0.0
+    return {
+        "readings": int(len(epochs)),
+        "first": (datetime.fromtimestamp(int(epochs[0]), timezone.utc).astimezone(tz)
+                  if len(epochs) else None),
+        "last": (datetime.fromtimestamp(int(epochs[-1]), timezone.utc).astimezone(tz)
+                 if len(epochs) else None),
+        "hours": hours,
+        "partial": hours < COMPLETE_DAY_HOURS,
+    }
+
+
 def count_scorable_windows(epochs, day, tz_name):
     """How many 60 s windows of this day hold at least 10 readings."""
     import numpy as np
@@ -579,6 +620,7 @@ def assess(person, day):
             median_values_per_window=float(np.median(sizes)),
             # One value per heartbeat, so about one per beat in a 60 s window.
             wesad_values_per_window=float(mean_hr_training),
+            coverage=day_coverage(epochs, person.timezone),
         )
 
     except ArousalUnavailable as exc:
@@ -602,14 +644,23 @@ def scorable_days(person):
     for day in sorted(repository.local_dates_with_data(person), reverse=True):
         epochs, _ = repository.local_day_readings(person, day)
         windows = count_scorable_windows(epochs, day, person.timezone)
+        hours = day_coverage(epochs, person.timezone)["hours"]
         days.append({"day": day, "readings": int(len(epochs)),
-                     "windows": windows,
+                     "windows": windows, "hours": hours,
+                     "complete": hours >= COMPLETE_DAY_HOURS,
                      "scorable": windows >= MIN_WINDOWS_TO_SCORE})
     return days
 
 
 def default_day(days):
-    """The most recent scorable day from `scorable_days`, or None."""
+    """The most recent complete, scorable day from `scorable_days`.
+
+    If no day is complete, the most recent scorable one (shown as partial);
+    None if nothing can be scored.
+    """
+    for entry in days:
+        if entry["scorable"] and entry["complete"]:
+            return entry["day"]
     for entry in days:
         if entry["scorable"]:
             return entry["day"]

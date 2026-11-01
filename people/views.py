@@ -226,6 +226,7 @@ def arousal_view(request, person):
     the result so a Fitbit day and an EmotiBit day can never look alike.
     """
     context = {"min_windows": arousal_module.MIN_WINDOWS_TO_SCORE,
+               "complete_hours": arousal_module.COMPLETE_DAY_HOURS,
                "scored_only": arousal_module.WESAD_ONLY_NOTICE,
                "window_seconds": arousal_module.WINDOW_SECONDS,
                "step_seconds": arousal_module.STEP_SECONDS,

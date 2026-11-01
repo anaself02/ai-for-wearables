@@ -84,6 +84,10 @@ class CaveatInTheSameBranchTests(StaffTestCase):
         self.assertIn("DEGENERATE", block)
         self.assertIn("cannot separate amusement from baseline", block)
         self.assertIn("NOT interpretable", block)
+        # Out of distribution AND degenerate: no amusement-like headline, caveats kept.
+        self.assertIn(arousal.NO_RESULT[0], block)
+        self.assertIn("not a clinical or validated measure", block)
+        self.assertNotIn("Light arousal signal", html)
 
 
 class ChoosingADayTests(StaffTestCase):
@@ -276,3 +280,51 @@ class NeverTrainsOnTheDayTests(StaffTestCase):
             offenders = [line.strip() for line in handle
                          if forbidden.search(line) and not line.lstrip().startswith("#")]
         self.assertEqual(offenders, [])
+
+
+class CompleteAndPartialDayTests(StaffTestCase):
+    """Synthetic UTC days 2026-09-17 and -18 at 3 s: in Toronto (UTC-4) the local
+    16th has 4 h of readings, the 17th 24 h and the 18th 20 h."""
+
+    @classmethod
+    def setUpTestData(cls):
+        cls.person = make_person()
+
+    def get(self, **params):
+        with patched():
+            return self.client.get(reverse("people:arousal", args=["subject"]), params)
+
+    def test_coverage_numbers_on_synthetic_data(self):
+        days = {entry["day"]: entry for entry in arousal.scorable_days(self.person)}
+        self.assertEqual(days[date(2026, 9, 16)]["hours"], 4.0)
+        self.assertEqual(days[date(2026, 9, 17)]["hours"], 24.0)
+        self.assertEqual(days[date(2026, 9, 18)]["hours"], 20.0)
+        response = self.get(date="2026-09-18")
+        coverage = response.context["assessment"].coverage
+        self.assertEqual(coverage["readings"], 20 * 3600 // 3)
+        self.assertEqual(coverage["first"].strftime("%H:%M:%S"), "00:00:00")
+        self.assertEqual(coverage["last"].strftime("%H:%M:%S"), "19:59:57")
+        html = " ".join(response.content.decode().split())
+        self.assertIn("00:00:00 / 19:59:57", html)
+        self.assertIn("20.0 h", html)
+
+    def test_a_partial_day_is_marked_and_the_threshold_is_shown(self):
+        html = " ".join(self.get().content.decode().split())
+        self.assertIn("at least <strong>{}</strong> hours".format(arousal.COMPLETE_DAY_HOURS), html)
+        self.assertIn("2026-09-16 (partial)", html)
+        self.assertNotIn("2026-09-17 (partial)", html)
+        self.assertNotIn("2026-09-18 (partial)", html)
+
+    def test_the_default_skips_partial_days(self):
+        with mock.patch.object(arousal, "COMPLETE_DAY_HOURS", 21):   # the 18th becomes partial
+            response = self.get()
+            self.assertEqual(response.context["chosen"], date(2026, 9, 17))
+            self.assertContains(response, "2026-09-18 (partial)")
+
+    def test_a_chosen_partial_day_carries_the_note_beside_its_headline(self):
+        html = self.get(date="2026-09-16").content.decode()
+        block = result_block(html)
+        self.assertIn("Elevated arousal signal", block)
+        self.assertIn("This day is PARTIAL", block)
+        self.assertIn("not a clinical or validated measure", block)
+        self.assertEqual(html.count("This day is PARTIAL"), 1)
