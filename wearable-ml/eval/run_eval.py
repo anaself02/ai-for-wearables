@@ -20,7 +20,7 @@ import time
 from datetime import datetime, timezone
 
 from . import config, folds, metrics, nested
-from .data import load_table, sha256
+from .data import features_sha256, load_table, sha256
 
 ALL = config.BASELINES + config.MODELS
 
@@ -100,7 +100,7 @@ def manifest(seeds, extra=None):
         "boot_seed": config.BOOT_SEED, "grids": {k: {p: [list(v) if isinstance(v, tuple) else v
                                                         for v in vs] for p, vs in g.items()}
                                                  for k, g in config.GRIDS.items()},
-        "files": {"results/features.csv": sha256(config.FEATURES)},
+        "files": {"results/features.csv": features_sha256(config.FEATURES)},
         "code": {name: sha256(os.path.join(config.EVAL_DIR, name))
                  for name in sorted(os.listdir(config.EVAL_DIR)) if name.endswith(".py")},
     }
@@ -288,7 +288,7 @@ def main(argv=None):
         return
     if not args.go:
         raise SystemExit("run needs --go (Part 2, after the amendment is applied).")
-    if sha256(config.FEATURES) != config.FEATURES_SHA256:
+    if features_sha256(config.FEATURES) != config.FEATURES_SHA256:
         raise SystemExit("results/features.csv changed since the protocol was frozen.")
     fold_rows, failures, pooled = run_all(tasks, seeds, models_, fresh=args.fresh,
                                           say=lambda m: print(m, flush=True))

@@ -35,6 +35,12 @@ def sha256(path):
     return digest.hexdigest()
 
 
+def features_sha256(path=config.FEATURES):
+    """sha256 of the feature table after replacing CRLF by LF (Amendment 6)."""
+    with open(path, "rb") as handle:
+        return hashlib.sha256(handle.read().replace(b"\r\n", b"\n")).hexdigest()
+
+
 def load_table(path=config.FEATURES):
     import pandas as pd
 

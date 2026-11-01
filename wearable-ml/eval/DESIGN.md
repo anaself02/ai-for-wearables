@@ -6,8 +6,9 @@ choices live in `config.py`; the draft Amendment 4 restates them for
 
 ## Input (audited read-only, reused as-is, never rebuilt)
 
-`results/features.csv`, sha256 `d0d72f86...2c36` (pinned in `config.py`; `run`
-refuses if it changes). 1015 windows, 15 subjects (S2-S17; S1 and S12 do not
+`results/features.csv`, sha256 `167f323d...207a` of the content with CRLF read as LF
+(pinned in `config.py`, Amendment 6; the Windows CRLF copy hashes to `d0d72f86...2c36`;
+`run` refuses if it changes). 1015 windows, 15 subjects (S2-S17; S1 and S12 do not
 exist in WESAD), 60 s windows with a 30 s step, kept only when 100% inside one
 condition. Labels 1 baseline (557), 2 stress (302), 3 amusement (156). Heart
 rate is computed from the wrist BVP at 64 Hz (0.7-3.7 Hz Butterworth, order 3,

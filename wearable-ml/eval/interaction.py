@@ -23,7 +23,7 @@ from datetime import datetime, timezone
 import numpy as np
 
 from . import config, cross, folds, metrics, resolution
-from .data import sha256
+from .data import features_sha256, sha256
 from .run_eval import convergence_text, fits_per_outer_fold, log_experiment, manifest, \
     pooled_macro_f1, write_csv
 
@@ -291,7 +291,7 @@ def main(argv=None):
     if args.action == "run":
         if not args.go:
             raise SystemExit("run needs --go (after Amendment 5 is applied and approved).")
-        if sha256(config.FEATURES) != config.FEATURES_SHA256:
+        if features_sha256(config.FEATURES) != config.FEATURES_SHA256:
             raise SystemExit("results/features.csv changed since the protocol was frozen.")
         r1, r2 = resolution.load_tables()                 # refuses unless R1s parity is proven
         fold_rows, failures, pooled = run_all(r1, r2, seeds, ALL, fresh=args.fresh,
@@ -302,7 +302,7 @@ def main(argv=None):
                 "stage": "2D resolution interaction", "conditions": CONDITIONS,
                 "bin_seconds": resolution.BIN_SECONDS, "min_readings": resolution.MIN_READINGS,
                 "n_windows_common": int(len(r1)),
-                "files": {"results/features.csv": sha256(config.FEATURES),
+                "files": {"results/features.csv": features_sha256(config.FEATURES),
                           "windows_R1s.csv": sha256(resolution.R1S_CSV),
                           "windows_R2.csv": sha256(resolution.R2_CSV)}}), handle, indent=1)
         print("done: {} fold rows, {} failure/warning records".format(len(fold_rows), len(failures)))

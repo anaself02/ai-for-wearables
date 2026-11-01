@@ -13,8 +13,11 @@ FOLDS_FILE = os.path.join(EVAL_DIR, "folds.json")
 EXPERIMENTS = os.path.join(EVAL_DIR, "EXPERIMENTS.md")
 MANIFEST = os.path.join(EVAL_DIR, "manifest.json")
 
-#: sha256 of results/features.csv when this protocol was written (2026-11-01).
-FEATURES_SHA256 = "d0d72f86b8a66c09ff0d3258bbba1fbf480f3f92cd85e606af0289d0aaaf2c36"
+#: sha256 of results/features.csv with every CRLF replaced by LF (Amendment 6), so the check
+#: does not depend on the line endings of the checkout. Same data as the hash frozen on
+#: 2026-11-01 (Amendment 4), which was taken on the Windows copy with CRLF line endings:
+#: d0d72f86b8a66c09ff0d3258bbba1fbf480f3f92cd85e606af0289d0aaaf2c36
+FEATURES_SHA256 = "167f323da96a6e3c034c32f8cf05c8d506084c0dbf9518c36cd7a7341fab207a"
 
 HR_FEATURES = ["HR_mean", "HR_std", "HR_min", "HR_max", "HR_slope"]
 STRESS = 2

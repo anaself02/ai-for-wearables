@@ -433,7 +433,28 @@ class ReproductionTests(unittest.TestCase):
         self.assertAlmostEqual(value, EXPECTED_FULL_SVM_MACRO_F1, delta=0.005)
 
     def test_the_feature_table_is_the_one_the_protocol_froze(self):
-        self.assertEqual(data.sha256(config.FEATURES), config.FEATURES_SHA256)
+        self.assertEqual(data.features_sha256(config.FEATURES), config.FEATURES_SHA256)
+
+    def test_feature_hash_ignores_line_endings_but_not_values(self):
+        # Amendment 6: an LF and a CRLF copy of the table both pass, a changed value does not
+        with open(config.FEATURES, "rb") as handle:
+            lf = handle.read().replace(b"\r\n", b"\n")
+        crlf = lf.replace(b"\n", b"\r\n")
+        header, first, rest = lf.split(b"\n", 2)
+        cells = first.split(b",")
+        cells[-1] = str(float(cells[-1]) + 0.001).encode()
+        changed = b"\n".join([header, b",".join(cells), rest])
+        self.assertNotEqual(changed, lf)
+        with tempfile.TemporaryDirectory() as tmp:
+            hashes = {}
+            for name, blob in (("lf", lf), ("crlf", crlf), ("changed", changed)):
+                path = os.path.join(tmp, name + ".csv")
+                with open(path, "wb") as handle:
+                    handle.write(blob)
+                hashes[name] = data.features_sha256(path)
+        self.assertEqual(hashes["lf"], config.FEATURES_SHA256)
+        self.assertEqual(hashes["crlf"], config.FEATURES_SHA256)
+        self.assertNotEqual(hashes["changed"], config.FEATURES_SHA256)
 
     def test_plan_counts(self):
         counts = run_eval.plan_counts()

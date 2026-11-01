@@ -1,3 +1,4 @@
+SUPERSEDED: the applied text is Amendment 5 in PRE_DECLARED.md. This file is kept only as the original draft.
 
 ## Amendment 5 - DRAFT, not applied (model x heart-rate resolution; to be frozen before any R2 result exists)
 
