@@ -56,7 +56,7 @@ people/            who the data belongs to, and everything about their readings
   ingest.py        parse -> report -> dedupe -> store (command and page share it)
   spool.py         short-lived holding area between report and confirm
   repository.py    the only way to read readings; requires a Person
-  views.py         home, person pages, arousal; views_upload.py: upload flow
+  views.py         home, person pages, arousal; views_import.py: upload flow
   management/      import_heart_rate
 health/            arousal.py: the WESAD model runner (and its tests)
 config/            settings, urls

@@ -14,6 +14,7 @@ Timestamps are UTC with a trailing "Z"; the file's date is the UTC start date,
 so a local evening lands in the next file. Spacing is about 2-3 s.
 """
 
+import csv
 import io
 import re
 from datetime import datetime, timezone
@@ -30,6 +31,34 @@ HAS_ZONE_RE = re.compile(r"(Z|[+-]\d{2}:?\d{2})$")
 MAX_STORABLE_BPM = 6553.0
 
 
+def check_header(name, data):
+    """Read ONLY the first line and require exactly the three heart-rate columns.
+
+    This runs before anything else is parsed, so a file with a different layout
+    (a profile, a device list, a location file) is refused on its header alone and
+    none of its other columns is ever read, stored or shown. The refusal says how
+    many unexpected columns there were, never what they were called.
+    """
+    first_line = data.split(b"\n", 1)[0].decode("utf-8-sig", errors="replace")
+    first_line = first_line.rstrip("\r")
+    try:
+        header = [c.strip() for c in next(csv.reader([first_line]), [])]
+    except csv.Error:
+        header = []
+    missing = [c for c in COLUMNS if c not in header]
+    extra = len([c for c in header if c not in COLUMNS])
+    if missing or not header:
+        raise SourceError(
+            "{} is not a Fitbit Takeout heart-rate file: it must have the columns {}."
+            .format(name, ", ".join(COLUMNS)))
+    if extra or len(header) != len(COLUMNS):
+        raise SourceError(
+            "{} has {} column(s) beyond the three heart-rate columns ({}). Only that "
+            "layout is accepted, and the other columns are never read. No other layout "
+            "is guessed.".format(name, max(extra, len(header) - len(COLUMNS)),
+                                 ", ".join(COLUMNS)))
+
+
 class FitbitTakeoutAdapter(DeviceAdapter):
     key = "fitbit-takeout"
     device_label = "Fitbit"
@@ -41,6 +70,7 @@ class FitbitTakeoutAdapter(DeviceAdapter):
         import pandas as pd
 
         name = source_file.name
+        check_header(name, source_file.data)
         try:
             table = pd.read_csv(io.BytesIO(source_file.data), usecols=COLUMNS)
         except ValueError:

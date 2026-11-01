@@ -1,6 +1,10 @@
 Django>=6.1,<6.2
 python-dotenv>=1.2
 
+# Reading an .xlsx heart-rate file (people/xlsx.py). It brings one helper,
+# et-xmlfile, and nothing else.
+openpyxl==3.1.5
+
 # --- Running the WESAD-trained model (health/arousal.py) --------------------
 # The arousal page loads a scikit-learn pipeline trained in the separate
 # wearable-ml project. Unpickling it needs scikit-learn importable in THIS

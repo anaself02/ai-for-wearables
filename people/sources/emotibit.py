@@ -26,11 +26,22 @@ That choice is not made here.
 
 from .base import DeviceAdapter, SourceNotImplemented
 
-MESSAGE = (
-    "The EmotiBit reader is not implemented: awaiting a sample export from "
-    "Rahil, expected after the mid-project presentation. Nothing was loaded. "
-    "See people/sources/emotibit.py for exactly what is needed from the export."
-)
+MESSAGE = ("EmotiBit import is not available yet: it needs a sample export from "
+           "Rahil.")
+
+#: What is needed from the export before a parser can be written. Shown on Rahil's
+#: Import data page so the gap is stated, not hidden.
+NEEDS = [
+    "The file layout: which files or sheets the export produces, and their names.",
+    "Whether heart rate is a signal in the export, or whether only the raw PPG "
+    "(optical pulse waveform) is.",
+    "The sampling rate of each signal.",
+    "The timestamp format, and its timezone or reference (UTC, local time, or time "
+    "since the start of the recording).",
+    "The units of every column.",
+    "Any event-marker or annotation columns (for example a rest or task marker).",
+    "A recording of at least 10 minutes, ideally with a resting period and a task period.",
+]
 
 
 class EmotiBitAdapter(DeviceAdapter):
@@ -38,6 +49,7 @@ class EmotiBitAdapter(DeviceAdapter):
     device_label = "EmotiBit"
     implemented = False
     not_implemented_message = MESSAGE
+    needs = NEEDS
 
     def accepts(self, name):
         return False

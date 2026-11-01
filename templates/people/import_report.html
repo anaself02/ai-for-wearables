@@ -3,7 +3,7 @@
 {% block title %}Validation report - {{ person.display_name }} ({{ person.device_label }}){% endblock %}
 
 {% block content %}
-  <p class="small"><a href="{% url 'people:upload' person.slug %}">&larr; Upload</a></p>
+  <p class="small"><a href="{% url 'people:import_data' person.slug %}">&larr; Import data</a></p>
   <h1>Validation report</h1>
   <p class="lede">For {{ person.display_name }} &middot; {{ person.device_label }}. Nothing has been saved yet.</p>
 
@@ -11,7 +11,13 @@
   {% if error %}<div class="notice error"><strong>{{ error }}</strong></div>{% endif %}
 
   {% if report.fatal %}
-    <div class="notice error"><strong>Cannot load: {{ report.fatal }}</strong></div>
+    <div class="notice error"><strong>{{ report.fatal }}</strong> Nothing was read and nothing was saved.</div>
+    {% if adapter.needs %}
+      <h2>What is needed from the export</h2>
+      <ul class="limitations">
+        {% for need in adapter.needs %}<li>{{ need }}</li>{% endfor %}
+      </ul>
+    {% endif %}
   {% else %}
     <dl class="person-facts">
       <div><dt class="label">To load</dt><dd class="num">{{ report.n_will_load }} file(s)</dd></div>
@@ -60,7 +66,7 @@
     {% endif %}
 
     {% if token %}
-      <form method="post" action="{% url 'people:upload_confirm' person.slug %}" class="panel">
+      <form method="post" action="{% url 'people:import_confirm' person.slug %}" class="panel">
         {% csrf_token %}
         <input type="hidden" name="token" value="{{ token }}">
         {% if needs_person_check %}
@@ -69,7 +75,7 @@
         {% endif %}
         <button class="btn" type="submit">Load {{ report.rows_to_load|floatformat:"0g" }} readings for {{ person.display_name }}</button>
       </form>
-      <form method="post" action="{% url 'people:upload_cancel' person.slug %}">
+      <form method="post" action="{% url 'people:import_cancel' person.slug %}">
         {% csrf_token %}
         <input type="hidden" name="token" value="{{ token }}">
         <button class="btn secondary" type="submit">Cancel</button>

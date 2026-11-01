@@ -77,6 +77,7 @@ class DeviceAdapter:
     #: False for a placeholder adapter, so the UI can say so up front.
     implemented = True
     not_implemented_message = ""
+    needs = ()
 
     def accepts(self, name):
         """True if a file with this name is one this adapter reads.

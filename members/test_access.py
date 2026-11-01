@@ -28,14 +28,14 @@ def person_urls(slug):
         "raw day": reverse("people:raw_day", args=[slug, day]),
         "arousal": reverse("people:arousal", args=[slug]),
         "arousal how": reverse("people:arousal_methodology", args=[slug]),
-        "upload": reverse("people:upload", args=[slug]),
+        "upload": reverse("people:import_data", args=[slug]),
     }
 
 
 def post_urls(slug):
-    return [reverse("people:upload", args=[slug]),
-            reverse("people:upload_confirm", args=[slug]),
-            reverse("people:upload_cancel", args=[slug])]
+    return [reverse("people:import_data", args=[slug]),
+            reverse("people:import_confirm", args=[slug]),
+            reverse("people:import_cancel", args=[slug])]
 
 
 class AccessCase(TestCase):
@@ -150,7 +150,7 @@ class OwnerTests(AccessCase):
 
     def test_an_owner_cannot_confirm_another_profiles_parked_upload(self):
         response = self.as_user(self.user_a).post(
-            reverse("people:upload_confirm", args=["beta"]), {"token": "a" * 24})
+            reverse("people:import_confirm", args=["beta"]), {"token": "a" * 24})
         self.assertEqual(response.status_code, 404)
         self.assertEqual(HeartRateDay.objects.filter(person=self.beta).count(), 2)
 

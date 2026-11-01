@@ -109,11 +109,9 @@ class EmotiBitStubTests(SimpleTestCase):
     def test_parsing_raises_a_clear_not_implemented_message(self):
         with self.assertRaises(SourceNotImplemented) as ctx:
             get_adapter("emotibit").parse_file(SourceFile("x.csv", b"1,2,3"))
-        message = str(ctx.exception)
-        self.assertIn("not implemented", message)
-        self.assertIn("awaiting a sample export", message)
-        self.assertIn("mid-project presentation", message)
-
+        self.assertEqual(str(ctx.exception),
+                         "EmotiBit import is not available yet: it needs a sample "
+                         "export from Rahil.")
     def test_the_stub_documents_what_is_needed(self):
         import people.sources.emotibit as module
         for need in ("heart rate", "sampling rate", "timestamp format",

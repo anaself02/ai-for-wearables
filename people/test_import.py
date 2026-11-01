@@ -17,6 +17,8 @@ from people.test_views import make_person
 from people.testing import hr_csv_bytes, utc_day_file, StaffTestCase
 
 NOTICE = "Model trained on WESAD only; uploaded data is only scored."
+EMOTIBIT = ("EmotiBit import is not available yet: it needs a sample export from "
+            "Rahil.")
 
 
 def upload_file(day, **kwargs):
@@ -44,39 +46,44 @@ class SpoolCase(StaffTestCase):
                 if os.path.isdir(os.path.join(self._tmp.name, d))]
 
     def validate(self, slug, files):
-        return self.client.post(reverse("people:upload", args=[slug]), {"files": files})
+        return self.client.post(reverse("people:import_data", args=[slug]), {"files": files})
 
     def token_of(self, response):
         return re.search(r'name="token" value="([^"]+)"',
                          response.content.decode()).group(1)
 
     def confirm(self, slug, token, **extra):
-        return self.client.post(reverse("people:upload_confirm", args=[slug]),
+        return self.client.post(reverse("people:import_confirm", args=[slug]),
                                 {"token": token, **extra})
 
 
 class FormTests(SpoolCase):
-    def test_the_form_says_models_are_wesad_only_and_other_files_are_not_read(self):
-        response = self.client.get(reverse("people:upload", args=["anas"]))
-        self.assertContains(response, NOTICE)
-        self.assertContains(response, 'type="file"')
-        self.assertContains(response, "skipped without being read")
-        self.assertContains(response, "Fitbit Air")
-
-    def test_rahils_page_explains_it_cannot_load_yet_and_offers_no_form(self):
-        response = self.client.get(reverse("people:upload", args=["rahil"]))
-        self.assertContains(response, "not implemented")
-        self.assertContains(response, "awaiting a sample export")
-        self.assertNotContains(response, 'type="file"')
-
+    def test_the_form_says_models_are_wesad_only_and_how_files_are_accepted(self):
+        response = self.client.get(reverse("people:import_data", args=["anas"]))
+        html = " ".join(response.content.decode().split())
+        self.assertIn(NOTICE, html)
+        self.assertIn('type="file"', html)
+        self.assertIn("accepted by its header", html)
+        self.assertIn("without being opened", html)
+        self.assertIn("beats per minute", html)
+        self.assertIn("Fitbit Air", html)
+        self.assertIn(">Import data<", html)
+    def test_rahils_page_has_the_form_the_message_and_what_is_needed(self):
+        response = self.client.get(reverse("people:import_data", args=["rahil"]))
+        html = " ".join(response.content.decode().split())
+        self.assertIn('type="file"', html)
+        self.assertIn(EMOTIBIT, html)
+        for need in ("file layout", "whether heart rate is a signal", "raw PPG",
+                     "sampling rate", "timestamp format", "timezone", "units"):
+            self.assertIn(need.lower(), html.lower(), need)
     def test_posting_nothing_is_a_plain_message(self):
-        response = self.client.post(reverse("people:upload", args=["anas"]), {})
+        response = self.client.post(reverse("people:import_data", args=["anas"]), {})
         self.assertContains(response, "Choose at least one file.")
 
     def test_the_upload_tab_is_in_the_bar(self):
         bar = re.search(r'<header class="topbar">.*?</header>',
                         self.client.get("/p/anas/").content.decode(), re.S).group(0)
-        self.assertIn(reverse("people:upload", args=["anas"]), bar)
+        self.assertIn(reverse("people:import_data", args=["anas"]), bar)
 
 
 class ValidateThenConfirmTests(SpoolCase):
@@ -100,7 +107,7 @@ class ValidateThenConfirmTests(SpoolCase):
     def test_confirming_stores_the_rows_and_clears_the_spool(self):
         files = [upload_file(date(2026, 7, 15)), upload_file(date(2026, 7, 16))]
         token = self.token_of(self.validate("anas", files))
-        response = self.client.post(reverse("people:upload_confirm", args=["anas"]),
+        response = self.client.post(reverse("people:import_confirm", args=["anas"]),
                                     {"token": token}, follow=True)
         self.assertEqual(response.redirect_chain, [("/p/anas/", 302)])
         anas = Person.objects.get(slug="anas")
@@ -127,7 +134,7 @@ class ValidateThenConfirmTests(SpoolCase):
 
     def test_cancel_discards_the_parked_files(self):
         token = self.token_of(self.validate("anas", [upload_file(date(2026, 7, 15))]))
-        self.client.post(reverse("people:upload_cancel", args=["anas"]), {"token": token})
+        self.client.post(reverse("people:import_cancel", args=["anas"]), {"token": token})
         self.assertEqual(self.spool_dirs(), [])
         self.assertEqual(HeartRateDay.objects.count(), 0)
 
@@ -157,21 +164,20 @@ class BadInputTests(SpoolCase):
         self.assertNotIn('name="token"', response.content.decode())
         self.assertEqual(HeartRateDay.objects.count(), 0)
 
-    def test_files_that_are_not_heart_rate_files_are_skipped_unread(self):
-        decoys = [SimpleUploadedFile("user_profile.csv", b"DECOY"),
-                  SimpleUploadedFile("Devices.csv", b"DECOY"),
-                  SimpleUploadedFile("patient.xlsx", b"DECOY")]
+    def test_unsupported_file_types_are_skipped_without_being_read(self):
+        decoys = [SimpleUploadedFile("notes.txt", b"DECOY"),
+                  SimpleUploadedFile("profile.json", b"DECOY"),
+                  SimpleUploadedFile("scan.pdf", b"DECOY")]
         response = self.validate("anas", [upload_file(date(2026, 7, 16))] + decoys)
         html = response.content.decode()
-        self.assertIn("user_profile.csv", html)
+        self.assertIn("notes.txt", html)
         self.assertIn("Skipped without being read", html)
+        self.assertEqual(response.context["report"].skipped_other, 3)
         self.confirm("anas", self.token_of(response))
         self.assertEqual(Recording.objects.count(), 1)
-
-    def test_only_unaccepted_files_gives_a_plain_refusal(self):
-        response = self.validate("anas", [SimpleUploadedFile("user_profile.csv", b"x")])
+    def test_only_unsupported_files_gives_a_plain_refusal(self):
+        response = self.validate("anas", [SimpleUploadedFile("notes.txt", b"x")])
         self.assertContains(response, "reader accepts")
-
     def test_a_broken_zip_is_a_plain_message(self):
         response = self.validate("anas", [SimpleUploadedFile("export.zip", b"not a zip")])
         self.assertContains(response, "not a valid zip")
@@ -182,15 +188,16 @@ class BadInputTests(SpoolCase):
         self.assertContains(response, "only the Heart Rate folder")
         self.assertEqual(HeartRateDay.objects.count(), 0)
 
-    def test_rahil_cannot_upload_and_nothing_is_stored(self):
+    def test_rahil_cannot_upload_and_nothing_is_saved(self):
         response = self.validate("rahil", [upload_file(date(2026, 7, 16))])
-        html = response.content.decode()
-        self.assertIn("Cannot load", html)
-        self.assertIn("awaiting a sample export", html)
+        html = " ".join(response.content.decode().split())
+        self.assertIn(EMOTIBIT, html)
+        self.assertIn("Nothing was read and nothing was saved", html)
+        self.assertIn("raw PPG", html)
         self.assertNotIn('name="token"', html)
         self.assertEqual(HeartRateDay.objects.count(), 0)
-
-
+        self.assertEqual(Recording.objects.count(), 0)
+        self.assertEqual(self.spool_dirs(), [])
 class ZipTests(SpoolCase):
     def zip_upload(self, members):
         buffer = io.BytesIO()

@@ -34,9 +34,12 @@ from django.db import transaction
 from .models import SECONDS_PER_DAY, HeartRateDay, Person, Recording
 from .sources import SourceError, SourceFile, SourceNotImplemented, get_adapter
 
-#: Guards for zip uploads. The Heart Rate folder of a real export is ~110 MB.
-MAX_ZIP_MEMBERS_READ = 2000
-MAX_UNCOMPRESSED_BYTES = 600 * 1024 * 1024
+#: Guards for zip uploads. The Heart Rate folder of a real export is ~100 daily files
+#: and ~110 MB. A zip is read in memory, never extracted to disk.
+MAX_ZIP_ENTRIES = 5000                      # names in the archive, read or not
+MAX_ZIP_MEMBERS_READ = 400                  # files actually read
+MAX_UNCOMPRESSED_BYTES = 600 * 1024 * 1024  # total of the members read
+MAX_MEMBER_BYTES = 50 * 1024 * 1024         # any one file
 
 
 # ---------------------------------------------------------------------------
@@ -79,7 +82,13 @@ def files_from_zip(adapter, data):
 
     accepted, skipped, total = [], 0, 0
     with archive:
-        for info in archive.infolist():
+        entries = archive.infolist()
+        if len(entries) > MAX_ZIP_ENTRIES:
+            raise SourceError(
+                "That zip holds too many files ({}). Upload only the Heart Rate folder "
+                "(the heart_rate_YYYY-MM-DD.csv files), not the whole export."
+                .format(len(entries)))
+        for info in entries:
             if info.is_dir():
                 continue
             name = os.path.basename(info.filename.replace("\\", "/"))
@@ -87,7 +96,8 @@ def files_from_zip(adapter, data):
                 skipped += 1
                 continue
             total += info.file_size
-            if len(accepted) >= MAX_ZIP_MEMBERS_READ or total > MAX_UNCOMPRESSED_BYTES:
+            if (len(accepted) >= MAX_ZIP_MEMBERS_READ or total > MAX_UNCOMPRESSED_BYTES
+                    or info.file_size > MAX_MEMBER_BYTES):
                 raise SourceError(
                     "That zip is too large to load here. Upload only the Heart "
                     "Rate folder (the heart_rate_YYYY-MM-DD.csv files), not the "
@@ -165,7 +175,7 @@ class IngestReport:
 class Plan:
     person: Person
     report: IngestReport
-    loads: list = field(default_factory=list)   # [(sha256, SourceFile, ParsedFile)]
+    loads: list = field(default_factory=list)   # [(sha256, file name, ParsedFile)]
 
 
 def build_plan(person, files, skipped_other=0):
@@ -213,9 +223,46 @@ def build_plan(person, files, skipped_other=0):
         report.files.append(FileOutcome(
             source_file.name, "will load", "; ".join(extra), r.rows,
             r.first_utc, r.last_utc))
-        plan.loads.append((digest, source_file, parsed))
+        plan.loads.append((digest, source_file.name, parsed))
         for name, count in parsed.sources.items():
             report.devices[name] = report.devices.get(name, 0) + count
+
+    _summarise(plan, person)
+    return plan
+
+
+def plan_from_parsed(person, items, skipped_other=0):
+    """Rebuild a Plan from files that were parsed earlier, without their bytes.
+
+    `items` is [(sha256, file name, ParsedFile)]. The uploaded files are not kept
+    after they are parsed; only these parsed readings wait for the confirmation.
+    Duplicates are checked again NOW against what is stored, in case something was
+    loaded in the meantime.
+    """
+    adapter = get_adapter(person.adapter_key)
+    report = IngestReport(person_name=person.display_name,
+                          device_label=person.device_label,
+                          timezone_assumed=person.timezone,
+                          skipped_other=skipped_other)
+    plan = Plan(person=person, report=report)
+    if not adapter.implemented:
+        report.fatal = adapter.not_implemented_message
+        return plan
+
+    known = set(person.recordings.values_list("sha256", flat=True))
+    for digest, name, parsed in items:
+        if digest in known:
+            report.files.append(FileOutcome(
+                name, "already loaded",
+                "same content (SHA-256) as a file already loaded for {}".format(
+                    person.display_name)))
+            continue
+        r = parsed.report
+        report.files.append(FileOutcome(name, "will load", "", r.rows,
+                                        r.first_utc, r.last_utc))
+        plan.loads.append((digest, name, parsed))
+        for source, count in parsed.sources.items():
+            report.devices[source] = report.devices.get(source, 0) + count
 
     _summarise(plan, person)
     return plan
@@ -341,10 +388,10 @@ def commit_plan(plan):
             result.rows_loaded += int(len(epochs)) - (
                 0 if existing is None else existing.n)
 
-        for digest, source_file, parsed in plan.loads:
+        for digest, file_name, parsed in plan.loads:
             r = parsed.report
             Recording.objects.create(
-                person=person, original_filename=source_file.name, sha256=digest,
+                person=person, original_filename=file_name, sha256=digest,
                 row_count=r.rows, first_utc=r.first_utc, last_utc=r.last_utc,
                 device_seen=", ".join(parsed.source_names)[:255],
                 timezone_assumed=person.timezone)

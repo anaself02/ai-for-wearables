@@ -65,10 +65,10 @@
           <a class="tab" href="{% url 'people:raw_index' person.slug %}">Raw rows</a>
         {% endif %}
 
-        {% if here == "upload" or here == "upload_confirm" %}
-          <a class="tab is-current" href="{% url 'people:upload' person.slug %}" aria-current="page">Upload</a>
+        {% if here == "import_data" or here == "import_confirm" %}
+          <a class="tab is-current" href="{% url 'people:import_data' person.slug %}" aria-current="page">Import data</a>
         {% else %}
-          <a class="tab" href="{% url 'people:upload' person.slug %}">Upload</a>
+          <a class="tab" href="{% url 'people:import_data' person.slug %}">Import data</a>
         {% endif %}
       </nav>
     {% endwith %}

@@ -2,7 +2,7 @@ from datetime import date
 
 from django.urls import path, register_converter
 
-from . import views, views_upload
+from . import views, views_import
 
 
 class DateConverter:
@@ -30,11 +30,11 @@ urlpatterns = [
     path("p/<slug:slug>/arousal/", views.arousal_view, name="arousal"),
     path("p/<slug:slug>/arousal/how-this-works/", views.arousal_methodology,
          name="arousal_methodology"),
-    path("p/<slug:slug>/upload/", views_upload.upload, name="upload"),
-    path("p/<slug:slug>/upload/confirm/", views_upload.upload_confirm,
-         name="upload_confirm"),
-    path("p/<slug:slug>/upload/cancel/", views_upload.upload_cancel,
-         name="upload_cancel"),
+    path("p/<slug:slug>/import/", views_import.import_data, name="import_data"),
+    path("p/<slug:slug>/import/confirm/", views_import.import_confirm,
+         name="import_confirm"),
+    path("p/<slug:slug>/import/cancel/", views_import.import_cancel,
+         name="import_cancel"),
     path("p/<slug:slug>/raw/", views.raw_index, name="raw_index"),
     path("p/<slug:slug>/raw/<isodate:day>/", views.raw_day, name="raw_day"),
 ]

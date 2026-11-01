@@ -171,13 +171,14 @@ class EmotiBitTests(TestCase):
     def test_rahils_upload_is_refused_up_front_and_nothing_is_stored(self):
         rahil = Person.objects.get(slug="rahil")
         plan = ingest.build_plan(rahil, source_files([date(2026, 7, 16)]))
-        self.assertIn("not implemented", plan.report.fatal)
-        self.assertIn("awaiting a sample export", plan.report.refusal())
+        message = ("EmotiBit import is not available yet: it needs a sample export "
+                   "from Rahil.")
+        self.assertEqual(plan.report.fatal, message)
+        self.assertEqual(plan.report.refusal(), message)
         with self.assertRaises(SourceError):
             ingest.commit_plan(plan)
         self.assertEqual(HeartRateDay.objects.count(), 0)
-
-
+        self.assertEqual(Recording.objects.count(), 0)
 class ZipTests(SimpleTestCase):
     def make_zip(self, members):
         buffer = io.BytesIO()
