@@ -406,9 +406,9 @@ def ibi_filter_section(summaries, table):
     lines.append("All pre-fix outputs - the feature table, both models' "
                  "scores, the confusion matrices and the previous version of "
                  "this file - are preserved under "
-                 "`results/{}/`. This project is not under version control, "
-                 "so they are kept as files rather than as "
-                 "history.".format(ARCHIVE_DIRNAME))
+                 "`results/{}/`. They are also tracked in git; they are "
+                 "kept as plain files so the before/after comparison can be "
+                 "read without checking out an old commit.".format(ARCHIVE_DIRNAME))
     lines.append("")
 
     return lines

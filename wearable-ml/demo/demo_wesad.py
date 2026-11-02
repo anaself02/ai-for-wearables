@@ -7,7 +7,7 @@ feature table (results/features.csv), for a 3-class and a binary task.
 Everything here learns from WESAD features only. Nothing is written to disk.
 
 Hyperparameters are the repo's defaults, taken from scripts/03_train_model.py
-so there is a single definition. They are NOT tuned here; tuning is Stage 2.
+so there is a single definition. They are NOT tuned here; the tuned, 5-seed nested evaluation is in eval/ (PRE_DECLARED.md Amendment 4).
 """
 
 import importlib

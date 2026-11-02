@@ -1,8 +1,8 @@
 # eval/ - two models under one protocol (design)
 
-Written 2026-11-01 (Part 1: code and tests only, no experiment run). The frozen
-choices live in `config.py`; the draft Amendment 4 restates them for
-`PRE_DECLARED.md`. No `eval/DESIGN.md` existed before this file.
+Written 2026-11-01, before the first nested run. The frozen choices live in
+`config.py`; Amendment 4 in `PRE_DECLARED.md` restates them and was applied
+before the run. No `eval/DESIGN.md` existed before this file.
 
 ## Input (audited read-only, reused as-is, never rebuilt)
 
@@ -72,7 +72,7 @@ predictions, with default hyperparameters. This protocol reports the MEAN of
 per-subject macro-F1 with tuned hyperparameters, so its numbers are not the
 same quantity; the pooled value is also written for comparison.
 
-## Outputs (Part 2)
+## Outputs
 
 `folds.json`, `manifest.json` (versions, seeds, grids, sha256 of the feature
 table and of every eval/*.py), `EXPERIMENTS.md` (every run, failures

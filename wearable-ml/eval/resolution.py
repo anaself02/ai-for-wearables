@@ -1,4 +1,4 @@
-"""Heart-rate input resolution (Stage 2D, DRAFT Amendment 5).
+"""Heart-rate input resolution (Stage 2D, Amendment 5 of PRE_DECLARED.md).
 
 R1  = the native beat-level HR series, features exactly as in results/features.csv
       (HR_slope is bpm per BEAT). Used only for the parity check.
@@ -257,6 +257,12 @@ def parity(rows, features_csv=config.FEATURES, atol=PARITY_ATOL):
 
 
 def write_all(say=print, wesad_dir=None):
+    """Rebuild R1, R1s and R2 from raw WESAD, check parity and write the tables.
+
+    Inputs: a progress callback and the WESAD folder. Output: the parity dict;
+    files out/resolution/windows_R1s.csv, windows_R2.csv and parity.json.
+    Randomness: none.
+    """
     rows = build_all(wesad_dir=wesad_dir or WESAD_DIR, say=say)
     r1s, r2, dropped = tables(rows)
     result = parity(rows)

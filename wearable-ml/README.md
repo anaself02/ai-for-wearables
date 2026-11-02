@@ -1,152 +1,130 @@
 # wearable-ml
 
-Stress / affect classification from **wrist-worn sensor data**, trained on the
-WESAD dataset. The pipeline compares two feature sets:
+**Does a stress classifier trained on WESAD transfer to a consumer wrist wearable that reports only heart rate?**
+SVM, random forest and MLP are trained on 5 heart-rate features (60 s windows, 30 s step) from 15 WESAD
+subjects with leave-one-subject-out validation. Team: Anas El Fali and Rahil Shah, course COEN 6322 / 498.
+The protocol was pre-declared in [`PRE_DECLARED.md`](PRE_DECLARED.md) before the results existed.
 
-| Feature set | Features | Represents |
-|---|---|---|
-| `full` | 40 | Research wristband (Empatica E4): EDA, skin temperature, PPG, accelerometer, heart rate |
-| `hr_only` | 5 | Consumer wearable (Fitbit-class): heart rate only |
+## Headline results
 
-Headline result (SVM, leave-one-subject-out cross-validation, 3 classes:
-baseline / stress / amusement):
+Binary task (stress vs non-stress): mean per-subject macro-F1 over 15 subjects, 5 seeds averaged first,
+95% bootstrap CI over subjects.
 
-| Feature set | Accuracy | Macro-F1 |
-|---|---|---|
-| `full` | 0.763 | **0.717** |
-| `hr_only` | 0.549 | **0.499** |
+| model | macro-F1 [95% CI] |
+|---|---|
+| majority class | 0.413 [0.411, 0.415] |
+| HR_mean threshold | 0.689 [0.594, 0.778] |
+| SVM | 0.731 [0.639, 0.818] |
+| random forest | 0.747 [0.669, 0.826] |
+| MLP | 0.760 [0.679, 0.833] |
 
-Full write-up, figures and per-subject scores: [RESULTS.md](RESULTS.md).
+Source: `eval/results/summary_binary.csv` (rows `metric = macro_f1`).
 
----
+Random forest loses about 0.031 macro-F1 at 3 s resolution (CI [-0.046, -0.016]); SVM and MLP are not clearly
+affected. We name no winner among the models (source: `eval/out/report_facts.md` section 6, from `eval/results/resolution/interaction.csv`).
 
-## 1. Get the dataset
-
-The raw WESAD data (~17 GB) is **not included in this repository**. It is
-third-party research data released under its own licence, and it is far too
-large for git. Download it yourself:
-
-- **Kaggle mirror (used for this project):**
-  https://www.kaggle.com/datasets/orvile/wesad-wearable-stress-affect-detection-dataset
-- Original source (UCI Machine Learning Repository):
-  https://archive.ics.uci.edu/dataset/465/wesad+wearable+stress+and+affect+detection
-
-### Option A: browser
-
-1. Open the Kaggle link above and sign in.
-2. Click **Download**. You get a zip archive.
-3. Extract it (see the folder layout below).
-
-### Option B: Kaggle CLI
-
-```bash
-pip install kaggle
-# Put your API token at ~/.kaggle/kaggle.json
-# (Kaggle -> Settings -> API -> Create New Token)
-kaggle datasets download -d orvile/wesad-wearable-stress-affect-detection-dataset -p data/
-cd data && unzip wesad-wearable-stress-affect-detection-dataset.zip
-```
-
-### Expected folder layout
-
-The scripts read from `wearable-ml/data/WESAD/` (set in
-[`scripts/project_config.py`](scripts/project_config.py)). After extracting,
-move the folders around if you need to so the layout matches this:
+## Repository layout
 
 ```
 wearable-ml/
-└── data/
-    └── WESAD/
-        ├── wesad_readme.pdf
-        ├── S2/
-        │   ├── S2.pkl          <- the only file the pipeline needs
-        │   ├── S2_E4_Data/
-        │   ├── S2_quest.csv
-        │   ├── S2_readme.txt
-        │   └── S2_respiban.txt
-        ├── S3/
-        ├── ...
-        └── S17/
+├── PRE_DECLARED.md   pre-declaration, append-only
+├── RESULTS.md        first WESAD results (3-class, default hyperparameters)
+├── scripts/          data prep: 01 inspect, 02 features, 03 train, 04 evaluate, 05 personal data
+├── models/           shared feature code, saved SVMs, model card
+├── results/          features.csv (the input of eval/) and outputs of scripts 02-04
+├── eval/             SVM / RF / MLP nested evaluation, interaction stage, error analysis, tests
+├── act/              ACT: LLM feedback vs deterministic template (rubric, runs, tests)
+├── demo/             demo: LOSO tables and one scored Fitbit day
+├── docs/             ARCHITECTURE.md
+├── reproduce.ps1 / reproduce.sh
+└── requirements.txt
 ```
 
-There are 15 subjects: S2–S17. **S1 and S12 do not exist.** The dataset
-authors removed them because of sensor malfunction, so their absence is
-expected.
+## Setup
 
-`data/` is listed in `.gitignore`, so the dataset will never be committed by
-accident.
+Python 3.12 (results were produced with 3.12.10). Windows PowerShell:
 
----
-
-## 2. Set up the environment
-
-Python 3.12.
-
-```bash
-cd wearable-ml
+```powershell
 python -m venv .venv
-
-# Windows
-.venv\Scripts\pip install -r requirements.txt
-# macOS / Linux
-.venv/bin/pip install -r requirements.txt
+.venv\Scripts\python -m pip install -r requirements.txt
 ```
 
-The Django / Google packages at the bottom of `requirements.txt` are only
-needed for step 5 (personal data). Steps 1–4 only need numpy, pandas,
-scikit-learn, scipy, matplotlib and joblib.
+Linux or macOS:
 
----
-
-## 3. Run the pipeline
-
-Run the scripts in order, from inside `wearable-ml/` with the venv activated:
-
-| Step | Command | What it does | Output |
-|---|---|---|---|
-| 1 | `python scripts/01_load_and_inspect.py [S2]` | Inspects one subject's `.pkl`: structure, sampling rates, label timeline. Writes nothing. | console only |
-| 2 | `python scripts/02_feature_extraction.py` | Slides 60 s windows (30 s step) over every subject and computes 40 features per window | `results/features.csv` |
-| 3 | `python scripts/03_train_model.py` | Random Forest + SVM, leave-one-subject-out CV, on both feature sets. Saves the SVMs. | `results/cv_predictions_*.csv`, `results/scores_*.json`, `models/*.joblib` |
-| 4 | `python scripts/04_evaluate.py` | Confusion matrices, per-subject F1 plots, classification reports | `results/*.png`, `results/*.txt`, `RESULTS.md` |
-| 5 | `python scripts/05_apply_to_personal_data.py inspect` then `... predict` | *Optional.* Runs the heart-rate-only model on your own heart-rate data from Google Health | `results/personal/` (git-ignored) |
-
-`results/features.csv` and the trained models are already committed. To
-explore the results or retrain without downloading 17 GB, skip steps 1–2 and
-start at step 3.
-
-### Step 5: personal data
-
-Script 05 reuses the OAuth credentials and Google Health API client from the
-sibling [`health dashboard`](../health%20dashboard/) project, so that project
-must be set up first (its `.env`, and a Google account connected through the
-dashboard). Its output is a **pipeline demo, not a validated stress detector**:
-WESAD's lab-induced stress does not transfer cleanly to everyday heart rate.
-The docstring at the top of the script explains why.
-
----
-
-## Project layout
-
-```
-wearable-ml/
-├── data/              WESAD dataset (download yourself, git-ignored)
-├── models/            trained SVMs + feature configs + model card
-├── results/           features table, CV predictions, plots, reports
-├── scripts/
-│   ├── project_config.py   all paths and constants in one place
-│   ├── features.py         feature definitions (full / hr_only)
-│   └── 01_ ... 05_         pipeline steps
-├── requirements.txt
-└── RESULTS.md         generated report
+```bash
+python3.12 -m venv .venv
+.venv/bin/python -m pip install -r requirements.txt
 ```
 
----
+Run the commands below from `wearable-ml/` with the venv active (`.venv\Scripts\Activate.ps1` or `source .venv/bin/activate`).
 
-## Citation
+## Data
 
-If you use WESAD, cite the original paper:
+- **WESAD**, Kaggle mirror: <https://www.kaggle.com/datasets/orvile/wesad-wearable-stress-affect-detection-dataset>.
+  Place it so that `data/WESAD/S2/S2.pkl` ... `data/WESAD/S17/S17.pkl` exist (15 subjects; S1 and S12 do not exist).
+  `data/` is git-ignored. Only scripts 01-02 and `eval.interaction parity` read these pickles; the main
+  evaluation needs only `results/features.csv`, which is in the repo.
+- **Private, not in the repo:** personal Fitbit data and the dashboard sessions (labelled sessions live in the separate
+  `../health dashboard/` project).
+- **Check `results/features.csv`:** the hash ignores line endings. `PRE_DECLARED.md` Amendment 6 gives both values:
+  `d0d72f86b8a66c09ff0d3258bbba1fbf480f3f92cd85e606af0289d0aaaf2c36` (CRLF, Windows) and
+  `167f323da96a6e3c034c32f8cf05c8d506084c0dbf9518c36cd7a7341fab207a` (CRLF read as LF, pinned in `eval/config.py`).
 
-> Philip Schmidt, Attila Reiss, Robert Duerichen, Claus Marberger and Kristof
-> Van Laerhoven. 2018. *Introducing WESAD, a Multimodal Dataset for Wearable
-> Stress and Affect Detection.* In Proceedings of the 20th ACM International
-> Conference on Multimodal Interaction (ICMI '18).
+  ```bash
+  python -c "from eval import config, data; print(data.features_sha256() == config.FEATURES_SHA256)"   # expect True
+  ```
+
+## Reproduce
+
+Run times are from the authors' Windows machine (`eval/out/report_facts.md`, sections 4 and 6).
+
+```bash
+python scripts/02_feature_extraction.py      # optional, not run by reproduce.ps1 or reproduce.sh; needs raw WESAD -> results/features.csv (hash check must still pass)
+python -m eval.splits --check                # compare splits with eval/folds.json -> eval/results/splits/
+python -m eval.run_eval plan                 # prints the plan
+python -m eval.run_eval run --go             # ~69 min (4152 s) -> eval/results/{summary,differences,folds}_{binary,three}.csv,
+                                             #   pooled_macro_f1.csv, failures.csv, eval/folds.json, eval/manifest.json, eval/EXPERIMENTS.md
+python -m eval.tables                        # -> eval/RESULTS.md
+python -m eval.interaction parity            # needs raw WESAD -> eval/out/resolution/parity.json
+python -m eval.interaction plan
+python -m eval.interaction run --go          # ~52 min (3103 s) -> eval/results/resolution/*.csv, rankings.json, eval/resolution_manifest.json
+python -m eval.tables                        # adds the interaction section to eval/RESULTS.md
+python -m eval.errors --predictions "eval/out/predictions/binary_svm_seed*.csv" --out eval/results/errors_tuned/binary_svm
+```
+
+The last line is one of three error-analysis calls; `binary_mlp` and `three_svm` use the same flags with their own prediction glob and `--out`. `reproduce.ps1` / `reproduce.sh` run the steps from `splits` onward in this order, plus setup, test and demo (the optional `scripts/02` step is not in them). They print only by default; `-Run` / `--run` executes and `-Long` / `--long` adds the long steps.
+
+## Tests
+
+```bash
+python -m unittest discover -s eval/tests -t .
+python -m unittest discover -s act/tests -t .
+python -m unittest discover -s demo/tests
+```
+
+## Pre-declaration
+
+`PRE_DECLARED.md` is append-only: earlier text is never edited.
+
+- Amendment 1: for the binary task the 60% dominance ("degenerate") flag is dropped and the out-of-distribution flag is the only warning; the 3-class rule is unchanged.
+- Amendment 2: a headline personal score needs at least 30 labelled windows per class; otherwise only the counts are shown, with a statement that there is not enough labelled data.
+- Amendment 3: ACT, LLM feedback vs template.
+- Amendment 4: SVM, RF, MLP under one nested leave-one-subject-out protocol.
+- Amendment 5: model x heart-rate-resolution interaction.
+- Amendment 6: feature-table hash made line-ending independent (no data change).
+
+## Demo and ACT
+
+- Demo: `python demo/run_demo.py` (options: `--takeout`, `--day`, `--tz`, `--with-rf`, `--mask-date`, `--no-personal`, `--save`).
+- A headline personal score is shown only with at least 30 labelled windows per class (Amendment 2); below that only the window counts are shown, with a statement that there is not enough labelled data.
+- All 197 LLM calls so far used synthetic inputs (`eval/out/report_facts.md` section 8).
+- API key: `act/llm.py` reads `GEMINI_API_KEY` from `wearable-ml/.env` (git-ignored; never commit it). A process environment variable is not read.
+
+## Limitations
+
+- 15 subjects: wide CIs.
+- WESAD stress is lab-induced, not everyday stress.
+- The MLP did not converge: it hit `max_iter=300` in nearly every fit (4196 of 4200 inner fits in the interaction run).
+- The 3 s condition is a simulation (beat-level HR averaged into 3 s bins), not a device.
+- The error analysis is exploratory.
+- No multiplicity adjustment on CIs.

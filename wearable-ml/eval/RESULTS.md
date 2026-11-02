@@ -395,3 +395,55 @@ MLP convergence (max_iter=300, no early stopping): inner fits that ran to max_it
 | binary | 2100 | 2100 | 75 | 75 |
 | three | 2100 | 2100 | 75 | 75 |
 
+## Interaction: model x heart-rate resolution (binary, Amendment 5)
+
+Protocol: `PRE_DECLARED.md` Amendment 5 (frozen before any interaction result). R1s = beat-level HR, R2 = the same beats averaged into 3.0 s bins (a controlled change of time resolution, not a device model), R1stoR2 = trained on R1s and tested on R2. Same 1012 windows in every condition; per-subject macro-F1, 5 seeds averaged first; 95% paired bootstrap CIs over the 15 subjects, **not adjusted for multiplicity**. Source: `results/resolution/*.csv`.
+
+### Macro-F1 per subject by condition (mean [95% CI])
+
+| model | R1s | R2 | R1stoR2 |
+|---|---|---|---|
+| majority | 0.412 [0.410, 0.414] | 0.412 [0.410, 0.414] | 0.412 [0.410, 0.414] |
+| threshold | 0.694 [0.598, 0.783] | 0.681 [0.590, 0.769] | 0.659 [0.577, 0.742] |
+| svm | 0.729 [0.639, 0.814] | 0.749 [0.659, 0.832] | 0.712 [0.626, 0.800] |
+| rf | 0.755 [0.679, 0.832] | 0.724 [0.643, 0.804] | 0.661 [0.581, 0.745] |
+| mlp | 0.752 [0.672, 0.825] | 0.761 [0.669, 0.842] | 0.737 [0.659, 0.814] |
+
+### Interaction contrasts (the pre-declared test; difference of differences)
+
+| contrast | difference at R1s | difference at R2 | contrast (95% CI) | CI excludes 0 |
+|---|---|---|---|---|
+| (mlp-svm at R1s) - (mlp-svm at R2) | +0.023 | +0.011 | +0.012 [-0.010, +0.034] | no |
+| (mlp-rf at R1s) - (mlp-rf at R2) | -0.003 | +0.037 | -0.041 [-0.073, -0.009] | yes |
+| (rf-svm at R1s) - (rf-svm at R2) | +0.026 | -0.026 | +0.052 [+0.029, +0.073] | yes |
+
+### Resolution effect (R2 minus R1s) and transfer (R1stoR2 minus R1s / R2)
+
+| contrast | mean difference [95% CI] | CI excludes 0 |
+|---|---|---|
+| majority at R2 - majority at R1s | +0.000 [+0.000, +0.000] | no |
+| majority at R1stoR2 - majority at R1s | +0.000 [+0.000, +0.000] | no |
+| majority at R1stoR2 - majority at R2 | +0.000 [+0.000, +0.000] | no |
+| threshold at R2 - threshold at R1s | -0.013 [-0.032, +0.004] | no |
+| threshold at R1stoR2 - threshold at R1s | -0.035 [-0.072, +0.001] | no |
+| threshold at R1stoR2 - threshold at R2 | -0.022 [-0.057, +0.010] | no |
+| svm at R2 - svm at R1s | +0.021 [+0.001, +0.044] | yes |
+| svm at R1stoR2 - svm at R1s | -0.017 [-0.057, +0.022] | no |
+| svm at R1stoR2 - svm at R2 | -0.038 [-0.086, +0.009] | no |
+| rf at R2 - rf at R1s | -0.031 [-0.046, -0.016] | yes |
+| rf at R1stoR2 - rf at R1s | -0.094 [-0.130, -0.059] | yes |
+| rf at R1stoR2 - rf at R2 | -0.063 [-0.108, -0.017] | yes |
+| mlp at R2 - mlp at R1s | +0.009 [-0.023, +0.043] | no |
+| mlp at R1stoR2 - mlp at R1s | -0.014 [-0.049, +0.017] | no |
+| mlp at R1stoR2 - mlp at R2 | -0.024 [-0.069, +0.023] | no |
+
+### Order of the three models by mean macro-F1 (descriptive; best first)
+
+- R1s: rf > mlp > svm
+- R2: mlp > svm > rf
+- R1stoR2: mlp > svm > rf
+
+MLP convergence (max_iter=300): 4196 of 4200 inner fits ran to max_iter and 150 of 150 outer refits did not converge (`results/resolution/failures.csv`).
+
+Limits (stated in Amendment 5): 15 subjects, so the interaction test has low power; binning does not reproduce a device's smoothing; R1stoR2 also carries a shift in the feature distributions.
+

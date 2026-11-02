@@ -67,6 +67,12 @@ class HRMeanThreshold(ClassifierMixin, BaseEstimator):
         self.column = column
 
     def fit(self, X, y):
+        """Choose the HR_mean cut that maximises macro-F1 on the training rows.
+
+        Inputs: X (rows x features, HR_mean in `column`), y (labels). Output: self.
+        Sets threshold_, low_, high_, classes_. Randomness: none (ties go to the
+        lowest cut).
+        """
         y = np.asarray(y)
         x = np.asarray(X)[:, self.column]
         if self.three_class:
@@ -79,9 +85,17 @@ class HRMeanThreshold(ClassifierMixin, BaseEstimator):
         return self
 
     def decision_function(self, X):
+        """HR_mean minus the fitted cut (positive = predicted high class).
+
+        Input: X. Output: 1-d float array. Randomness: none.
+        """
         return np.asarray(X)[:, self.column] - self.threshold_
 
     def predict(self, X):
+        """Predicted class: high class where HR_mean is above the cut, else low class.
+
+        Input: X. Output: label array. Randomness: none.
+        """
         return np.where(self.decision_function(X) > 0, self.high_, self.low_)
 
 
@@ -108,6 +122,13 @@ class OversampledMLP(ClassifierMixin, BaseEstimator):
         self.max_iter = max_iter
 
     def fit(self, X, y):
+        """Oversample the minority class(es) at random to the majority count, then fit.
+
+        Inputs: X, y (the rows this fit receives only). Output: self. Seed:
+        random_state drives the oversampling draw, the row shuffle and the MLP
+        initialisation. Fixed max_iter, no early stopping; converged_ records whether
+        it stopped before max_iter.
+        """
         X, y = np.asarray(X), np.asarray(y)
         rng = np.random.default_rng(self.random_state)
         classes, counts = np.unique(y, return_counts=True)
@@ -127,9 +148,11 @@ class OversampledMLP(ClassifierMixin, BaseEstimator):
         return self
 
     def predict(self, X):
+        """Class predictions of the fitted MLP. Input: X. Output: label array. Randomness: none."""
         return self.mlp_.predict(X)
 
     def predict_proba(self, X):
+        """Class probabilities of the fitted MLP. Input: X. Output: (rows x classes) array. Randomness: none."""
         return self.mlp_.predict_proba(X)
 
 

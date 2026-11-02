@@ -3,7 +3,7 @@
     python -m eval.run_eval plan                 what would run, and how many fits
     python -m eval.run_eval benchmark            time one inner fit per model -> estimate
     python -m eval.run_eval reproduce            the Table I check (full SVM, 0.717)
-    python -m eval.run_eval run --go             the full nested run (Part 2 only)
+    python -m eval.run_eval run --go             the full nested run (long: about 1.2 h)
 
 `run` refuses without --go, and refuses if results/features.csv no longer has
 the hash recorded in config.FEATURES_SHA256. Memory: one (task, model, seed)
@@ -26,6 +26,11 @@ ALL = config.BASELINES + config.MODELS
 
 
 def fits_per_outer_fold(model):
+    """Number of model fits for one outer fold.
+
+    Input: a model name. Output: grid points x inner folds + 1 refit (1 for the
+    baselines). Randomness: none.
+    """
     grid = config.GRIDS.get(model)
     if not grid:
         return 1
@@ -36,6 +41,10 @@ def fits_per_outer_fold(model):
 
 
 def plan_counts(tasks=("binary", "three"), seeds=config.SEEDS, n_subjects=15):
+    """Total fits per model for a run.
+
+    Inputs: tasks, seeds, number of subjects. Output: {model: fits}. Randomness: none.
+    """
     out = {}
     for model in ALL:
         out[model] = fits_per_outer_fold(model) * n_subjects * len(seeds) * len(tasks)
@@ -88,6 +97,13 @@ def estimate(per_fit, n_subjects=15, seeds=config.SEEDS):
 
 
 def manifest(seeds, extra=None):
+    """Record of how a run was made.
+
+    Inputs: the seeds used and an optional dict of extra entries. Output: dict with
+    date, Python and library versions, seeds, inner folds, bootstrap settings, grids,
+    the feature-table hash (line-ending independent) and the sha256 of every
+    eval/*.py. Randomness: none.
+    """
     import numpy, pandas, scipy, sklearn
     data = {
         "date": datetime.now(timezone.utc).isoformat(),
@@ -109,6 +125,10 @@ def manifest(seeds, extra=None):
 
 
 def log_experiment(text, path=config.EXPERIMENTS):
+    """Append one entry to eval/EXPERIMENTS.md (created with a header if missing).
+
+    Inputs: the text and the file path. Output: none. Randomness: none.
+    """
     new = not os.path.exists(path)
     with open(path, "a", encoding="utf-8") as handle:
         if new:
@@ -117,6 +137,11 @@ def log_experiment(text, path=config.EXPERIMENTS):
 
 
 def write_csv(path, rows, columns=None):
+    """Write a list of row dicts as CSV.
+
+    Inputs: path, rows, optional column order (default: first-seen keys). Output:
+    none; writes nothing for an empty list. Randomness: none.
+    """
     if not rows:
         return
     if columns is None:
@@ -235,6 +260,12 @@ def run_all(tasks, seeds, models_, out_dir=config.OUT_DIR, table=None, fresh=Fal
 
 
 def write_results(fold_rows, failures, tasks, out_dir=config.EVAL_DIR, pooled=()):
+    """Write the summary, difference and fold tables of a run.
+
+    Inputs: fold rows, failure records, tasks, output folder, pooled values.
+    Output: eval/results/{summary,differences,folds,failures,pooled_macro_f1}*.csv.
+    Seed: the bootstrap uses config.BOOT_SEED (6322).
+    """
     results_dir = os.path.join(out_dir, "results")
     for task in tasks:
         rows = [r for r in fold_rows if r["task"] == task]
@@ -254,6 +285,12 @@ def write_results(fold_rows, failures, tasks, out_dir=config.EVAL_DIR, pooled=()
 
 
 def main(argv=None):
+    """Command line: plan | benchmark | reproduce | run [--go] [--fresh] [--seeds] [--tasks] [--models].
+
+    `run` refuses without --go and refuses if the feature table's hash differs from
+    config.FEATURES_SHA256. Seeds: config.SEEDS (0-4) unless --seeds is given;
+    bootstrap seed config.BOOT_SEED.
+    """
     parser = argparse.ArgumentParser(prog="python -m eval.run_eval")
     parser.add_argument("action", choices=["plan", "benchmark", "reproduce", "run"])
     parser.add_argument("--go", action="store_true", help="required for run")
@@ -287,7 +324,7 @@ def main(argv=None):
         print("estimated total: {:.0f} s ({:.1f} h), single process".format(total, total / 3600))
         return
     if not args.go:
-        raise SystemExit("run needs --go (Part 2, after the amendment is applied).")
+        raise SystemExit("run needs --go (a long run: about 1.2 h).")
     if features_sha256(config.FEATURES) != config.FEATURES_SHA256:
         raise SystemExit("results/features.csv changed since the protocol was frozen.")
     fold_rows, failures, pooled = run_all(tasks, seeds, models_, fresh=args.fresh,

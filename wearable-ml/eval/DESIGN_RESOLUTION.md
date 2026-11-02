@@ -1,6 +1,6 @@
-# Design: model x HR resolution (Stage 2D, Part 1)
+# Design: model x HR resolution (Stage 2D)
 
-Code only so far. No model has been run on R2. Protocol: Amendment 5 was applied in `PRE_DECLARED.md` on 2026-11-01, before any interaction result existed (original draft: `DRAFT_AMENDMENT_5.md`).
+Status: the interaction run is finished (2026-11-01; results in `results/resolution/`, manifest in `resolution_manifest.json`). Protocol: Amendment 5 was applied in `PRE_DECLARED.md` on 2026-11-01, before any interaction result existed (original draft: `DRAFT_AMENDMENT_5.md`).
 
 | file | role |
 |---|---|

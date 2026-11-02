@@ -1,0 +1,32 @@
+{
+ "seeds": [
+  0,
+  1,
+  2,
+  3,
+  4
+ ],
+ "inner_folds": 7,
+ "n_subjects": 15,
+ "subjects": [
+  "S2",
+  "S3",
+  "S4",
+  "S5",
+  "S6",
+  "S7",
+  "S8",
+  "S9",
+  "S10",
+  "S11",
+  "S13",
+  "S14",
+  "S15",
+  "S16",
+  "S17"
+ ],
+ "n_windows": 1015,
+ "bootstrap_seed": 6322,
+ "n_boot": 10000,
+ "features_sha256_crlf_to_lf": "167f323da96a6e3c034c32f8cf05c8d506084c0dbf9518c36cd7a7341fab207a"
+}

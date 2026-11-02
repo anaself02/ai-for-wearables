@@ -71,7 +71,7 @@ def amendment_text(masked):
 
 COMPARISON_NOTE = (
     "SVM vs rule comparison: both are single-run point estimates with NO "
-    "confidence interval (intervals over subjects are Stage 2). This demo does "
+    "confidence interval (bootstrap intervals over subjects are in eval/). This demo does "
     "not claim either one is better than the other.")
 OUT_DIR = os.path.join(DEMO_DIR, "out")
 EXPECTED_SKLEARN = "1.5.2"  # the version that wrote the saved model
@@ -178,7 +178,7 @@ def load_saved_scores(fs_name):
 def show_loso(table, with_rf):
     rule("3. LEAVE-ONE-SUBJECT-OUT (15 folds, pooled out-of-fold predictions)")
     say("Default hyperparameters, one run, NO tuning (nested tuning and 5 seeds "
-        "are Stage 2).")
+        "are in eval/, PRE_DECLARED.md Amendment 4).")
     say("The binary and 3-class tables are different problems; their macro-F1 "
         "values are not directly comparable.")
     say(COMPARISON_NOTE)

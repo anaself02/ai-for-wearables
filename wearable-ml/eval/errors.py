@@ -134,12 +134,22 @@ def attach_context(preds, features_path=config.FEATURES):
 # ---------------------------------------------------------------------------
 
 def spearman(x, y):
+    """Spearman correlation.
+
+    Inputs: two equal-length sequences. Output: (rho, p) as floats. Randomness: none.
+    """
     from scipy.stats import spearmanr
     rho, p = spearmanr(x, y)
     return float(rho), float(p)
 
 
 def per_subject(table, task):
+    """One row per subject: windows, error rate, macro-F1, resting HR, stress and
+    amusement response (change in HR_mean from baseline), median wrist motion.
+
+    Inputs: the joined table and the task ('binary' or 'three'). Output: DataFrame
+    sorted by macro-F1 (lowest first). EXPLORATORY. Randomness: none.
+    """
     from sklearn.metrics import f1_score
     import pandas as pd
 
@@ -161,6 +171,11 @@ def per_subject(table, task):
 
 
 def by_condition(table, task):
+    """Predictions by true condition and the error rate per condition.
+
+    Inputs: table, task. Output: (crosstab of true condition x predicted class,
+    error-rate table). Randomness: none.
+    """
     import pandas as pd
     names = CLASS_NAMES[task]
     counts = pd.crosstab(table["condition"], table["y_pred"].map(names))
@@ -170,6 +185,11 @@ def by_condition(table, task):
 
 
 def by_position(table, edges=(0, 2, 5, 1000)):
+    """Error rate by position inside a condition block.
+
+    Inputs: table, bucket edges (default windows 1-2, 3-5, 6+). Output: DataFrame
+    (condition, position bucket, error_rate, windows). Randomness: none.
+    """
     import pandas as pd
     labels = ["windows 1-2", "windows 3-5", "window 6+"]
     bucket = pd.cut(table["position"], list(edges), labels=labels)
@@ -178,6 +198,11 @@ def by_position(table, edges=(0, 2, 5, 1000)):
 
 
 def by_motion(table):
+    """Error rate by wrist-motion tertile (ACC_mag_std) within each condition.
+
+    Input: table. Output: (rates DataFrame, median motion per condition).
+    Motion is not a model input. Randomness: none.
+    """
     import pandas as pd
     tertile = pd.qcut(table["ACC_mag_std"], 3, labels=["low", "mid", "high"])
     rates = table.groupby(["condition", tertile], observed=True)["error"].agg(
@@ -202,6 +227,11 @@ def false_alarm_motion(table, task):
 
 
 def by_resting_hr(table, subjects):
+    """Error rate by the subject's resting-HR tertile and condition.
+
+    Inputs: table, per-subject table. Output: DataFrame (tertile x condition).
+    Randomness: none.
+    """
     import pandas as pd
     tertile = pd.qcut(subjects["resting_hr"], 3, labels=["low", "mid", "high"])
     lookup = dict(zip(subjects["subject_id"], tertile))
@@ -260,6 +290,10 @@ def _plt():
 
 
 def fig_response(subjects, path):
+    """Scatter of stress response vs per-subject macro-F1.
+
+    Inputs: per-subject table, output PNG path. Output: the PNG. Randomness: none.
+    """
     plt = _plt()
     fig, ax = plt.subplots(figsize=(5, 3.6))
     ax.scatter(subjects["stress_response"], subjects["macro_f1"], color="#3b6ea8")
@@ -276,6 +310,11 @@ def fig_response(subjects, path):
 
 
 def fig_motion(rates, path):
+    """Bar chart of error rate by motion tertile and condition.
+
+    Inputs: the rates table from by_motion, output PNG path. Output: the PNG.
+    Randomness: none.
+    """
     plt = _plt()
     conds = [c for c in CONDITIONS.values() if c in set(rates["condition"])]
     fig, ax = plt.subplots(figsize=(5, 3.4))
@@ -296,6 +335,11 @@ def fig_motion(rates, path):
 
 
 def fig_timelines(table, subjects_to_plot, path):
+    """HR_mean timelines of chosen subjects with misclassified windows circled.
+
+    Inputs: joined table, list of subject ids, output PNG path. Output: the PNG.
+    Randomness: none.
+    """
     plt = _plt()
     colours = {"baseline": "#7f7f7f", "stress": "#d62728", "amusement": "#2ca02c"}
     fig, axes = plt.subplots(len(subjects_to_plot), 1, figsize=(6.5, 2.3 * len(subjects_to_plot)),
@@ -333,6 +377,14 @@ def _md_table(frame, floatfmt="{:.3f}"):
 
 
 def run(pattern, model=None, task=None, out_dir=None, features_path=config.FEATURES):
+    """Run the whole error analysis for one model and write ERRORS.md and figures.
+
+    Inputs: prediction file or glob (eval format: one file per seed), optional
+    model and task, output folder, feature-table path. Output: (folder, results
+    dict); files ERRORS.md, per_subject.csv, windows.csv and three PNGs.
+    EXPLORATORY, not pre-declared. A window counts as wrong when it is wrong in at
+    least half of the seeds. Randomness: none (uses the seeds already in the files).
+    """
     preds, task, desc = load_predictions(pattern, model, task)
     table = attach_context(preds, features_path)
     name = os.path.splitext(os.path.basename(pattern.replace("*", "all")))[0]
@@ -402,6 +454,10 @@ def run(pattern, model=None, task=None, out_dir=None, features_path=config.FEATU
 
 
 def main(argv=None):
+    """Command line: python -m eval.errors --predictions GLOB [--model M] [--task T] [--out DIR].
+
+    Output: prints the path of ERRORS.md. Randomness: none.
+    """
     parser = argparse.ArgumentParser(prog="python -m eval.errors")
     parser.add_argument("--predictions", required=True, help="file or quoted glob")
     parser.add_argument("--model", default=None)

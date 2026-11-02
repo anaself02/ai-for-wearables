@@ -1,8 +1,8 @@
-"""Model x HR-resolution interaction (Stage 2D, DRAFT Amendment 5; binary task only).
+"""Model x HR-resolution interaction (Stage 2D, Amendment 5 of PRE_DECLARED.md; binary task only).
 
     python -m eval.interaction plan            what would run, fits, time estimate
     python -m eval.interaction parity          rebuild R1s/R2 from raw WESAD, compare R1s with features.csv
-    python -m eval.interaction run --go        the full run (only after Amendment 5 is applied and approved)
+    python -m eval.interaction run --go        the full run (Amendment 5 is applied; about 52 min at n_jobs=2)
 
 
 Conditions (per held-out subject, seeds averaged first):
@@ -66,6 +66,15 @@ def plan(seeds=config.SEEDS, models_=ALL):
 # ---------------------------------------------------------------------------
 
 def run_all(r1, r2, seeds, models_, out_dir=OUT, fresh=False, say=print, n_jobs=config.GRID_JOBS):
+    """Run every (training resolution, model, seed) of the interaction stage.
+
+    Inputs: the row-aligned R1s and R2 window tables, seeds, model names, output
+    folder (finished units are saved under partial/ and reused unless fresh=True),
+    a progress callback and the number of parallel grid fits. Output: (fold rows,
+    failure records, pooled values). R1s-trained models are scored on R1s and on R2
+    (R1stoR2); R2-trained models on R2. Seeds: each seed goes to cross.run (inner
+    folds, RF, MLP, oversampling); SVM and baselines are deterministic.
+    """
     os.makedirs(os.path.join(out_dir, "partial"), exist_ok=True)
     code = protocol_hash()
     fold_rows, failures, pooled = [], [], []
@@ -210,6 +219,11 @@ def rankings(fold_rows, metric="macro_f1"):
 
 
 def pooled_table(pooled):
+    """Pooled out-of-fold macro-F1 per condition and model (mean, min, max over seeds).
+
+    Input: list of pooled values from run_all. Output: list of row dicts.
+    Randomness: none.
+    """
     out = {}
     for p in pooled:
         out.setdefault((p["condition"], p["model"]), []).append(p["pooled_macro_f1"])
@@ -252,6 +266,12 @@ def heatmap(summary_rows, path):
 
 
 def write_results(fold_rows, failures, pooled, results_dir=RESULTS):
+    """Write the interaction-stage CSVs to eval/results/resolution/.
+
+    Inputs: fold rows, failure records, pooled values, output folder. Output:
+    summary, differences, interaction, folds, failures, pooled_macro_f1 CSVs.
+    Seed: the paired bootstrap uses config.BOOT_SEED (6322), 10,000 resamples.
+    """
     summary = [r for m in METRICS for r in summaries(fold_rows, m)]
     write_csv(os.path.join(results_dir, "summary.csv"), summary)
     write_csv(os.path.join(results_dir, "differences.csv"),
@@ -267,6 +287,12 @@ def write_results(fold_rows, failures, pooled, results_dir=RESULTS):
 
 
 def main(argv=None):
+    """Command line: python -m eval.interaction plan | parity | run --go [--fresh] [--wesad-dir DIR] [--seeds].
+
+    `plan` prints fits and a time estimate; `parity` rebuilds R1s/R2 from raw WESAD
+    and checks them against results/features.csv; `run` needs --go and a proven
+    parity. Seeds: config.SEEDS (0-4) unless --seeds is given.
+    """
     parser = argparse.ArgumentParser(prog="python -m eval.interaction")
     parser.add_argument("action", choices=["plan", "parity", "run"])
     parser.add_argument("--go", action="store_true")
@@ -290,7 +316,7 @@ def main(argv=None):
         sys.exit(0 if result["ok"] else 1)
     if args.action == "run":
         if not args.go:
-            raise SystemExit("run needs --go (after Amendment 5 is applied and approved).")
+            raise SystemExit("run needs --go (a long run: about 52 min at n_jobs=2).")
         if features_sha256(config.FEATURES) != config.FEATURES_SHA256:
             raise SystemExit("results/features.csv changed since the protocol was frozen.")
         r1, r2 = resolution.load_tables()                 # refuses unless R1s parity is proven

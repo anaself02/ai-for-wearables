@@ -30,3 +30,18 @@ __pycache__/
 demo/out/
 
 .env
+
+# --- Added for the course reproducibility check ------------------------------
+# Large regenerable evaluation output (per-window predictions, partial runs, logs, facts pack).
+eval/out/
+# Other virtual-environment folder names and tool caches.
+venv/
+env/
+.pytest_cache/
+.DS_Store
+# Anything that looks like personal exports or databases of the dashboard project.
+*.sqlite3
+data-samples/
+takeout*/
+Takeout*/
+.env.*
