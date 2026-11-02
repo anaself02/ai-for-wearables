@@ -125,7 +125,7 @@ Read plainly, that means:
 
 The corrected features are also the better starting point for Phase 3 regardless of what happened to the score, because a feature that mostly measures a particular peak detector's error pattern cannot transfer to a device that uses a different one.
 
-All pre-fix outputs - the feature table, both models' scores, the confusion matrices and the previous version of this file - are preserved under `results/before_ibi_median_filter/`. This project is not under version control, so they are kept as files rather than as history.
+All pre-fix outputs - the feature table, both models' scores, the confusion matrices and the previous version of this file - are preserved under `results/before_ibi_median_filter/`. They are also tracked in git; they are kept as plain files so the before/after comparison can be read without checking out an old commit.
 
 ## Detail: `full` - all 8 channels (research-grade wristband)
 

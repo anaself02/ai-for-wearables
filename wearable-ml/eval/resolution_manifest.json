@@ -1,0 +1,96 @@
+{
+ "date": "2026-11-01T23:20:44.791803+00:00",
+ "python": "3.12.10",
+ "platform": "Windows-11-10.0.22631-SP0",
+ "versions": {
+  "scikit-learn": "1.5.2",
+  "numpy": "2.1.3",
+  "pandas": "2.2.3",
+  "scipy": "1.14.1"
+ },
+ "seeds": [
+  0,
+  1,
+  2,
+  3,
+  4
+ ],
+ "inner_folds": 7,
+ "n_boot": 10000,
+ "grid_jobs": 2,
+ "rf_jobs": 4,
+ "mlp_max_iter": 300,
+ "mlp_early_stopping": false,
+ "boot_seed": 6322,
+ "grids": {
+  "svm": {
+   "clf__C": [
+    0.1,
+    1,
+    10,
+    100
+   ],
+   "clf__gamma": [
+    "scale",
+    0.01,
+    0.1
+   ]
+  },
+  "rf": {
+   "clf__max_depth": [
+    null,
+    10,
+    20
+   ],
+   "clf__min_samples_leaf": [
+    1,
+    5
+   ]
+  },
+  "mlp": {
+   "clf__hidden_layer_sizes": [
+    [
+     32
+    ],
+    [
+     64,
+     32
+    ]
+   ],
+   "clf__alpha": [
+    0.0001,
+    0.01
+   ]
+  }
+ },
+ "files": {
+  "results/features.csv": "167f323da96a6e3c034c32f8cf05c8d506084c0dbf9518c36cd7a7341fab207a",
+  "windows_R1s.csv": "030bee5dfa5291589f0cad08b4c8f2734896816f12ceb7d6233cbaf0e880f315",
+  "windows_R2.csv": "ececb1ed1c758f431bc8bd06ab65598bf3a3402faa34554568759d83b58c0908"
+ },
+ "code": {
+  "__init__.py": "28004a737655066fd84909065d6b22b89f97cf12a7dc22c66c83d9bbf6c0708b",
+  "config.py": "f9cb1a12a24e899e1fcd2da6bc576d85d3935f9cca5cb64fadabddd7383314e3",
+  "cross.py": "faa395957b6f82505e4afaaa95b784425a526e039ff2adb013947a6257718c97",
+  "data.py": "a00a4cd469111c7201674590e2be6355c7753eecfe8d32dc46df83c036bfbce4",
+  "errors.py": "3c91212dbf6cc7495d42e04a1ce5068da698cebe44781e2621465f91f314c401",
+  "folds.py": "9d3e07c6e5581465adff35186b73a0cafb35fe62699338f67ae3823f9f0f1659",
+  "interaction.py": "b336e72a04a2b2d2bfc5e96288b98ea50cff123d0d3dd2545c5037a5aaebcd5f",
+  "metrics.py": "ad1ed32f5eb7785b004aae51b2c88412fbbe81f9b65cca88db443a568cc9b8b4",
+  "models.py": "80305d725d944aa03e27e76823f3d6e31fbde7213481aedf0a42f60dc22dce90",
+  "nested.py": "74a7caf351ccb935df615a686a7274cb6902283c5ca3fd2fedbd8d3fbcdd6bd9",
+  "reproduce.py": "5008bce58a65bd930a41d5c00c1735e892eed1a0862995e8a70d294f24273b2f",
+  "resolution.py": "5dc887f90dec15350ace9c589ba6d3ce3128f0566c31e86bd181976830e8472f",
+  "run_eval.py": "6e38578a011645f6a1fb922b341577001516c822836f7692ca24d699245bea19",
+  "tables.py": "195a48894936c5123ef3417d76156cc6017834c1ccae619182f187d97ce72e55"
+ },
+ "stage": "2D resolution interaction",
+ "conditions": [
+  "R1s",
+  "R2",
+  "R1stoR2"
+ ],
+ "bin_seconds": 3.0,
+ "min_readings": 10,
+ "n_windows_common": 1012
+}

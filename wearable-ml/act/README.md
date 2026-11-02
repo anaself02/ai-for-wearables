@@ -54,6 +54,16 @@ about 5.3 calls a minute, so about 64 minutes. It fits in one day only if the
 daily quota is at least 340 (otherwise the run stops at `--rpd` and resumes the
 next day).
 
+## Status (2026-11-01, from `../eval/out/report_facts.md` section 8)
+
+Only synthetic inputs have been sent so far: 197 LLM calls to `gemini-3.5-flash-lite`
+(125 primary, 60 exploratory sweep, 12 pilot), 0 with a real day; no API errors. The
+planned real-day calls (220) have not been made. The API key is read from `wearable-ml/.env`
+(`GEMINI_API_KEY`, git-ignored), not from an environment variable. LLM sampling uses
+temperature 0.7 and is not seeded (the API call passes no seed), so a rerun of the LLM arm
+gives different text; the cache in `runs/calls.jsonl` is what makes a finished run repeatable.
+The input shuffle, the bootstrap and the spot-check draw use `SEED = 6322` (`config.py`).
+
 ## How to run (from `wearable-ml/`, with its `.venv`)
 
 ```

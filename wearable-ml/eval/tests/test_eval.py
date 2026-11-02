@@ -24,6 +24,13 @@ SMALL_GRIDS = {"svm": {"clf__C": [1, 10]}, "rf": {"clf__max_depth": [None, 5]},
                "mlp": {"clf__alpha": [1e-4, 1e-2]}}
 
 
+def run1(*args, **kwargs):
+    """nested.run with the grid search in THIS process (n_jobs=1), so spies and
+    mocks see every fit. Parallel runs are tested separately."""
+    kwargs.setdefault("n_jobs", 1)
+    return nested.run(*args, **kwargs)
+
+
 def synthetic_table(n_subjects=6, per_condition=8, seed=0):
     """Synthetic windows. HR_min encodes the subject (subject number x 1000) so a
     fitted model's training rows can be traced back to subjects."""
@@ -108,7 +115,7 @@ class LeakageTests(unittest.TestCase):
             self.assertAlmostEqual(scaler.mean_[2], np.mean(sorted(train_codes)), places=6)
 
         for model in config.MODELS:
-            nested.run(self.table, "binary", model, 0, grid=SMALL_GRIDS[model],
+            run1(self.table, "binary", model, 0, grid=SMALL_GRIDS[model],
                        inner_k=3, on_fitted=check)
         self.assertEqual(len(seen), 3 * 6)
 
@@ -119,7 +126,7 @@ class LeakageTests(unittest.TestCase):
                                        X[train_index].mean(axis=0))
             self.assertFalse(np.allclose(fitted.named_steps["scaler"].mean_, X.mean(axis=0)))
 
-        nested.run(self.table, "three", "svm", 0, grid=SMALL_GRIDS["svm"], inner_k=3,
+        run1(self.table, "three", "svm", 0, grid=SMALL_GRIDS["svm"], inner_k=3,
                    on_fitted=check)
 
     def test_inner_selection_scores_scalers_fitted_on_inner_training_rows(self):
@@ -132,7 +139,7 @@ class LeakageTests(unittest.TestCase):
             return real_fit(self_, X, y)
 
         with mock.patch.object(StandardScaler, "fit", spy):
-            nested.run(self.table, "binary", "svm", 0, grid={"clf__C": [1]}, inner_k=5,
+            run1(self.table, "binary", "svm", 0, grid={"clf__C": [1]}, inner_k=5,
                        subjects=["S2", "S3", "S4", "S5", "S6", "S7"])
         rows_per_subject = 24
         # per outer fold: 5 inner fits on 4 subjects, then the refit on 5 subjects
@@ -146,32 +153,133 @@ class LeakageTests(unittest.TestCase):
         self.assertEqual(len(mlp.predict(X[:7])), 7)
         self.assertEqual(mlp.predict_proba(X[:7]).shape, (7, 2))
 
-    def test_threshold_baseline_is_fitted_on_training_rows_and_matches_the_demo(self):
-        demo_path = os.path.join(config.ML_DIR, "demo", "demo_wesad.py")
-        if not os.path.exists(demo_path):
-            self.skipTest("demo/demo_wesad.py not present")
-        spec = importlib.util.spec_from_file_location("demo_wesad_pin", demo_path)
-        demo = importlib.util.module_from_spec(spec)
-        spec.loader.exec_module(demo)
+    def test_threshold_baseline_maximises_macro_f1_on_the_training_rows(self):
+        """REPLACES the earlier test that pinned the cut to the demo's
+        balanced-accuracy rule: Amendment 4 chooses the cut by macro-F1 instead
+        (the demo and the dashboard are untouched and keep their own rule)."""
+        from sklearn.metrics import f1_score
         rng = np.random.default_rng(1)
-        x, positive = rng.normal(80, 10, 300), rng.random(300) > 0.7
-        self.assertEqual(models.best_threshold(x, positive), demo.best_threshold(x, positive))
-        self.assertEqual(config.HR_FEATURES[0], "HR_mean")
+        cases = [
+            ("binary", 0, 1, [0, 1], rng.normal(80, 10, 300), rng.random(300) > 0.7),
+            ("binary", 0, 1, [0, 1], np.round(rng.normal(80, 10, 200)), rng.random(200) > 0.5),
+            ("three", 1, 2, [1, 2, 3], rng.normal(80, 10, 300), rng.integers(1, 4, 300)),
+            ("three", 1, 2, [1, 2, 3], np.round(rng.normal(80, 10, 200)), rng.integers(1, 4, 200)),
+        ]
+        for name, low, high, task_labels, x, y in cases:
+            y = np.asarray(y).astype(int)
+            mine = models.best_threshold(x, y, low, high, task_labels)
+
+            def macro(cut):
+                return f1_score(y, np.where(x > cut, high, low), labels=task_labels,
+                                average="macro", zero_division=0)
+
+            distinct = np.unique(x)
+            best = max(macro(0.5 * (a + b)) for a, b in zip(distinct[:-1], distinct[1:]))
+            self.assertAlmostEqual(macro(mine), best, places=12, msg=name)
+            self.assertTrue(distinct[0] < mine < distinct[-1])
+
+    def test_threshold_edge_cases_and_the_three_class_rule(self):
+        self.assertEqual(models.best_threshold([5.0, 5.0, 5.0], [0, 1, 0], 0, 1, [0, 1]), -np.inf)
+        rng = np.random.default_rng(2)
+        X = rng.normal(80, 10, (120, 5))
+        y = rng.integers(1, 4, 120)
+        rule = models.HRMeanThreshold(three_class=True).fit(X, y)
+        self.assertEqual(set(np.unique(rule.predict(X))) - {1, 2}, set())     # never amusement
+        binary = models.HRMeanThreshold().fit(X, (y == 2).astype(int))
+        self.assertEqual(set(np.unique(binary.predict(X))) - {0, 1}, set())
+
+    def test_the_threshold_is_computed_from_training_subjects_only(self):
+        table = self.table
+        seen = {}
+
+        def check(test_subject, fitted, train_index, test_index):
+            seen[test_subject] = fitted.threshold_
+            y = (table["label"].to_numpy() == 2).astype(int)
+            expected = models.best_threshold(table["HR_mean"].to_numpy()[train_index],
+                                             y[train_index], 0, 1, [0, 1])
+            self.assertEqual(fitted.threshold_, expected)
+
+        run1(table, "binary", "threshold", 0, grid={}, on_fitted=check)
+        self.assertEqual(len(seen), 6)
+        self.assertGreater(len(set(seen.values())), 1)          # differs by held-out subject
+
+    def test_the_mlp_has_no_early_stopping_and_a_fixed_max_iter(self):
+        self.assertEqual(config.MLP_MAX_ITER, 300)
+        pipeline = models.make("mlp", "binary", 0)
+        X = np.random.default_rng(0).normal(size=(80, 5))
+        y = np.array([0] * 60 + [1] * 20)
+        pipeline.fit(X, y)
+        inner = pipeline.named_steps["clf"].mlp_
+        self.assertFalse(inner.early_stopping)
+        self.assertEqual(inner.max_iter, 300)
+        self.assertIsNone(getattr(inner, "validation_scores_", None))   # no validation split
+        with open(os.path.join(config.EVAL_DIR, "models.py"), encoding="utf-8") as handle:
+            code = [line for line in handle if not line.lstrip().startswith(("#", '"'))]
+        self.assertFalse(any("early_stopping=True" in line for line in code))
+
+    def test_oversampling_in_the_inner_folds_uses_only_inner_training_rows(self):
+        """Every fit the grid search makes sees only the inner-TRAINING subjects
+        (inner-validation rows go to predict only); oversampling then draws only
+        from the rows it was given."""
+        table = synthetic_table(n_subjects=6)
+        seen = []
+        real_fit = models.OversampledMLP.fit
+
+        def spy(self_, X, y):
+            seen.append(np.unique(np.round(np.asarray(X)[:, 2], 9)))   # HR_min = subject code
+            return real_fit(self_, X, y)
+
+        with mock.patch.object(models.OversampledMLP, "fit", spy):
+            run1(table, "binary", "mlp", 0, grid={"clf__alpha": [1e-4]}, inner_k=3)
+
+        subjects = sorted(set(table["subject_id"]), key=folds.subject_key)
+        expected = []
+        for test, train in folds.outer_folds(subjects):
+            for held in folds.inner_folds(train, 0, 3):
+                fit_subjects = [t for t in train if t not in held]
+                codes = np.array([int(t[1:]) * 1000.0 for t in fit_subjects])
+                expected.append(np.sort((codes - codes.mean()) / codes.std()))
+            codes = np.array([int(t[1:]) * 1000.0 for t in train])               # the refit
+            expected.append(np.sort((codes - codes.mean()) / codes.std()))
+        self.assertEqual(len(seen), len(expected))
+        for got, want in zip(seen, expected):
+            np.testing.assert_allclose(np.sort(got), want, atol=1e-6)
+
+    def test_oversampled_rows_are_copies_of_rows_given_to_fit(self):
+        from sklearn.neural_network import MLPClassifier
+        rng = np.random.default_rng(0)
+        X = rng.normal(size=(60, 5))
+        y = np.array([0] * 50 + [1] * 10)
+        captured = {}
+        real_fit = MLPClassifier.fit
+
+        def spy(self_, Xr, yr):
+            captured["X"], captured["y"] = np.asarray(Xr), np.asarray(yr)
+            return real_fit(self_, Xr, yr)
+
+        with mock.patch.object(MLPClassifier, "fit", spy):
+            models.OversampledMLP(random_state=0).fit(X, y)
+        given = {tuple(row) for row in X}
+        self.assertTrue(all(tuple(row) in given for row in captured["X"]))
+        self.assertEqual(np.bincount(captured["y"]).tolist(), [50, 50])
+        minority_rows = {tuple(row) for row in X[y == 1]}
+        self.assertTrue(all(tuple(row) in minority_rows
+                            for row in captured["X"][captured["y"] == 1]))
 
 
 class DeterminismTests(unittest.TestCase):
     def test_same_seed_same_predictions(self):
         table = synthetic_table(n_subjects=5)
         for model in config.MODELS + config.BASELINES:
-            a = nested.run(table, "binary", model, 2, grid=SMALL_GRIDS.get(model, {}), inner_k=2)
-            b = nested.run(table, "binary", model, 2, grid=SMALL_GRIDS.get(model, {}), inner_k=2)
+            a = run1(table, "binary", model, 2, grid=SMALL_GRIDS.get(model, {}), inner_k=2)
+            b = run1(table, "binary", model, 2, grid=SMALL_GRIDS.get(model, {}), inner_k=2)
             self.assertEqual([(p["y_pred"], p["score"]) for p in a["predictions"]],
                              [(p["y_pred"], p["score"]) for p in b["predictions"]], model)
             self.assertEqual([f["chosen"] for f in a["folds"]], [f["chosen"] for f in b["folds"]])
 
     def test_predictions_carry_subject_condition_fold_seed_model_score(self):
         table = synthetic_table(n_subjects=4)
-        result = nested.run(table, "binary", "svm", 1, grid=SMALL_GRIDS["svm"], inner_k=3)
+        result = run1(table, "binary", "svm", 1, grid=SMALL_GRIDS["svm"], inner_k=3)
         row = result["predictions"][0]
         for field in ("subject", "condition", "fold", "seed", "model", "score", "y_true", "y_pred"):
             self.assertIn(field, row)
@@ -191,9 +299,63 @@ class DeterminismTests(unittest.TestCase):
             return real(name, task, seed)
 
         with mock.patch.object(models, "make", flaky):
-            result = nested.run(table, "binary", "svm", 0, grid=SMALL_GRIDS["svm"], inner_k=3)
+            result = run1(table, "binary", "svm", 0, grid=SMALL_GRIDS["svm"], inner_k=3)
         self.assertEqual(len(result["folds"]), 3)
         self.assertEqual([f["kind"] for f in result["failures"]], ["fold failed"])
+
+
+class ParallelAndConvergenceTests(unittest.TestCase):
+    def setUp(self):
+        self.table = synthetic_table(n_subjects=5)
+
+    def test_n_jobs_2_gives_the_same_predictions_and_choices_as_n_jobs_1(self):
+        grid = SMALL_GRIDS["mlp"]
+        one = nested.run(self.table, "binary", "mlp", 3, grid=grid, inner_k=2, n_jobs=1)
+        two = nested.run(self.table, "binary", "mlp", 3, grid=grid, inner_k=2, n_jobs=2)
+        self.assertEqual([(p["y_pred"], p["score"]) for p in one["predictions"]],
+                         [(p["y_pred"], p["score"]) for p in two["predictions"]])
+        self.assertEqual([f["chosen"] for f in one["folds"]], [f["chosen"] for f in two["folds"]])
+        self.assertEqual([f["inner_macro_f1"] for f in one["folds"]],
+                         [f["inner_macro_f1"] for f in two["folds"]])
+
+    def test_convergence_is_recorded_per_fit_also_across_processes(self):
+        grid = {"clf__max_iter": [2], "clf__alpha": [1e-4, 1e-2]}      # 2 epochs: cannot converge
+        for n_jobs in (1, 2):
+            result = nested.run(self.table, "binary", "mlp", 0, grid=grid, inner_k=3,
+                                n_jobs=n_jobs)
+            notes = [f for f in result["failures"] if f["kind"] == "convergence warnings"]
+            self.assertEqual(len(notes), 5, n_jobs)                    # every outer fold
+            for note in notes:
+                self.assertEqual((note["inner_fits_not_converged"], note["inner_fits"]), (6, 6))
+                self.assertFalse(note["outer_refit_converged"])
+
+    def test_models_that_cannot_fail_to_converge_report_nothing(self):
+        result = nested.run(self.table, "binary", "svm", 0, grid=SMALL_GRIDS["svm"],
+                            inner_k=2, n_jobs=2)
+        self.assertEqual([f for f in result["failures"] if f["kind"] == "convergence warnings"],
+                         [])
+
+    def test_run_all_saves_partials_and_resumes_and_refuses_other_code(self):
+        table = synthetic_table(n_subjects=4)
+        notes = []
+        with tempfile.TemporaryDirectory() as tmp, \
+                mock.patch.object(run_eval, "log_experiment", notes.append), \
+                mock.patch.object(folds, "write_folds", lambda *a, **k: None), \
+                mock.patch.dict(config.GRIDS, {"svm": SMALL_GRIDS["svm"]}), \
+                mock.patch.object(config, "INNER_FOLDS", 2):
+            first = run_eval.run_all(["binary"], [0, 1], ["majority", "svm"], out_dir=tmp,
+                                     table=table, say=lambda m: None)
+            self.assertEqual(len(os.listdir(os.path.join(tmp, "partial"))), 4)
+            self.assertEqual(len(notes), 4)
+            second = run_eval.run_all(["binary"], [0, 1], ["majority", "svm"], out_dir=tmp,
+                                      table=table, say=lambda m: None)
+            self.assertEqual(len(notes), 4)                            # nothing re-run
+            self.assertEqual(first[0], second[0])
+            self.assertEqual(first[2], second[2])
+            with mock.patch.object(run_eval, "protocol_hash", lambda: "other code"):
+                with self.assertRaises(SystemExit):
+                    run_eval.run_all(["binary"], [0], ["majority"], out_dir=tmp, table=table,
+                                     say=lambda m: None)
 
 
 class BootstrapTests(unittest.TestCase):
@@ -271,7 +433,28 @@ class ReproductionTests(unittest.TestCase):
         self.assertAlmostEqual(value, EXPECTED_FULL_SVM_MACRO_F1, delta=0.005)
 
     def test_the_feature_table_is_the_one_the_protocol_froze(self):
-        self.assertEqual(data.sha256(config.FEATURES), config.FEATURES_SHA256)
+        self.assertEqual(data.features_sha256(config.FEATURES), config.FEATURES_SHA256)
+
+    def test_feature_hash_ignores_line_endings_but_not_values(self):
+        # Amendment 6: an LF and a CRLF copy of the table both pass, a changed value does not
+        with open(config.FEATURES, "rb") as handle:
+            lf = handle.read().replace(b"\r\n", b"\n")
+        crlf = lf.replace(b"\n", b"\r\n")
+        header, first, rest = lf.split(b"\n", 2)
+        cells = first.split(b",")
+        cells[-1] = str(float(cells[-1]) + 0.001).encode()
+        changed = b"\n".join([header, b",".join(cells), rest])
+        self.assertNotEqual(changed, lf)
+        with tempfile.TemporaryDirectory() as tmp:
+            hashes = {}
+            for name, blob in (("lf", lf), ("crlf", crlf), ("changed", changed)):
+                path = os.path.join(tmp, name + ".csv")
+                with open(path, "wb") as handle:
+                    handle.write(blob)
+                hashes[name] = data.features_sha256(path)
+        self.assertEqual(hashes["lf"], config.FEATURES_SHA256)
+        self.assertEqual(hashes["crlf"], config.FEATURES_SHA256)
+        self.assertNotEqual(hashes["changed"], config.FEATURES_SHA256)
 
     def test_plan_counts(self):
         counts = run_eval.plan_counts()

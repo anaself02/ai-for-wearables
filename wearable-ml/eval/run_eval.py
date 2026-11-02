@@ -3,7 +3,7 @@
     python -m eval.run_eval plan                 what would run, and how many fits
     python -m eval.run_eval benchmark            time one inner fit per model -> estimate
     python -m eval.run_eval reproduce            the Table I check (full SVM, 0.717)
-    python -m eval.run_eval run --go             the full nested run (Part 2 only)
+    python -m eval.run_eval run --go             the full nested run (long: about 1.2 h)
 
 `run` refuses without --go, and refuses if results/features.csv no longer has
 the hash recorded in config.FEATURES_SHA256. Memory: one (task, model, seed)
@@ -20,12 +20,17 @@ import time
 from datetime import datetime, timezone
 
 from . import config, folds, metrics, nested
-from .data import load_table, sha256
+from .data import features_sha256, load_table, sha256
 
 ALL = config.BASELINES + config.MODELS
 
 
 def fits_per_outer_fold(model):
+    """Number of model fits for one outer fold.
+
+    Input: a model name. Output: grid points x inner folds + 1 refit (1 for the
+    baselines). Randomness: none.
+    """
     grid = config.GRIDS.get(model)
     if not grid:
         return 1
@@ -36,6 +41,10 @@ def fits_per_outer_fold(model):
 
 
 def plan_counts(tasks=("binary", "three"), seeds=config.SEEDS, n_subjects=15):
+    """Total fits per model for a run.
+
+    Inputs: tasks, seeds, number of subjects. Output: {model: fits}. Randomness: none.
+    """
     out = {}
     for model in ALL:
         out[model] = fits_per_outer_fold(model) * n_subjects * len(seeds) * len(tasks)
@@ -88,6 +97,13 @@ def estimate(per_fit, n_subjects=15, seeds=config.SEEDS):
 
 
 def manifest(seeds, extra=None):
+    """Record of how a run was made.
+
+    Inputs: the seeds used and an optional dict of extra entries. Output: dict with
+    date, Python and library versions, seeds, inner folds, bootstrap settings, grids,
+    the feature-table hash (line-ending independent) and the sha256 of every
+    eval/*.py. Randomness: none.
+    """
     import numpy, pandas, scipy, sklearn
     data = {
         "date": datetime.now(timezone.utc).isoformat(),
@@ -95,10 +111,12 @@ def manifest(seeds, extra=None):
         "versions": {"scikit-learn": sklearn.__version__, "numpy": numpy.__version__,
                      "pandas": pandas.__version__, "scipy": scipy.__version__},
         "seeds": list(seeds), "inner_folds": config.INNER_FOLDS, "n_boot": config.N_BOOT,
+        "grid_jobs": config.GRID_JOBS, "rf_jobs": config.RF_JOBS,
+        "mlp_max_iter": config.MLP_MAX_ITER, "mlp_early_stopping": False,
         "boot_seed": config.BOOT_SEED, "grids": {k: {p: [list(v) if isinstance(v, tuple) else v
                                                         for v in vs] for p, vs in g.items()}
                                                  for k, g in config.GRIDS.items()},
-        "files": {"results/features.csv": sha256(config.FEATURES)},
+        "files": {"results/features.csv": features_sha256(config.FEATURES)},
         "code": {name: sha256(os.path.join(config.EVAL_DIR, name))
                  for name in sorted(os.listdir(config.EVAL_DIR)) if name.endswith(".py")},
     }
@@ -107,6 +125,10 @@ def manifest(seeds, extra=None):
 
 
 def log_experiment(text, path=config.EXPERIMENTS):
+    """Append one entry to eval/EXPERIMENTS.md (created with a header if missing).
+
+    Inputs: the text and the file path. Output: none. Randomness: none.
+    """
     new = not os.path.exists(path)
     with open(path, "a", encoding="utf-8") as handle:
         if new:
@@ -115,9 +137,17 @@ def log_experiment(text, path=config.EXPERIMENTS):
 
 
 def write_csv(path, rows, columns=None):
+    """Write a list of row dicts as CSV.
+
+    Inputs: path, rows, optional column order (default: first-seen keys). Output:
+    none; writes nothing for an empty list. Randomness: none.
+    """
     if not rows:
         return
-    columns = columns or list(rows[0])
+    if columns is None:
+        columns = []
+        for row in rows:
+            columns += [k for k in row if k not in columns]
     os.makedirs(os.path.dirname(path), exist_ok=True)
     with open(path, "w", newline="", encoding="utf-8") as handle:
         writer = csv.DictWriter(handle, fieldnames=columns, extrasaction="ignore")
@@ -136,38 +166,106 @@ def pooled_macro_f1(predictions, task):
                           labels=config.TASKS[task]["labels"], average="macro", zero_division=0))
 
 
-def run_all(tasks, seeds, models_, out_dir=config.OUT_DIR, table=None):
+def protocol_hash():
+    """Hash of the code that defines results: a partial run from other code is refused."""
+    import hashlib
+    digest = hashlib.sha256()
+    for name in ("config.py", "data.py", "folds.py", "metrics.py", "models.py", "nested.py"):
+        digest.update(sha256(os.path.join(config.EVAL_DIR, name)).encode())
+    digest.update(config.FEATURES_SHA256.encode())
+    return digest.hexdigest()
+
+
+def convergence_text(failures):
+    """Per-fit convergence notes for EXPERIMENTS.md (empty string if all converged)."""
+    lines = []
+    for f in failures:
+        if f.get("kind") == "convergence warnings":
+            lines.append("    - fold {}: {} of {} inner fits hit max_iter={} (ConvergenceWarning); "
+                         "outer refit {}".format(
+                             f["subject"], f["inner_fits_not_converged"], f["inner_fits"],
+                             config.MLP_MAX_ITER,
+                             "converged" if f["outer_refit_converged"] else "did NOT converge"))
+    return "\n".join(lines)
+
+
+def run_all(tasks, seeds, models_, out_dir=config.OUT_DIR, table=None, fresh=False, say=print):
+    """Every (task, model, seed), one at a time. Each finished run is saved to
+    out/partial/ so an interrupted run resumes; partials made by different code
+    or a different feature table are refused unless fresh=True."""
     table = load_table() if table is None else table
     subjects = sorted(set(table["subject_id"]), key=folds.subject_key)
     folds.write_folds(subjects, seeds=seeds)
+    partial_dir = os.path.join(out_dir, "partial")
+    os.makedirs(partial_dir, exist_ok=True)
+    code = protocol_hash()
     all_folds, all_failures, pooled = [], [], []
+    total = len(tasks) * len(models_) * len(seeds)
+    done = 0
     for task in tasks:
         for model in models_:
             for seed in seeds:
+                done += 1
+                tag = "{}_{}_seed{}".format(task, model, seed)
+                path = os.path.join(partial_dir, tag + ".json")
+                if os.path.exists(path) and not fresh:
+                    with open(path, encoding="utf-8") as handle:
+                        saved = json.load(handle)
+                    if saved["protocol_hash"] != code:
+                        raise SystemExit("{} was made by different code; rerun with --fresh "
+                                         "(or delete out/partial).".format(path))
+                    all_folds += saved["folds"]
+                    all_failures += saved["failures"]
+                    pooled.append(saved["pooled"])
+                    say("[{}/{}] {} resumed from partial".format(done, total, tag))
+                    continue
                 started = datetime.now(timezone.utc).isoformat()
                 try:
                     result = nested.run(table, task, model, seed)
                 except Exception as exc:
-                    log_experiment("- {} {} {} seed {}: FAILED {}: {}".format(
+                    log_experiment("- {} {} {} seed {}: RUN FAILED {}: {}".format(
                         started, task, model, seed, type(exc).__name__, exc))
                     all_failures.append({"task": task, "model": model, "seed": seed,
                                          "kind": "run failed", "error": str(exc)})
+                    say("[{}/{}] {} RUN FAILED: {}".format(done, total, tag, exc))
                     continue
-                write_csv(os.path.join(out_dir, "predictions",
-                                       "{}_{}_seed{}.csv".format(task, model, seed)),
+                write_csv(os.path.join(out_dir, "predictions", tag + ".csv"),
                           result["predictions"])
+                # Same form as a resumed run reads back from JSON (string dict keys).
+                result["folds"] = json.loads(json.dumps(result["folds"]))
+                run_pooled = {"task": task, "model": model, "seed": seed,
+                              "pooled_macro_f1": pooled_macro_f1(result["predictions"], task)}
+                run_failures = [{"task": task, "model": model, "seed": seed, **f}
+                                for f in result["failures"]]
+                with open(path, "w", encoding="utf-8") as handle:
+                    json.dump({"protocol_hash": code, "folds": result["folds"],
+                               "failures": run_failures, "pooled": run_pooled}, handle)
                 all_folds += result["folds"]
-                pooled.append({"task": task, "model": model, "seed": seed,
-                               "pooled_macro_f1": pooled_macro_f1(result["predictions"], task)})
-                all_failures += [{"task": task, "model": model, "seed": seed, **f}
-                                 for f in result["failures"]]
-                log_experiment("- {} {} {} seed {}: {} folds, {:.1f} s, failures/warnings: {}"
-                               .format(started, task, model, seed, len(result["folds"]),
-                                       result["seconds"], result["failures"] or "none"))
+                all_failures += run_failures
+                pooled.append(run_pooled)
+                kinds = sorted({f["kind"] for f in result["failures"]})
+                detail = convergence_text(result["failures"])
+                log_experiment("- {} {} {} seed {}: {} folds, {:.1f} s, pooled macro-F1 {}, "
+                               "failures/warnings: {}{}".format(
+                                   started, task, model, seed, len(result["folds"]),
+                                   result["seconds"],
+                                   "n/a" if run_pooled["pooled_macro_f1"] is None
+                                   else "{:.3f}".format(run_pooled["pooled_macro_f1"]),
+                                   ", ".join(kinds) if kinds else "none",
+                                   ("\n" + detail) if detail else ""))
+                say("[{}/{}] {} done in {:.0f} s ({} folds, {})".format(
+                    done, total, tag, result["seconds"], len(result["folds"]),
+                    ", ".join(kinds) if kinds else "no failures"))
     return all_folds, all_failures, pooled
 
 
 def write_results(fold_rows, failures, tasks, out_dir=config.EVAL_DIR, pooled=()):
+    """Write the summary, difference and fold tables of a run.
+
+    Inputs: fold rows, failure records, tasks, output folder, pooled values.
+    Output: eval/results/{summary,differences,folds,failures,pooled_macro_f1}*.csv.
+    Seed: the bootstrap uses config.BOOT_SEED (6322).
+    """
     results_dir = os.path.join(out_dir, "results")
     for task in tasks:
         rows = [r for r in fold_rows if r["task"] == task]
@@ -187,9 +285,17 @@ def write_results(fold_rows, failures, tasks, out_dir=config.EVAL_DIR, pooled=()
 
 
 def main(argv=None):
+    """Command line: plan | benchmark | reproduce | run [--go] [--fresh] [--seeds] [--tasks] [--models].
+
+    `run` refuses without --go and refuses if the feature table's hash differs from
+    config.FEATURES_SHA256. Seeds: config.SEEDS (0-4) unless --seeds is given;
+    bootstrap seed config.BOOT_SEED.
+    """
     parser = argparse.ArgumentParser(prog="python -m eval.run_eval")
     parser.add_argument("action", choices=["plan", "benchmark", "reproduce", "run"])
     parser.add_argument("--go", action="store_true", help="required for run")
+    parser.add_argument("--fresh", action="store_true",
+                        help="ignore and overwrite saved partial results in out/partial")
     parser.add_argument("--seeds", default=",".join(map(str, config.SEEDS)))
     parser.add_argument("--tasks", default="binary,three")
     parser.add_argument("--models", default=",".join(ALL))
@@ -218,10 +324,11 @@ def main(argv=None):
         print("estimated total: {:.0f} s ({:.1f} h), single process".format(total, total / 3600))
         return
     if not args.go:
-        raise SystemExit("run needs --go (Part 2, after the amendment is applied).")
-    if sha256(config.FEATURES) != config.FEATURES_SHA256:
+        raise SystemExit("run needs --go (a long run: about 1.2 h).")
+    if features_sha256(config.FEATURES) != config.FEATURES_SHA256:
         raise SystemExit("results/features.csv changed since the protocol was frozen.")
-    fold_rows, failures, pooled = run_all(tasks, seeds, models_)
+    fold_rows, failures, pooled = run_all(tasks, seeds, models_, fresh=args.fresh,
+                                          say=lambda m: print(m, flush=True))
     write_results(fold_rows, failures, tasks, pooled=pooled)
     with open(config.MANIFEST, "w", encoding="utf-8") as handle:
         json.dump(manifest(seeds, {"tasks": tasks, "models": models_}), handle, indent=1)

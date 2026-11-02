@@ -25,6 +25,11 @@ NON_FEATURES = ("subject_id", "label", "label_name", "window_start_s")
 
 
 def full_svm_loso(path=config.FEATURES):
+    """Reproduce the Table I number: SVM, 40 features, 3 classes, leave-one-subject-out.
+
+    Input: path of the feature table. Output: (pooled out-of-fold macro-F1, number
+    of features). Seed: SVC random_state=42, as scripts/03_train_model.py.
+    """
     table = pd.read_csv(check_path(path))
     features = [c for c in table.columns if c not in NON_FEATURES]
     X, y, groups = table[features], table["label"].astype(int), table["subject_id"]

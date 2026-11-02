@@ -7,6 +7,7 @@ from . import config
 
 
 def subject_key(subject):
+    """Sort key of a subject id: 'S12' -> 12. Randomness: none."""
     return int(subject[1:])
 
 
@@ -37,6 +38,13 @@ def inner_splits(groups, train_index, val_groups):
 
 
 def all_folds(subjects, seeds=config.SEEDS, k=config.INNER_FOLDS):
+    """Every split of the evaluation as one dict.
+
+    Inputs: subject ids, seeds (default config.SEEDS 0-4), number of inner folds
+    (default 7). Output: {'outer': [{'test', 'train'}], 'inner': {seed: {test
+    subject: [validation groups]}}, 'inner_k': k}. Seeds: each seed drives
+    inner_folds (random.Random(seed)); the outer folds are not random.
+    """
     return {
         "outer": [{"test": test, "train": train} for test, train in outer_folds(subjects)],
         "inner": {str(seed): {test: inner_folds(train, seed, k)
@@ -46,6 +54,10 @@ def all_folds(subjects, seeds=config.SEEDS, k=config.INNER_FOLDS):
 
 
 def write_folds(subjects, path=config.FOLDS_FILE, seeds=config.SEEDS):
+    """Write all_folds(subjects, seeds) as JSON (eval/folds.json by default).
+
+    Inputs: subject ids, output path, seeds. Output: the path. Seeds: as all_folds.
+    """
     with open(path, "w", encoding="utf-8") as handle:
         json.dump(all_folds(subjects, seeds), handle, indent=1)
     return path
